@@ -6,15 +6,15 @@
 </template>
 
 <script setup lang="ts">
-import CurrentContent from '@/components/CurrentContent.vue';
-import Button from '@/components/ui/Button.vue'
+import CurrentContent from "@/components/CurrentContent.vue";
+import Button from "@/components/ui/Button.vue";
 defineProps<{
-  project: Project
-}>()
+  project: Project;
+}>();
 
 defineEmits<{
-  backward: []
-}>()
+  backward: [];
+}>();
 </script>
 
 <style lang="scss">

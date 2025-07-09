@@ -1,6 +1,6 @@
 <template>
   <span class="copy-text" :class="{ 'copy-text_hide': hide, 'copy-text_inline': inline }">
-    {{ isHide ? '******' : text }}
+    {{ isHide ? "******" : text }}
     <Button v-if="hide" @click="isHide = !isHide" class="copy-text__hide">
       <EyeIcon v-if="isHide" />
       <EyeSlashIcon v-else />
@@ -13,28 +13,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import ClipboardTextIcon from '@/components/icons/ClipboardTextIcon.vue';
-import ClipboardTickIcon from '@/components/icons/ClipboardTickIcon.vue';
-import EyeIcon from '@/components/icons/EyeIcon.vue';
-import EyeSlashIcon from '@/components/icons/EyeSlashIcon.vue';
-import Button from '@/components/ui/Button.vue';
+import { ref } from "vue";
+import ClipboardTextIcon from "@/components/icons/ClipboardTextIcon.vue";
+import ClipboardTickIcon from "@/components/icons/ClipboardTickIcon.vue";
+import EyeIcon from "@/components/icons/EyeIcon.vue";
+import EyeSlashIcon from "@/components/icons/EyeSlashIcon.vue";
+import Button from "@/components/ui/Button.vue";
 
 const props = defineProps<{
-  text: string
-  hide?: boolean
-  inline?: boolean
-}>()
+  text: string;
+  hide?: boolean;
+  inline?: boolean;
+}>();
 
-const isCopy = ref(false)
-const isHide = ref(props.hide)
+const isCopy = ref(false);
+const isHide = ref(props.hide);
 
 const copy = () => {
   navigator.clipboard.writeText(props.text).then(() => {
-    isCopy.value = true
-    setTimeout(() => isCopy.value = false, 2000)
-  })
-}
+    isCopy.value = true;
+    setTimeout(() => (isCopy.value = false), 2000);
+  });
+};
 </script>
 
 <style lang="scss">
@@ -51,7 +51,6 @@ const copy = () => {
 
   &:not(.copy-text_inline) {
     border: 1px solid var(--color-input-border);
-    width: 200px;
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 1;

@@ -33,7 +33,7 @@ export const useNoticeStore = defineStore(STORAGE_NAME, () => {
 
   const remove = (timestamp: number) => {
     state.value = state.value.filter(
-      (item: Notice) => item.timestamp !== timestamp
+      (item: Notice) => item.timestamp !== timestamp,
     );
     saveToStorage();
   };

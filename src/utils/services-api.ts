@@ -22,12 +22,12 @@ export const geServices = async () => {
           "Content-Type": "application/json",
         },
         signal: controller.signal,
-      }
+      },
     );
     if (!response.ok) {
       noticeStore.add(
         "error",
-        `Ошибка при получении сервисов: ${response.status}`
+        `Ошибка при получении сервисов: ${response.status}`,
       );
       return { result: [] };
     }

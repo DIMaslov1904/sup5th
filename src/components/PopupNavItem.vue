@@ -1,5 +1,5 @@
 <template>
-  <button class="popup-nav__item" :class="{ 'active': active }" :title>
+  <button class="popup-nav__item" :class="{ active: active }" :title>
     <slot />
     <span v-if="count" class="popup-nav__item-count">{{ count }}</span>
   </button>
@@ -17,8 +17,8 @@ defineProps({
   },
   count: {
     type: Number,
-  }
-})
+  },
+});
 </script>
 
 <style lang="scss">

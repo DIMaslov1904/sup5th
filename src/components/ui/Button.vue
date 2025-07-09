@@ -9,13 +9,13 @@
 
 <script setup lang="ts">
 interface Props {
-  size?: 's' | 'm' | 'l',
-  href?: string
+  size?: "s" | "m" | "l";
+  href?: string;
 }
 
 withDefaults(defineProps<Props>(), {
-  size: 'm'
-})
+  size: "m",
+});
 </script>
 
 <style lang="scss">
@@ -31,7 +31,6 @@ withDefaults(defineProps<Props>(), {
   transition: background-color 0.2s ease;
   cursor: pointer;
   gap: 10px;
-
 
   &_s {
     --size-svg: 8px;
@@ -65,6 +64,5 @@ withDefaults(defineProps<Props>(), {
     max-width: var(--size-svg);
     max-height: var(--size-svg);
   }
-
 }
 </style>

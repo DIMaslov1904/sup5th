@@ -1,25 +1,34 @@
 <template>
   <div class="services-item">
-    <Button size="l" class="services-item__favorite" :class="{ 'services-item__favorite_added': ifFavorite }"
-      @click.stop="$emit('setFavorites')">
+    <Button
+      size="l"
+      class="services-item__favorite"
+      :class="{ 'services-item__favorite_added': ifFavorite }"
+      @click.stop="$emit('setFavorites')"
+    >
       <ArchiveTickIcon class="services-item__favorite-icon" type="all" />
     </Button>
     <p>{{ services.description }}</p>
-    <a class="services-item__link" :href="'https://' + services.url" target="_blank">{{ services.name }}</a>
+    <a
+      class="services-item__link"
+      :href="'https://' + services.url"
+      target="_blank"
+      >{{ services.name }}</a
+    >
   </div>
 </template>
 
 <script setup lang="ts">
-import Button from '@/components/ui/Button.vue';
-import ArchiveTickIcon from '@/components/icons/ArchiveTickIcon.vue';
+import Button from "@/components/ui/Button.vue";
+import ArchiveTickIcon from "@/components/icons/ArchiveTickIcon.vue";
 
 defineProps<{
-  services: ServicesItem
-  ifFavorite: boolean
-}>()
+  services: ServicesItem;
+  ifFavorite: boolean;
+}>();
 defineEmits<{
-  setFavorites: []
-}>()
+  setFavorites: [];
+}>();
 </script>
 
 <style lang="scss">
@@ -40,7 +49,7 @@ defineEmits<{
 }
 
 .services-item__favorite {
-  transition: opacity .2s;
+  transition: opacity 0.2s;
   padding: 5px 10px;
   position: absolute;
   top: 10px;
@@ -67,7 +76,6 @@ defineEmits<{
 }
 
 .services-item__favorite-icon {
-
   .added,
   .remove,
   .add {
@@ -83,14 +91,13 @@ defineEmits<{
   }
 }
 
-
 .services-item__link {
   color: currentColor;
   text-decoration: none;
   font-weight: bold;
 
   &::after {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
   }

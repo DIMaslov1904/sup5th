@@ -27,7 +27,7 @@ const getUrlAdminLogin = (urlAdmin: string, cms: CMSName) => {
 
 const getVal = (
   num: number,
-  attr: { min?: number; max?: number } = {}
+  attr: { min?: number; max?: number } = {},
 ): number => {
   if (!num) return 0;
   let res = Math.trunc(num);
@@ -58,7 +58,7 @@ const getFromStorage = async () => {
   } catch (error) {
     console.error(
       new Date().toLocaleString() + "Ошибка при получении из хранилища:",
-      error
+      error,
     );
     return null;
   }
@@ -70,7 +70,7 @@ const setToStorage = async (data: Record<string, any>) => {
   } catch (error) {
     console.error(
       new Date().toLocaleString() + "Ошибка при сохранении в хранилище:",
-      error
+      error,
     );
   }
 };
@@ -85,7 +85,7 @@ const saveWidgetPosition = async (): Promise<void> => {
   )
     widgetPosition = currentProject.widgetPosition;
   storage.projects = storage.projects.map((item: any) =>
-    item.url === currentProject?.url ? { ...item, widgetPosition } : item
+    item.url === currentProject?.url ? { ...item, widgetPosition } : item,
   );
   await setToStorage(storage);
 };
@@ -96,13 +96,13 @@ const loginAdminPanelSecond = async () => {
   const loginBitrix = async () => {
     if (!document.querySelector("[name=USER_LOGIN]")) return;
     const inputLogin = document.querySelector(
-        "[name=USER_LOGIN]"
+        "[name=USER_LOGIN]",
       ) as HTMLInputElement,
       inputPassword = document.querySelector(
-        "[name=USER_PASSWORD]"
+        "[name=USER_PASSWORD]",
       ) as HTMLInputElement,
       inputLoginBtn = document.querySelector(
-        "[name=Login]"
+        "[name=Login]",
       ) as HTMLInputElement;
     inputLogin.value = currentProject?.login || "";
     inputPassword.value = currentProject?.password || "";
@@ -112,13 +112,13 @@ const loginAdminPanelSecond = async () => {
   const loginModx = async () => {
     if (!document.querySelector("[name=username]")) return;
     const inputLogin = document.querySelector(
-        "[name=username]"
+        "[name=username]",
       ) as HTMLInputElement,
       inputPassword = document.querySelector(
-        "[name=password]"
+        "[name=password]",
       ) as HTMLInputElement,
       inputLoginBtn = document.querySelector(
-        "[name=login]"
+        "[name=login]",
       ) as HTMLInputElement;
     inputLogin.value = currentProject?.login || "";
     inputPassword.value = currentProject?.password || "";
@@ -128,10 +128,10 @@ const loginAdminPanelSecond = async () => {
   const loginTilda = async () => {
     if (!document.querySelector("[name=email]")) return;
     const inputLogin = document.querySelector(
-        "[name=email]"
+        "[name=email]",
       ) as HTMLInputElement,
       inputPassword = document.querySelector(
-        "[name=password]"
+        "[name=password]",
       ) as HTMLInputElement,
       inputLoginBtn = document.querySelector("#send") as HTMLInputElement;
     inputLogin.value = currentProject?.login || "";
@@ -258,7 +258,7 @@ const loginAdminPanel = async (target: string) => {
     default:
       window.open(
         getUrlAdminLogin(currentProject.urlAdmin, currentProject.cms),
-        target
+        target,
       );
   }
 };
@@ -290,7 +290,7 @@ const checkCurrentProject = async (): Promise<void> => {
         ? project.subdomain
           ? currentDomain.includes(project.url)
           : currentDomain === project.url
-        : false
+        : false,
     ) || null;
   if (currentProject) {
     checkAdmin();
@@ -315,7 +315,7 @@ const createFloatingWidget = async (): Promise<void> => {
   btnMenu.title = "Нажмите для открытия / Зажмите для переноса";
   btnMenu.setAttribute(
     "style",
-    `background-image: url(${getProjectImg(currentProject?.cms || "cms")})`
+    `background-image: url(${getProjectImg(currentProject?.cms || "cms")})`,
   );
   btnMenu.addEventListener("click", () => {
     if (!floatingWidget) return;
@@ -328,12 +328,12 @@ const createFloatingWidget = async (): Promise<void> => {
         "--translate",
         `translate(min(max(calc(var(--x) + ${
           (floatingWidget.childElementCount - 1) * 68
-        }px), calc((100dvw - var(--width) - var(--offset)) * -1)), 0dvw), min(max(var(--y), calc((100dvh - var(--height) - var(--offset)) * -1)), 0dvh))`
+        }px), calc((100dvw - var(--width) - var(--offset)) * -1)), 0dvw), min(max(var(--y), calc((100dvh - var(--height) - var(--offset)) * -1)), 0dvh))`,
       );
     } else {
       floatingWidget.style.setProperty(
         "--translate",
-        `translate(min(max(var(--x), calc((100dvw - var(--width) - var(--offset)) * -1)), 0dvw), min(max(var(--y), calc((100dvh - var(--height) - var(--offset)) * -1)), 0dvh))`
+        `translate(min(max(var(--x), calc((100dvw - var(--width) - var(--offset)) * -1)), 0dvw), min(max(var(--y), calc((100dvh - var(--height) - var(--offset)) * -1)), 0dvh))`,
       );
     }
 
@@ -414,7 +414,7 @@ const createFloatingWidget = async (): Promise<void> => {
   floatingWidget.style.setProperty("--y", `${position.y}dvh`);
   floatingWidget.style.setProperty(
     "flex-direction",
-    `${position.x > -50 ? "row-reverse" : "row"}`
+    `${position.x > -50 ? "row-reverse" : "row"}`,
   );
 
   makeDraggable(floatingWidget);
@@ -423,7 +423,7 @@ const createFloatingWidget = async (): Promise<void> => {
 
   floatingWidget.style.setProperty(
     "--width-full",
-    `${floatingWidget.childElementCount * 68}px`
+    `${floatingWidget.childElementCount * 68}px`,
   );
 };
 
@@ -483,11 +483,11 @@ const makeDraggable = (element: HTMLElement): void => {
       `${getVal(((startY - e.pageY) * -100) / window.innerHeight, {
         min: -99,
         max: 0,
-      })}dvh`
+      })}dvh`,
     );
     element.style.setProperty(
       "flex-direction",
-      `${posX > -50 ? "row-reverse" : "row"}`
+      `${posX > -50 ? "row-reverse" : "row"}`,
     );
   });
 };

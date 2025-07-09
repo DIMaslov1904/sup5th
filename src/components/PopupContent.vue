@@ -5,7 +5,7 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{ fixHeight?: boolean }>()
+defineProps<{ fixHeight?: boolean }>();
 </script>
 
 <style lang="scss">
@@ -13,7 +13,7 @@ defineProps<{ fixHeight?: boolean }>()
   width: 604px;
   border-radius: 8px;
   overflow: auto;
-  transition: height .3s;
+  transition: height 0.3s;
   height: 600px;
   scrollbar-gutter: stable;
 

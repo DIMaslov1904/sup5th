@@ -13,7 +13,7 @@ let ticketId: null | string;
 const createModal = (
   name: string,
   fnOpen: Function = () => {},
-  fnClose: Function = () => {}
+  fnClose: Function = () => {},
 ): ExtendedModal => {
   const modal = document.createElement("dialog"),
     wrapper = document.createElement("div"),
@@ -33,7 +33,7 @@ const createModal = (
   modal.className = "modal";
   modal.addEventListener(
     "click",
-    ({ currentTarget, target }) => target === currentTarget && closeModal()
+    ({ currentTarget, target }) => target === currentTarget && closeModal(),
   );
   wrapper.className = "modal__wrapper";
   closeButton.className = "modal__close";
@@ -105,7 +105,7 @@ const createIframe = (id: string): HTMLIFrameElement => {
   ifrm.onload = () =>
     (
       ifrm.contentWindow?.document.querySelectorAll(
-        'input[name*="time"]'
+        'input[name*="time"]',
       ) as NodeListOf<HTMLInputElement>
     ).forEach(toggleDateTimeInput);
   return ifrm;
@@ -134,7 +134,7 @@ const nextOnCloseModal = () => {
 const modal = createModal(
   "iframe-modal",
   prevOnOpenModal,
-  nextOnCloseModal
+  nextOnCloseModal,
 ) as ExtendedModal;
 
 const waitForElm = (selector: string): Promise<HTMLElement> => {

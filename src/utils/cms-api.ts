@@ -11,7 +11,7 @@ const cmsList: { [key: string]: string } = {
 export const getUrlAdminLogin = (
   url: string,
   urlAdmin: string,
-  cms: CMSName
+  cms: CMSName,
 ) => {
   switch (cms) {
     case "Нет":

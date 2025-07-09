@@ -15,18 +15,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useMainStore, useProjectsStore } from '@/stores';
-import Button from '@/components/ui/Button.vue'
-import Input from '@/components/ui/Input.vue'
+import { computed } from "vue";
+import { useMainStore, useProjectsStore } from "@/stores";
+import Button from "@/components/ui/Button.vue";
+import Input from "@/components/ui/Input.vue";
 
-const mainStore = useMainStore()
-const projectsStore = useProjectsStore()
+const mainStore = useMainStore();
+const projectsStore = useProjectsStore();
 
 const apiUrl = computed({
   get: () => mainStore.state.apiUrl,
-  set: (val) => mainStore.setApiUrl(val)
-})
+  set: (val) => mainStore.setApiUrl(val),
+});
 </script>
 
 <style lang="scss">

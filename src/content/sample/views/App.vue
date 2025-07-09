@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import Logo from '@/assets/crx.svg'
-import { ref } from 'vue'
+import Logo from "@/assets/crx.svg";
+import { ref } from "vue";
 
-const show = ref(false)
-const toggle = () => show.value = !show.value
+const show = ref(false);
+const toggle = () => (show.value = !show.value);
 </script>
 
 <template>
-  <div class="popup-container">
+  <div class="flex h-full">
     <div
       v-show="show"
       class="popup-content"
@@ -15,11 +15,8 @@ const toggle = () => show.value = !show.value
     >
       <h1>HELLO CRXJS</h1>
     </div>
-    <button
-      class="toggle-button"
-      @click="toggle()"
-    >
-      <img :src="Logo" alt="CRXJS logo" class="button-icon">
+    <button class="toggle-button" @click="toggle()">
+      <img :src="Logo" alt="CRXJS logo" class="button-icon" />
     </button>
   </div>
 </template>

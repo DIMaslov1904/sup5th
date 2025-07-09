@@ -48,7 +48,7 @@ export const useProjectsStore = defineStore(STORAGE_NAME, () => {
 
   const remove = (url: string) => {
     state.value.projects = state.value.projects.filter(
-      (el: Project) => el.url !== url
+      (el: Project) => el.url !== url,
     );
   };
 
@@ -114,8 +114,8 @@ export const useProjectsStore = defineStore(STORAGE_NAME, () => {
       if (indexs.length !== 0)
         indexs.forEach((index: number) =>
           notFounds.push(
-            `${state.value.projects[index].name} (${state.value.projects[index].url})`
-          )
+            `${state.value.projects[index].name} (${state.value.projects[index].url})`,
+          ),
         );
 
       noticeStore.add(
@@ -125,17 +125,17 @@ export const useProjectsStore = defineStore(STORAGE_NAME, () => {
           (constAdd > 0 ? `Добавлено проектов: ${constAdd}шт.` : "") +
           (notFounds.length > 0
             ? `<br>Нет в общем списке:<ol><li>${notFounds.join(
-                ";</li><li> "
+                ";</li><li> ",
               )}</li></ol>`
             : ""),
-        10
+        10,
       );
 
       saveToStorage();
     } catch (e) {
       noticeStore.add(
         "error",
-        "<b>Ошибка загрузки проектов:</b><br>Не верная структура таблицы"
+        "<b>Ошибка загрузки проектов:</b><br>Не верная структура таблицы",
       );
       console.error(e);
     }
@@ -178,10 +178,10 @@ export const useProjectsStore = defineStore(STORAGE_NAME, () => {
         (countUpdate > 0 ? `Обновлены доступы: ${countUpdate}шт.<br>` : "") +
         (newProjects.length > 0
           ? `Добавлено проектов из личного доступа:<ol> <li>${newProjects.join(
-              ";</li><li> "
+              ";</li><li> ",
             )}.</li></ol>`
           : ""),
-      10
+      10,
     );
 
     saveToStorage();
@@ -206,8 +206,8 @@ export const useProjectsStore = defineStore(STORAGE_NAME, () => {
         "success",
         `Проектов удалено: ${deleteProjects}шт.<br>` +
           `Проекты, которых больше вам не доступны:<ol> <li>${projectUrls.join(
-            ";</li><li> "
-          )}.</li></ol>`
+            ";</li><li> ",
+          )}.</li></ol>`,
       );
     }
     projectUrls = [];

@@ -8,23 +8,23 @@
 </template>
 
 <script setup lang="ts">
-import Button from '@/components/ui/Button.vue';
-import { ref, watch } from 'vue';
+import Button from "@/components/ui/Button.vue";
+import { ref, watch } from "vue";
 
-const dialog = ref<null | HTMLDialogElement>(null)
+const dialog = ref<null | HTMLDialogElement>(null);
 
 const props = defineProps<{
-  isShowModal: boolean
-}>()
+  isShowModal: boolean;
+}>();
 
 defineEmits<{
-  close: []
-}>()
+  close: [];
+}>();
 
 watch(props, () => {
-  if (!dialog.value) return
-  props.isShowModal ? dialog.value.showModal() : dialog.value.close()
-})
+  if (!dialog.value) return;
+  props.isShowModal ? dialog.value.showModal() : dialog.value.close();
+});
 </script>
 
 <style lang="scss" scoped>

@@ -2,31 +2,38 @@
   <div class="notice-container">
     <template v-if="noticeStore.state.length > 0">
       <ul class="notice-list">
-        <li v-for="notice in noticeStore.state" :key="notice.timestamp" class="notice-item"
-          :class="`notice-item_${notice.type}`">
+        <li
+          v-for="notice in noticeStore.state"
+          :key="notice.timestamp"
+          class="notice-item"
+          :class="`notice-item_${notice.type}`"
+        >
           <span class="notice-time">{{ formateDateRu(notice.timestamp) }}</span>
-          <Button class="notice-remove" @click="noticeStore.remove(notice.timestamp)">
+          <Button
+            class="notice-remove"
+            @click="noticeStore.remove(notice.timestamp)"
+          >
             <CloseIcon />
           </Button>
           <Content v-html="notice.text"></Content>
         </li>
       </ul>
-      <Button class="notice-remove-all" @click="noticeStore.removeAll">Очистить все</Button>
+      <Button class="notice-remove-all" @click="noticeStore.removeAll"
+        >Очистить все</Button
+      >
     </template>
-    <p v-else class="notice-empty">
-      Уведомлений нет
-    </p>
+    <p v-else class="notice-empty">Уведомлений нет</p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useNoticeStore } from '@/stores'
-import Button from '@/components/ui/Button.vue'
-import CloseIcon from '@/components/icons/CloseIcon.vue'
-import { formateDateRu } from '@/utils/date'
-import Content from '@/components/Content.vue'
+import { useNoticeStore } from "@/stores";
+import Button from "@/components/ui/Button.vue";
+import CloseIcon from "@/components/icons/CloseIcon.vue";
+import { formateDateRu } from "@/utils/date";
+import Content from "@/components/Content.vue";
 
-const noticeStore = useNoticeStore()
+const noticeStore = useNoticeStore();
 </script>
 
 <style lang="scss">

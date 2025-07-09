@@ -1,17 +1,22 @@
 <template>
   <label class="checkbox">
-    <input class="checkbox-input" type="checkbox" :checked="modelValue" @change="model = !modelValue" />
+    <input
+      class="checkbox-input"
+      type="checkbox"
+      :checked="modelValue"
+      @change="model = !modelValue"
+    />
     <p class="checkbox-label">{{ label }}</p>
   </label>
 </template>
 
 <script setup lang="ts">
-const model = defineModel()
+const model = defineModel();
 
 defineProps<{
-  modelValue: boolean,
-  label: string
-}>()
+  modelValue: boolean;
+  label: string;
+}>();
 </script>
 <style lang="scss">
 .checkbox-input {
@@ -23,7 +28,7 @@ defineProps<{
   border-radius: 3px;
   border: 1px solid var(--color-input-border);
   transition-property: border-color, background-color;
-  transition-delay: .2ms;
+  transition-delay: 0.2ms;
   margin: 0;
 
   &::after {
@@ -34,7 +39,7 @@ defineProps<{
     background-repeat: no-repeat;
     background-position: center;
     background-size: 10px;
-    transition: transform .2s;
+    transition: transform 0.2s;
   }
 
   &:not(:checked) {

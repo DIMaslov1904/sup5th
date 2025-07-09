@@ -18,7 +18,6 @@
     font-style: italic;
   }
 
-
   h1,
   h2,
   h3,
@@ -99,11 +98,15 @@
     color: var(--color-link-view-default-typo-base);
     cursor: pointer;
     transition-property: text-decoration-color, color;
-    transition-duration: .2s;
+    transition-duration: 0.2s;
     outline-color: var(--color-control-view-action-focused);
     text-decoration: underline;
-    text-underline-offset: .1em;
-    -webkit-text-decoration-color: color-mix(in oklab, currentColor 30%, transparent);
+    text-underline-offset: 0.1em;
+    -webkit-text-decoration-color: color-mix(
+      in oklab,
+      currentColor 30%,
+      transparent
+    );
     text-decoration-color: color-mix(in oklab, currentColor 30%, transparent);
 
     &:hover {
@@ -128,7 +131,7 @@
       gap: 8px;
 
       &:before {
-        content: '';
+        content: "";
         flex-shrink: 0;
         background-image: url("data:image/svg+xml,%3Csvg xmlns='https://www.w3.org/2000/svg' width='33' height='33' viewBox='0 0 33 33' fill='none'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M7.16667 1.375H21.0523L28.5 8.82272V28.0417C28.5 29.5144 27.3061 30.7083 25.8333 30.7083H7.16667C5.69391 30.7083 4.5 29.5144 4.5 28.0417V4.04167C4.5 2.56891 5.69391 1.375 7.16667 1.375ZM17.8359 4.03906H7.16406V28.0391H25.8307V12.0443H20.5026C19.0298 12.0443 17.8359 10.8504 17.8359 9.3776V4.03906ZM20.5026 4.59655V9.3776H25.2837L20.5026 4.59655ZM11.1641 22.7057V20.0391H19.1641V22.7057H11.1641ZM11.1641 14.7109V17.3776H21.8307V14.7109H11.1641Z' fill='%23042C4D'/%3E%3C/svg%3E");
         background-size: contain;
@@ -161,7 +164,7 @@
         left: 0;
       }
 
-      &>*:first-child {
+      & > *:first-child {
         display: inline;
       }
 
@@ -180,7 +183,7 @@
       margin-top: 12px;
     }
 
-    &>li {
+    & > li {
       --counter-weight: 600;
       --counter-size: inherit;
 
@@ -194,28 +197,27 @@
     }
 
     li {
-
-      ol>li {
+      ol > li {
         padding-left: 3.5ch;
         margin-left: -2ch;
 
-        ol>li {
+        ol > li {
           padding-left: 5ch;
           margin-left: -3ch;
 
-          ol>li {
+          ol > li {
             padding-left: 6ch;
             margin-left: -4ch;
 
-            ol>li {
+            ol > li {
               padding-left: 7.5ch;
               margin-left: -5ch;
 
-              ol>li {
+              ol > li {
                 padding-left: 9ch;
                 margin-left: -6ch;
 
-                ol>li {
+                ol > li {
                   padding-left: 10.5ch;
                   margin-left: -7ch;
                 }
@@ -232,7 +234,7 @@
       padding-left: 2em;
 
       &:before {
-        content: '— ';
+        content: "— ";
         font-size: inherit;
         line-height: inherit;
         top: 0;
@@ -279,7 +281,7 @@
     }
   }
 
-  div:has(>table) {
+  div:has(> table) {
     --can-scroll: 0;
     --can-scroll-r: 1;
 
@@ -296,10 +298,19 @@
       linear-gradient(90deg, white 30%, rgba(0 0 0 / 0)),
       linear-gradient(90deg, rgba(0 0 0 / 0), white 70%) 0 100%,
       radial-gradient(farthest-side at -50% 35%, black, rgba(255 255 255 / 0)),
-      radial-gradient(farthest-side at 150% 35%, black, rgba(255 255 255 / 0)) 0 100%;
+      radial-gradient(farthest-side at 150% 35%, black, rgba(255 255 255 / 0)) 0
+        100%;
     background-repeat: no-repeat;
-    background-position: top left, top right, top left, top right;
-    background-size: 32px 100%, 32px 100%, 16px 140%, 16px 140%;
+    background-position:
+      top left,
+      top right,
+      top left,
+      top right;
+    background-size:
+      32px 100%,
+      32px 100%,
+      16px 140%,
+      16px 140%;
     background-attachment: local, local, scroll, scroll;
 
     table {
@@ -328,7 +339,7 @@
     padding-right: 24px;
 
     &:before {
-      content: '';
+      content: "";
       position: absolute;
       top: 24px;
       left: 24px;
@@ -352,7 +363,7 @@
     overflow: hidden;
   }
 
-  div:has(>a>img) {
+  div:has(> a > img) {
     margin-bottom: 12px;
   }
 

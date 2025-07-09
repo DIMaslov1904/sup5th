@@ -3,29 +3,38 @@
     <header class="project-item__header">
       <h2 class="project-item__title">{{ project.name }}</h2>
 
-      <Button size="l" :href="'https://' + project.url" target="_blank" @click.stop>
+      <Button
+        size="l"
+        :href="'https://' + project.url"
+        target="_blank"
+        @click.stop
+      >
         {{ project.url }}
       </Button>
 
-      <Button size="l" :href="getUrlAdminLogin(project.url, project.urlAdmin, project.cms)" target="_blank"
-        title="Админ. раздел" @click.stop>
+      <Button
+        size="l"
+        :href="getUrlAdminLogin(project.url, project.urlAdmin, project.cms)"
+        target="_blank"
+        title="Админ. раздел"
+        @click.stop
+      >
         <GlobalEditIcon />
       </Button>
     </header>
   </li>
 </template>
 <script setup lang="ts">
-import { getUrlAdminLogin } from '@/utils/cms-api';
-import Button from '@/components/ui/Button.vue';
-import GlobalEditIcon from '@/components/icons/GlobalEditIcon.vue';
+import { getUrlAdminLogin } from "@/utils/cms-api";
+import Button from "@/components/ui/Button.vue";
+import GlobalEditIcon from "@/components/icons/GlobalEditIcon.vue";
 
 defineProps<{
-  project: Project
-}>()
+  project: Project;
+}>();
 defineEmits<{
-  setSite: []
-}>()
-
+  setSite: [];
+}>();
 </script>
 
 <style lang="scss">
@@ -35,24 +44,26 @@ defineEmits<{
   padding: 10px;
   border-radius: 8px;
   border: 1px solid var(--color-secondaty-hover);
-  box-shadow: 0 0 10px rgba(0 0 0 / .3);
+  box-shadow: 0 0 10px rgba(0 0 0 / 0.3);
   transition-property: box-shadow;
-  transition-duration: .2s;
+  transition-duration: 0.2s;
   overflow: hidden;
   height: 76px;
   cursor: pointer;
 
-
   &::before {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
-    background-image: linear-gradient(light-dark(#fff, #2e2f38), light-dark(#ffffff00, #2e2f3800));
+    background-image: linear-gradient(
+      light-dark(#fff, #2e2f38),
+      light-dark(#ffffff00, #2e2f3800)
+    );
     z-index: 1;
   }
 
   &:hover {
-    box-shadow: 0 0 10px rgba(255 255 255 / .3);
+    box-shadow: 0 0 10px rgba(255 255 255 / 0.3);
   }
 }
 

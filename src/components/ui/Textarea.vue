@@ -1,10 +1,9 @@
 <template>
-  <textarea v-model="model">
-  </textarea>
+  <textarea v-model="model"> </textarea>
 </template>
 
 <script setup lang="ts">
-const model = defineModel<string>()
+const model = defineModel<string>();
 </script>
 
 <style lang="scss" scoped>

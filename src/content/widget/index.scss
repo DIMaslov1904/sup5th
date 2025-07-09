@@ -30,7 +30,9 @@
   overflow: hidden;
 
   &:hover {
-    transition: width 0.3s, transform 0.3s;
+    transition:
+      width 0.3s,
+      transform 0.3s;
   }
 
   &.open {

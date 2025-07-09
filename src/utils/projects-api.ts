@@ -23,7 +23,7 @@ export const getProjects = async () => {
     if (!response.ok) {
       noticeStore.add(
         "error",
-        `Ошибка при получении проектов: ${response.status}`
+        `Ошибка при получении проектов: ${response.status}`,
       );
       return { result: [] };
     }
@@ -62,7 +62,7 @@ export const getAccess = async () => {
     if (!response.ok) {
       noticeStore.add(
         "error",
-        `Ошибка при получении доступов: ${response.status}`
+        `Ошибка при получении доступов: ${response.status}`,
       );
     }
     const r = await response.json();

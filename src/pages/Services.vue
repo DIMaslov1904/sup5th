@@ -6,19 +6,16 @@
       <Button @click="servicesStore.update">Обновить</Button>
     </header>
     <ul class="services__list">
-
       <li class="services__item services__item_personal">
         <Button class="services__item_personal-add" v-if="!servicesStore.state.personal"
           @click="isShowModal = true">Заполнить сслыку на личную таблицу доступов</Button>
         <template v-else>
           <a class="services__item_personal-link" :href="'https://' + servicesStore.state.personal"
-            target="_blank">Личная
-            таблица доступов</a>
+            target="_blank">Личная таблица доступов</a>
           <Button size="l" class="services__item_personal-edit" @click="isShowModal = true">
             <EditIcon />
           </Button>
         </template>
-
       </li>
 
       <li v-if="servicesStore.state.favourites.url" class="services__item">
@@ -28,10 +25,15 @@
 
       <li v-for="services in getListSetFilters()" :class="services.url ? 'services__item' : 'services__group'">
         <ServicesItem v-if="services.url" :services :ifFavorite="servicesStore.state.favourites.url === services.url"
-          @setFavorites="servicesStore.chandeFavorites(servicesStore.state.favourites.url === services.url ? null : services)" />
+          @setFavorites="
+            servicesStore.chandeFavorites(
+              servicesStore.state.favourites.url === services.url
+                ? null
+                : services,
+            )
+            " />
         <div v-else>{{ services.name }}</div>
       </li>
-
     </ul>
   </div>
 
@@ -41,54 +43,71 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue';
-import switcher from '@/utils/switcher'
-import { useServicesStore } from '@/stores';
-import Button from '@/components/ui/Button.vue';
-import ServicesItem from '@/components/ServicesItem.vue'
-import Search from '@/components/ui/Search.vue'
-import EditIcon from '@/components/icons/EditIcon.vue'
-import Modal from '@/components/Modal.vue';
-import Textarea from '@/components/ui/Textarea.vue';
+import { onMounted, ref, computed } from "vue";
+import switcher from "@/utils/switcher";
+import { useServicesStore, useMainStore } from "@/stores";
+import Button from "@/components/ui/Button.vue";
+import ServicesItem from "@/components/ServicesItem.vue";
+import Search from "@/components/ui/Search.vue";
+import EditIcon from "@/components/icons/EditIcon.vue";
+import Modal from "@/components/Modal.vue";
+import Textarea from "@/components/ui/Textarea.vue";
 
+const servicesStore = useServicesStore();
+const store = useMainStore();
 
-const servicesStore = useServicesStore()
-const search = ref('')
-const searchRU = ref('')
-const searchEN = ref('')
-const isShowModal = ref(false)
+const search = ref("");
+const searchRU = ref("");
+const searchEN = ref("");
+const isShowModal = ref(false);
 
 onMounted(async () => {
-  await servicesStore.loadFromStorage()
-  servicesStore.state.list.length === 0 && servicesStore.update()
-})
+  await servicesStore.loadFromStorage();
+  servicesStore.state.list.length === 0 && store.state.apiUrl && servicesStore.update();
+});
 
 const personalLink = computed({
   get: () => servicesStore.state.personal,
   set: (newValue: string) => {
-    servicesStore.changePersonal(newValue.replace('http://', '').replace('https://', ''))
-  }
+    servicesStore.changePersonal(
+      newValue.replace("http://", "").replace("https://", ""),
+    );
+  },
 });
 
 const searchComputed = computed({
   get: () => search.value,
   set: (newValue: string) => {
-    newValue = newValue.toLowerCase()
-    searchRU.value = switcher(newValue)
-    searchEN.value = searchRU.value === newValue ? switcher(newValue, { type: 'rueng' }) : ''
-    search.value = newValue
-  }
+    newValue = newValue.toLowerCase();
+    searchRU.value = switcher(newValue);
+    searchEN.value =
+      searchRU.value === newValue ? switcher(newValue, { type: "rueng" }) : "";
+    search.value = newValue;
+  },
 });
 
 const fitrelServices = (item: ServicesItem | ServicesGroup) => {
-  const name = item.name.toLowerCase()
-  const description = 'description' in item ? item.description.toLowerCase() : ''
-  if (searchEN.value) return name.includes(search.value) || description.includes(search.value) || name.includes(searchEN.value) || description.includes(searchEN.value)
-  return name.includes(search.value) || description.includes(search.value) || name.includes(searchRU.value)
-}
+  const name = item.name.toLowerCase();
+  const description =
+    "description" in item ? item.description.toLowerCase() : "";
+  if (searchEN.value)
+    return (
+      name.includes(search.value) ||
+      description.includes(search.value) ||
+      name.includes(searchEN.value) ||
+      description.includes(searchEN.value)
+    );
+  return (
+    name.includes(search.value) ||
+    description.includes(search.value) ||
+    name.includes(searchRU.value)
+  );
+};
 
-const getListSetFilters = () => search.value ? servicesStore.state.list.filter(fitrelServices) : servicesStore.state.list
-
+const getListSetFilters = () =>
+  search.value
+    ? servicesStore.state.list.filter(fitrelServices)
+    : servicesStore.state.list;
 </script>
 
 <style lang="scss">
@@ -139,13 +158,13 @@ const getListSetFilters = () => search.value ? servicesStore.state.list.filter(f
   padding: 10px;
   border-radius: 8px;
   border: 1px solid var(--color-secondaty-hover);
-  box-shadow: 0 0 10px rgba(0 0 0 / .3);
+  box-shadow: 0 0 10px rgba(0 0 0 / 0.3);
   transition-property: box-shadow;
-  transition-duration: .2s;
+  transition-duration: 0.2s;
   overflow: hidden;
 
   &:hover {
-    box-shadow: 0 0 10px rgba(255 255 255 / .3);
+    box-shadow: 0 0 10px rgba(255 255 255 / 0.3);
   }
 }
 
@@ -166,7 +185,7 @@ const getListSetFilters = () => search.value ? servicesStore.state.list.filter(f
 }
 
 .services__item_personal-edit {
-  transition: opacity .2s;
+  transition: opacity 0.2s;
   padding: 5px 10px;
   position: absolute;
   top: 10px;
@@ -180,7 +199,7 @@ const getListSetFilters = () => search.value ? servicesStore.state.list.filter(f
   font-weight: bold;
 
   &::after {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
   }

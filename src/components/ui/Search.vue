@@ -8,11 +8,11 @@
 </template>
 
 <script setup lang="ts">
-import Input from '@/components/ui/Input.vue'
-import Button from '@/components/ui/Button.vue'
-import CloseIcon from '../icons/CloseIcon.vue';
+import Input from "@/components/ui/Input.vue";
+import Button from "@/components/ui/Button.vue";
+import CloseIcon from "../icons/CloseIcon.vue";
 
-const model = defineModel()
+const model = defineModel();
 </script>
 
 <style lang="scss">
