@@ -1,0 +1,89 @@
+.sup-5th-widget {
+  --offset: 32px;
+  --x: 0;
+  --y: 0;
+  --width-full: 272px;
+  --width: 68px;
+  --height: 68px;
+  --translate: translate(
+    min(
+      max(var(--x), calc((100dvw - var(--width) - var(--offset)) * -1)),
+      0dvw
+    ),
+    min(
+      max(var(--y), calc((100dvh - var(--height) - var(--offset)) * -1)),
+      0dvh
+    )
+  );
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1000000000000;
+  background: rgb(255 255 255 / 0.9);
+  border-radius: 16px;
+  user-select: none;
+  transform: var(--translate);
+  font-size: 0;
+  box-shadow: 0 0 11px 2px rgb(0 0 0 / 0.2);
+  display: inline-flex;
+  width: var(--width);
+  overflow: hidden;
+
+  &:hover {
+    transition: width 0.3s, transform 0.3s;
+  }
+
+  &.open {
+    --width: var(--width-full) !important;
+  }
+
+  .sup-5th-menu:hover {
+    transform: scale(1.05);
+  }
+
+  &:not(.dragging) .sup-5th-btn:not(.sup-5th-menu):hover {
+    background-color: #ef3f2c;
+    color: #fff;
+  }
+
+  &.dragging {
+    transition: none;
+    opacity: 0.8;
+    cursor: grabbing;
+    transform: var(--translate) scale(1.05);
+    box-shadow: 0 0 15px 2px rgb(0 0 0 / 0.2);
+
+    .sup-5th-btn {
+      pointer-events: none;
+    }
+  }
+}
+
+.sup-5th-btn {
+  --img-size: 48px;
+  margin: 0;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: none;
+  cursor: pointer;
+  padding: 10px;
+  width: 68px;
+  height: 68px;
+  box-sizing: border-box;
+  color: #000;
+  transition-property: transform, background-color, color;
+  transition-duration: 0.3s;
+  background-color: transparent;
+
+  svg {
+    width: var(--img-size);
+  }
+}
+
+.sup-5th-menu {
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: var(--img-size);
+}

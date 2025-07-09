@@ -1,0 +1,87 @@
+.modal {
+  border: none;
+  padding: 0;
+  border-radius: 8px;
+  opacity: 0;
+  transform: scale(0);
+  transition: transform 0.5s, opasity 0.5s;
+
+  &::backdrop {
+    transition: background 0.5s;
+  }
+
+  &[open] {
+    opacity: 1;
+    transform: scale(1);
+
+    &::backdrop {
+      background: rgba(39 39 39 / 0.4);
+    }
+  }
+
+  .modal__wrapper {
+    position: relative;
+    padding: 40px 48px 48px;
+  }
+
+  button.modal__close {
+    outline: none;
+    border: 2px solid transparent;
+    background-color: transparent;
+    border-radius: 12px;
+    font-size: 16px;
+    transition: background 0.2s, border 0.2s, color 0.2s;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    --size: 32px;
+    padding: 8px;
+    width: var(--size);
+    height: var(--size);
+    box-sizing: border-box;
+    border: none;
+    cursor: pointer;
+
+    &::after,
+    &::before {
+      content: "";
+      position: absolute;
+      width: 17px;
+      height: 1px;
+      border-radius: 5px;
+      inset: 0;
+      margin: auto;
+      background-color: #000;
+      transform: rotate(45deg);
+    }
+
+    &::after {
+      transform: rotate(-45deg);
+    }
+  }
+
+  .iframe {
+    border: none;
+    width: 90vw;
+    height: 90dvh;
+    margin: -40px -48px -48px;
+  }
+}
+
+.ui-button.edit-time-taskt:hover {
+  border-color: #84bdde;
+  background-image: url("images/ui-bg_glass_75_c6e9fe_1x400.png");
+  color: #111;
+  box-shadow: inset 0px 1px 0px #fff, inset 0px -1px 0px #f2faff;
+}
+
+@starting-style {
+  .modal[open] {
+    opacity: 0;
+    transform: scale(0);
+
+    &::backdrop {
+      background: rgba(39 39 39 / 0);
+    }
+  }
+}

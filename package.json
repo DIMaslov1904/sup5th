@@ -1,0 +1,31 @@
+{
+  "name": "sup5th",
+  "type": "module",
+  "version": "3.0.0",
+  "author": "DIMaslov",
+  "license": "ISC",
+  "description": "Расширение поддержки 5-го измерения",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "pinia": "^3.0.3",
+    "sass": "^1.89.2",
+    "tailwindcss": "^4.1.11",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0",
+    "@types/chrome": "^0.0.313",
+    "@types/node": "^22.13.14",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/tsconfig": "^0.7.0",
+    "typescript": "~5.7.2",
+    "vite": "^6.2.0",
+    "vite-plugin-zip-pack": "^1.2.4",
+    "vue-tsc": "^2.2.4"
+  }
+}
