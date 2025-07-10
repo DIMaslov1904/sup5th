@@ -299,12 +299,6 @@ const checkCurrentProject = async (): Promise<void> => {
 };
 
 const createFloatingWidget = async (): Promise<void> => {
-  // Добавляем стили
-  const styleSheet = document.createElement("link");
-  styleSheet.href = chrome.runtime.getURL("widget.css");
-  styleSheet.rel = "stylesheet";
-  document.head.appendChild(styleSheet);
-
   // Сам виджет
   floatingWidget = document.createElement("div");
   floatingWidget.className = "sup-5th-widget";

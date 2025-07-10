@@ -32,4 +32,12 @@ export default defineManifest({
     service_worker: "src/background/main.ts",
     type: "module",
   },
+  web_accessible_resources: [
+    {
+      matches: [
+        "<all_urls>"
+      ],
+      resources: ["*", "*.js", "*.css", "assets/*"]
+    }
+  ]
 });
