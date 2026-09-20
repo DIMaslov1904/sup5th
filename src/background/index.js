@@ -1,38 +1,236 @@
-let settings = {
-  isEnabled: true
-}
+const DATA_KEY = 'projectData'
+const SETTINGS_KEY = 'apiSettings'
+const ERRORS_KEY = 'apiErrorLog'
+const REQUEST_TIMEOUT = 30000
+const MAX_ERROR_ENTRIES = 50
 
-// default settings for development environment
-if (process.env.NODE_ENV === 'development') {
-  settings = {
-    isEnabled: true
-  }
-
-  console.info('Extension initialized with settings: ', settings)
-}
-
-function loadSettings() {
-  chrome.storage.sync.get((items) => {
-    if (items.settings) settings = items.settings
-  })
-}
-
-function saveSettings(updated) {
-  if (updated) settings = updated
-
-  chrome.storage.sync.set({
-    settings
-  })
-}
-
-chrome.runtime.onMessage.addListener((message) => {
-  if (!settings.isEnabled) return
-
-  console.log(message, settings)
+const emptyData = () => ({
+    lastSuccessfulData: {
+        projects: [],
+        accesses: [],
+        projectsUpdatedAt: null,
+        accessesUpdatedAt: null,
+        projectsUrl: '',
+        accessesUrl: ''
+    }
 })
 
-chrome.runtime.onInstalled.addListener(() => {
-  saveSettings()
+const emptySettings = () => ({ projectsUrl: '', accessUrl: '' })
+
+const storageGet = (key, fallback) => new Promise((resolve, reject) => {
+    chrome.storage.local.get([key], (result) => {
+        const error = chrome.runtime.lastError
+        if (error) reject(new Error(error.message))
+        else resolve(result[key] ?? fallback)
+    })
 })
 
-loadSettings()
+const storageSet = (key, value) => new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [key]: value }, () => {
+        const error = chrome.runtime.lastError
+        if (error) reject(new Error(error.message))
+        else resolve()
+    })
+})
+
+const getStoredData = async () => {
+    const stored = await storageGet(DATA_KEY, emptyData())
+    if (stored.lastSuccessfulData) return stored
+
+    return {
+        lastSuccessfulData: {
+            projects: stored.projects || [],
+            accesses: stored.accesses || [],
+            projectsUpdatedAt: stored.updatedAt || null,
+            accessesUpdatedAt: stored.updatedAt || null,
+            projectsUrl: '',
+            accessesUrl: ''
+        }
+    }
+}
+
+const getUrlKey = (value) => {
+    if (!value) return ''
+    const candidate = String(value).trim()
+    try {
+        return new URL(candidate.includes('://') ? candidate : `https://${candidate}`).host
+    } catch {
+        return candidate.replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase()
+    }
+}
+
+const asText = (value) => (value == null ? '' : String(value).trim())
+
+const normalizeProject = (item) => {
+    const value = Array.isArray(item)
+        ? { name: item[0], url: item[1], subdomain: item[2], manual: item[3], urlAdmin: item[4], cms: item[5], git: item[6], figma: item[7], addDocument: item[8] }
+        : item || {}
+
+    return {
+        name: asText(value.name || value.title || value.project),
+        url: getUrlKey(value.url || value.site || value.domain),
+        subdomain: Boolean(value.subdomain),
+        urlAdmin: asText(value.urlAdmin || value.adminUrl),
+        cms: asText(value.cms) || 'Нет',
+        manual: asText(value.manual),
+        git: asText(value.git),
+        figma: asText(value.figma),
+        addDocument: asText(value.addDocument),
+        login: asText(value.login),
+        password: asText(value.password)
+    }
+}
+
+const normalizeAccess = (item) => {
+    const value = Array.isArray(item)
+        ? { name: item[0], url: item[1], login: item[2], password: item[3] }
+        : item || {}
+
+    return {
+        name: asText(value.name || value.title || value.project),
+        url: getUrlKey(value.url || value.site || value.domain),
+        login: asText(value.login || value.username),
+        password: asText(value.password)
+    }
+}
+
+const extractRows = (payload) => {
+    const rows = Array.isArray(payload) ? payload : payload?.result ?? payload?.data
+    if (!Array.isArray(rows)) throw new Error('Ответ API не содержит массив result')
+    return rows
+}
+
+const requestRows = async (url, kind) => {
+    if (!url?.trim()) throw new Error(`Не указан адрес API ${kind}`)
+
+    let parsedUrl
+    try {
+        parsedUrl = new URL(url.trim())
+    } catch {
+        throw new Error(`Некорректный адрес API ${kind}`)
+    }
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        throw new Error(`API ${kind} должен использовать HTTP или HTTPS`)
+    }
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT)
+    try {
+        const response = await fetch(parsedUrl.href, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal
+        })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return extractRows(await response.json())
+    } catch (error) {
+        if (error.name === 'AbortError') throw new Error('Превышено время ожидания API')
+        throw new Error(error.message || `Ошибка запроса API ${kind}`)
+    } finally {
+        clearTimeout(timeoutId)
+    }
+}
+
+const mergeProjectsAndAccesses = ({ projects, accesses }) => {
+    const merged = new Map(projects.filter((item) => item.url).map((item) => [item.url, item]))
+    for (const access of accesses) {
+        if (!access.url) continue
+        const project = merged.get(access.url)
+        merged.set(access.url, {
+            ...(project || { name: access.name }),
+            login: access.login,
+            password: access.password
+        })
+    }
+    return [...merged.values()]
+}
+
+const saveSuccessfulData = async (data, type, rows, url) => {
+    const snapshot = data.lastSuccessfulData
+    const nextSnapshot = {
+        ...snapshot,
+        [type]: rows,
+        [`${type}UpdatedAt`]: Date.now(),
+        [`${type}Url`]: url
+    }
+    nextSnapshot.projects = mergeProjectsAndAccesses(nextSnapshot)
+    await storageSet(DATA_KEY, { lastSuccessfulData: nextSnapshot })
+    return { lastSuccessfulData: nextSnapshot }
+}
+
+const logError = async (type, error) => {
+    const current = await storageGet(ERRORS_KEY, [])
+    const entry = { type, message: error.message || String(error), createdAt: Date.now() }
+    await storageSet(ERRORS_KEY, [entry, ...current].slice(0, MAX_ERROR_ENTRIES))
+}
+
+const refreshProjects = async (url) => {
+    try {
+        const data = await getStoredData()
+        const rows = (await requestRows(url, 'проектов')).map(normalizeProject)
+        return saveSuccessfulData(data, 'projects', rows, url)
+    } catch (error) {
+        await logError('projects', error)
+        throw error
+    }
+}
+
+const refreshAccesses = async (url) => {
+    try {
+        const data = await getStoredData()
+        const rows = (await requestRows(url, 'доступов')).map(normalizeAccess)
+        return saveSuccessfulData(data, 'accesses', rows, url)
+    } catch (error) {
+        await logError('accesses', error)
+        throw error
+    }
+}
+
+const refreshAll = async ({ projectsUrl, accessUrl }) => {
+    const errors = []
+    try {
+        await refreshProjects(projectsUrl)
+    } catch (error) {
+        errors.push(`Проекты: ${error.message}`)
+    }
+    try {
+        await refreshAccesses(accessUrl)
+    } catch (error) {
+        errors.push(`Доступы: ${error.message}`)
+    }
+    return { ...(await getStoredData()), refreshErrors: errors }
+}
+
+const toPublicData = (data) => ({
+    ...data,
+    lastSuccessfulData: {
+        ...data.lastSuccessfulData,
+        projects: data.lastSuccessfulData.projects.map(({ password, ...project }) => project),
+        accesses: data.lastSuccessfulData.accesses.map(({ password, ...access }) => access)
+    }
+})
+
+const handlers = {
+    'data:settings:get': () => storageGet(SETTINGS_KEY, emptySettings()),
+    'data:settings:set': ({ settings }) => {
+        const nextSettings = { ...emptySettings(), ...settings }
+        return storageSet(SETTINGS_KEY, nextSettings).then(() => nextSettings)
+    },
+    'data:projects:get': () => getStoredData().then(toPublicData),
+    'data:projects:refresh': ({ url }) => refreshProjects(url).then(toPublicData),
+    'data:accesses:refresh': ({ url }) => refreshAccesses(url).then(toPublicData),
+    'data:all:refresh': (payload) => refreshAll(payload).then(toPublicData),
+    'data:errors:get': () => storageGet(ERRORS_KEY, [])
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    const handler = handlers[message?.type]
+    if (!handler) return false
+
+    Promise.resolve(handler(message.payload || {}))
+        .then((data) => sendResponse({ ok: true, data }))
+        .catch((error) => {
+            console.error(`[background] ${message.type}`, error)
+            sendResponse({ ok: false, error: error.message })
+        })
+    return true
+})
