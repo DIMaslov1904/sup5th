@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { loadApiSettings, loadErrorLog, loadProjectData, refreshAccesses, refreshProjects, saveApiSettings } from '../data/projectData'
+import { clearAllData, loadApiSettings, loadErrorLog, loadProjectData, refreshAccesses, refreshProjects, saveApiSettings } from '../data/projectData'
 
 const settings = ref({ projectsUrl: '', accessUrl: '' })
 const data = ref({ lastSuccessfulData: { projects: [], accesses: [], projectsUpdatedAt: null, accessesUpdatedAt: null } })
@@ -44,6 +44,24 @@ const checkApi = async (type) => {
         message.value = error.message
         data.value = await loadProjectData()
         errors.value = await loadErrorLog()
+    } finally {
+        loading.value = ''
+    }
+}
+
+const resetData = async () => {
+    if (!window.confirm('Удалить все данные расширения? Это действие нельзя отменить.')) return
+
+    loading.value = 'reset'
+    message.value = ''
+    try {
+        await clearAllData()
+        settings.value = { projectsUrl: '', accessUrl: '' }
+        data.value = { lastSuccessfulData: { projects: [], accesses: [], projectsUpdatedAt: null, accessesUpdatedAt: null, projectsUrl: '', accessesUrl: '' } }
+        errors.value = []
+        message.value = 'Все данные расширения удалены'
+    } catch (error) {
+        message.value = error.message
     } finally {
         loading.value = ''
     }
@@ -122,5 +140,11 @@ const checkApi = async (type) => {
                 </li>
             </ul>
         </details>
+
+        <button
+            class="rounded border border-red-400/40 px-3 py-2 text-xs text-red-300 transition hover:bg-red-400/10 disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+            type="button" :disabled="loading.length" @click="resetData">
+            Сбросить все данные
+        </button>
     </div>
 </template>

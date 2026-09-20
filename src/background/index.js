@@ -50,6 +50,23 @@ const storageSet = (key, value) => new Promise((resolve, reject) => {
     })
 })
 
+const clearAllData = () => new Promise((resolve, reject) => {
+    chrome.storage.local.clear(async () => {
+        const error = chrome.runtime.lastError
+        if (error) {
+            reject(new Error(error.message))
+            return
+        }
+
+        try {
+            await chrome.alarms.clear(PROJECTS_ALARM)
+            resolve()
+        } catch (alarmError) {
+            reject(alarmError)
+        }
+    })
+})
+
 const getStoredData = async () => {
     const stored = await storageGet(DATA_KEY, emptyData())
     if (stored.lastSuccessfulData) return stored
@@ -238,7 +255,8 @@ const handlers = {
     'data:projects:refresh': ({ url }) => refreshProjects(url).then(toPublicData),
     'data:accesses:refresh': ({ url }) => refreshAccesses(url).then(toPublicData),
     'data:all:refresh': (payload) => refreshAll(payload).then(toPublicData),
-    'data:errors:get': () => storageGet(ERRORS_KEY, [])
+    'data:errors:get': () => storageGet(ERRORS_KEY, []),
+    'data:clear': () => clearAllData().then(() => ({ cleared: true }))
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

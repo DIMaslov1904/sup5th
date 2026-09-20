@@ -30,3 +30,5 @@ export const refreshAll = (settings) =>
     callBackground('data:all:refresh', settings)
 
 export const loadErrorLog = () => callBackground('data:errors:get')
+
+export const clearAllData = () => callBackground('data:clear')
