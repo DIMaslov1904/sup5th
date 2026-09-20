@@ -1,15 +1,48 @@
+<script setup>
+import { onMounted, ref } from 'vue'
+import { loadApiSettings, refreshAccesses, refreshProjects, saveApiSettings } from '../data/projectData'
+
+const settings = ref({ projectsUrl: '', accessUrl: '' })
+const loading = ref('')
+const message = ref('')
+
+onMounted(async () => {
+    settings.value = await loadApiSettings()
+})
+
+const checkApi = async (type) => {
+    const urlKey = type === 'projects' ? 'projectsUrl' : 'accessUrl'
+    loading.value = type
+    message.value = ''
+    try {
+        await saveApiSettings(settings.value)
+        const data = type === 'projects'
+            ? await refreshProjects(settings.value[urlKey])
+            : await refreshAccesses(settings.value[urlKey])
+        message.value = type === 'projects'
+            ? `Загружено проектов: ${data.projects.length}`
+            : `Загружено доступов: ${data.accesses.length}`
+    } catch (error) {
+        message.value = error.message
+    } finally {
+        loading.value = ''
+    }
+}
+</script>
+
 <template>
     <div class="grid gap-4 w-full pt-4 px-4">
         <div class="relative">
-            <input
-                class="peer w-full bg-transparent placeholder:text-slate-400 text-slate-700 text-sm border-b border-slate-200 px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow" />
+            <input v-model="settings.projectsUrl"
+                class="peer w-full bg-transparent placeholder:text-slate-400 text-slate-200 text-sm border-b border-slate-200 px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+                required />
             <button
                 class="absolute right-1 top-1 rounded bg-slate-800 py-1 px-2.5 border border-transparent text-center text-sm text-white transition-all shadow-sm hover:shadow focus:bg-slate-700 focus:shadow-none active:bg-slate-700 hover:bg-slate-700 active:shadow-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none cursor-pointer"
-                type="button">
+                type="button" :disabled="loading === 'projects'" @click="checkApi('projects')">
                 Проверить
             </button>
             <label
-                class="absolute cursor-text pointer-events-none px-1 left-2.5 top-2.5 text-slate-400 text-sm transition-all transform origin-left peer-focus:-top-2 peer-focus:left-2.5 peer-focus:text-xs peer-focus:text-slate-400 peer-focus:scale-90">
+                class="absolute cursor-text pointer-events-none px-1 left-2.5 top-2.5 text-slate-400 text-sm transition-all transform origin-left peer-focus:-top-2 peer-focus:left-2.5 peer-focus:text-xs peer-focus:text-slate-400 peer-focus:scale-90 peer-valid:-top-2 peer-valid:left-2.5 peer-valid:text-xs peer-valid:text-slate-400 peer-valid:scale-90">
                 API получения всех проектов
             </label>
             <p class="flex items-start mt-2 text-xs text-slate-400">
@@ -23,15 +56,16 @@
         </div>
 
         <div class="relative">
-            <input
-                class="peer w-full bg-transparent placeholder:text-slate-400 text-slate-700 text-sm border-b border-slate-200 px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow" />
+            <input v-model="settings.accessUrl"
+                class="peer w-full bg-transparent placeholder:text-slate-400 text-slate-200 text-sm border-b border-slate-200 px-3 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+                required />
             <button
                 class="absolute right-1 top-1 rounded bg-slate-800 py-1 px-2.5 border border-transparent text-center text-sm text-white transition-all shadow-sm hover:shadow focus:bg-slate-700 focus:shadow-none active:bg-slate-700 hover:bg-slate-700 active:shadow-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none cursor-pointer"
-                type="button">
+                type="button" :disabled="loading === 'access'" @click="checkApi('access')">
                 Проверить
             </button>
             <label
-                class="absolute cursor-text pointer-events-none px-1 left-2.5 top-2.5 text-slate-400 text-sm transition-all transform origin-left peer-focus:-top-2 peer-focus:left-2.5 peer-focus:text-xs peer-focus:text-slate-400 peer-focus:scale-90">
+                class="absolute cursor-text pointer-events-none px-1 left-2.5 top-2.5 text-slate-400 text-sm transition-all transform origin-left peer-focus:-top-2 peer-focus:left-2.5 peer-focus:text-xs peer-focus:text-slate-400 peer-focus:scale-90 peer-valid:-top-2 peer-valid:left-2.5 peer-valid:text-xs peer-valid:text-slate-400 peer-valid:scale-90">
                 API получения личных доступов
             </label>
             <p class="flex items-start mt-2 text-xs text-slate-400">
@@ -42,6 +76,9 @@
                 </svg>
                 Необходимо создать самостоятельно. Инструкция
             </p>
+        </div>
+        <div v-if="message" class="text-white bg-[#c1a100cc] p-2 rounded">
+            {{ message }}
         </div>
     </div>
 </template>
