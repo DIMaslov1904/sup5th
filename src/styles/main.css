@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 #app {
   height: 100dvh;
@@ -10,12 +8,12 @@
 @media (prefers-color-scheme: dark) {
   body {
     background-image: linear-gradient(to bottom right, #161617, #1f1f21);
-    color: hsla(0,0%,100%,.45);
+    color: hsla(0, 0%, 100%, 0.45);
   }
 }
 
 @media (prefers-color-scheme: light) {
   body {
-    background-image: linear-gradient(to bottom right, #FDFCFB, #E2D1C3);
+    background-image: linear-gradient(to bottom right, #fdfcfb, #e2d1c3);
   }
 }

@@ -5,8 +5,7 @@
 ## Features
 * Vue 3
 * Vite
-* TailwindCSS
-* Daisy UI
+* TailwindCSS 4
 * Packaging Script
 
 ## Installation
