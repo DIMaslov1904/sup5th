@@ -4,16 +4,3 @@
   height: 100dvh;
   width: 100%;
 }
-
-@media (prefers-color-scheme: dark) {
-  body {
-    background-image: linear-gradient(to bottom right, #161617, #1f1f21);
-    color: hsla(0, 0%, 100%, 0.45);
-  }
-}
-
-@media (prefers-color-scheme: light) {
-  body {
-    background-image: linear-gradient(to bottom right, #fdfcfb, #e2d1c3);
-  }
-}
