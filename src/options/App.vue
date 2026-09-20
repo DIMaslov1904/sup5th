@@ -1,39 +1,92 @@
-<script setup>
-import { ref } from 'vue';
-const login = ref('')
-const password = ref('')
-</script>
-
 <template>
-
-  <div class="flex flex-col gap-6 w-72 mx-auto h-full justify-center">
-    <div class="relative h-11 w-full min-w-[200px]">
-      <input v-model="login"
-        class="peer h-full w-full border-b border-current bg-transparent pt-4 pb-1.5 font-sans text-sm font-normal text-blue-gray-700 outline outline-0 transition-all placeholder-shown:border-blue-gray-200 focus:border-pink-500 focus:outline-0 disabled:border-0 disabled:bg-blue-gray-50"
-        placeholder=" "
-        type="text" />
-      <label
-        class="after:content[' '] pointer-events-none absolute left-0 -top-1.5 flex h-full w-full select-none text-[11px] font-normal leading-tight text-blue-gray-500 transition-all after:absolute after:-bottom-1.5 after:block after:w-full after:scale-x-0 after:border-b-2 after:border-pink-500 after:transition-transform after:duration-300 peer-placeholder-shown:text-sm peer-placeholder-shown:leading-[4.25] peer-placeholder-shown:text-blue-gray-500 peer-focus:text-[11px] peer-focus:leading-tight peer-focus:text-pink-500 peer-focus:after:scale-x-100 peer-focus:after:border-pink-500 peer-disabled:text-transparent peer-disabled:peer-placeholder-shown:text-blue-gray-500">
-        Логин
-      </label>
+  <div
+    class="flex justify-center items-center w-full h-full bg-linear-[135deg,#0f172a,0%,#1e293b,30%,#334155,60%,#1e293b] text-white text-xl">
+    <div class="max-w-3xl">
+      <h1 class="text-3xl font-bold mb-5">Инструкция по созданию api в гугл таблице</h1>
+      <ol>
+        <li>Переходим в Вашу таблицу доступов</li>
+        <li>Необходимо задать название листа <b class="bg-gray-500 px-2 rounded">Доступы к сайтам</b></li>
+        <li>
+          Проверяем столбцы
+          <ul class="grid grid-cols-4 mb-3">
+            <li>[A] Название</li>
+            <li>[B] Адрес</li>
+            <li>[C] Логин</li>
+            <li>[D] Пароль</li>
+          </ul>
+        </li>
+        <li>
+          Для выгрузки с ftp доступами, проверьте еще
+          <ul class="grid grid-cols-4 mb-3">
+            <li>[F] Домен</li>
+            <li>[G] Логин</li>
+            <li>[H] Пароль</li>
+          </ul>
+        </li>
+        <li>В верхнем меню выбираем &#128073;Расширения &#128073;Apps script</li>
+        <li>
+          Копируем код: <button @click="copyCode"
+            class="rounded bg-slate-800 py-1 px-2.5 border border-transparent text-center text-sm text-white transition-all shadow-sm hover:shadow focus:bg-slate-700 focus:shadow-none active:bg-slate-700 hover:bg-slate-700 active:shadow-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none cursor-pointer"
+            type="button">
+            {{ copyCodeText }}
+          </button>
+        </li>
+        <li>Вставляем код в редактор, удаляя пустую функцию по умолчанию</li>
+        <li>Нажимаем сверху кнопку &#128073;Начать развертывание</li>
+        <li>&#128073;Новое развертывание</li>
+        <li>
+          Выберите тип, нажимаем шестеренку, выбираем &#128073;Веб-приложение
+        </li>
+        <li>У кого есть доступ, ставим - &#128073;Все</li>
+        <li>Предоставить доступ, дальше авторизация через гугл</li>
+        <li>
+          ‼️На странице с восклицательным знаком - &#128073;Advanced &#128073;Go
+          to ... (unsafe)
+        </li>
+        <li>Копируем URL</li>
+        <li>
+          Вставляем в поле <b class="bg-gray-500 px-2 rounded">API получения личных доступов</b>
+        </li>
+      </ol>
     </div>
-
-    <div v-if="login.length > 2" class="relative h-11 w-full min-w-[200px]">
-      <input v-model="password"
-        class="peer h-full w-full border-b border-current bg-transparent pt-4 pb-1.5 font-sans text-sm font-normal text-blue-gray-700 outline outline-0 Transition-all placeholder-shown:border-blue-gray-200 focus:border-pink-500 focus:outline-0 disabled:border-0 disabled:bg-blue-gray-50"
-        placeholder=" "
-        type="password" />
-      <label
-        class="after:content[' '] pointer-events-none absolute left-0 -top-1.5 flex h-full w-full select-none text-[11px] font-normal leading-tight text-blue-gray-500 transition-all after:absolute after:-bottom-1.5 after:block after:w-full after:scale-x-0 after:border-b-2 after:border-pink-500 after:transition-transform after:duration-300 peer-placeholder-shown:text-sm peer-placeholder-shown:leading-[4.25] peer-placeholder-shown:text-blue-gray-500 peer-focus:text-[11px] peer-focus:leading-tight peer-focus:text-pink-500 peer-focus:after:scale-x-100 peer-focus:after:border-pink-500 peer-disabled:text-transparent peer-disabled:peer-placeholder-shown:text-blue-gray-500">
-        Пароль
-      </label>
-    </div>
-
-    <button v-if="password.length > 5"
-      class="middle none center rounded-lg py-3 px-6 font-sans text-xs font-bold uppercase text-pink-500 transition-all hover:bg-pink-500/10 active:bg-pink-500/30 disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none"
-      data-ripple-dark="true">
-      Авторизоваться
-    </button>
   </div>
-
 </template>
+
+<script setup>
+import { ref } from "vue";
+
+defineEmits(["return"]);
+
+const copyCodeText = ref("Скопировать код");
+
+const copyCode = () => {
+  navigator.clipboard
+    .writeText(
+      `
+const ss = SpreadsheetApp.getActiveSpreadsheet()
+
+const getData = (range = 'A:D') => {
+  const s = ss.getSheetByName("Доступы к сайтам")
+  if (!s) throw new Error("Лист 'Доступы к сайтам' не найден")
+  const v = s.getRange(range).getValues()
+  return v.slice(1, s.getLastRow())
+}
+
+const doGet = (e) => {
+  try {
+    const result = e?.parameter?.get === 'ftp' ? getData('A:H') : getData()
+    return ContentService.createTextOutput(JSON.stringify({result})).setMimeType(ContentService.MimeType.JSON)
+  } catch (e) {
+    return ContentService.createTextOutput(JSON.stringify({'error': e.message})).setMimeType(ContentService.MimeType.JSON)
+  }
+}
+`,
+    )
+    .then(() => {
+      copyCodeText.value = "Скопировано!";
+      setTimeout(() => {
+        copyCodeText.value = "Скопировать код";
+      }, 1500);
+    });
+};
+</script>
