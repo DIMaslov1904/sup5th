@@ -1,6 +1,8 @@
 const DATA_KEY = 'projectData'
 const SETTINGS_KEY = 'apiSettings'
 const ERRORS_KEY = 'apiErrorLog'
+const PROJECTS_ALARM = 'weekly-projects-refresh'
+const PROJECTS_REFRESH_PERIOD_MINUTES = 7 * 24 * 60
 const REQUEST_TIMEOUT = 30000
 const MAX_ERROR_ENTRIES = 50
 
@@ -16,6 +18,21 @@ const emptyData = () => ({
 })
 
 const emptySettings = () => ({ projectsUrl: '', accessUrl: '' })
+
+const scheduleProjectsRefresh = async (projectsUrl) => {
+    await chrome.alarms.clear(PROJECTS_ALARM)
+    if (!projectsUrl?.trim()) return
+
+    await chrome.alarms.create(PROJECTS_ALARM, {
+        delayInMinutes: PROJECTS_REFRESH_PERIOD_MINUTES,
+        periodInMinutes: PROJECTS_REFRESH_PERIOD_MINUTES
+    })
+}
+
+const restoreProjectsSchedule = async () => {
+    const settings = await storageGet(SETTINGS_KEY, emptySettings())
+    await scheduleProjectsRefresh(settings.projectsUrl)
+}
 
 const storageGet = (key, fallback) => new Promise((resolve, reject) => {
     chrome.storage.local.get([key], (result) => {
@@ -213,7 +230,9 @@ const handlers = {
     'data:settings:get': () => storageGet(SETTINGS_KEY, emptySettings()),
     'data:settings:set': ({ settings }) => {
         const nextSettings = { ...emptySettings(), ...settings }
-        return storageSet(SETTINGS_KEY, nextSettings).then(() => nextSettings)
+        return storageSet(SETTINGS_KEY, nextSettings)
+            .then(() => scheduleProjectsRefresh(nextSettings.projectsUrl))
+            .then(() => nextSettings)
     },
     'data:projects:get': () => getStoredData().then(toPublicData),
     'data:projects:refresh': ({ url }) => refreshProjects(url).then(toPublicData),
@@ -233,4 +252,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             sendResponse({ ok: false, error: error.message })
         })
     return true
+})
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name !== PROJECTS_ALARM) return
+
+    storageGet(SETTINGS_KEY, emptySettings())
+        .then((settings) => refreshProjects(settings.projectsUrl))
+        .catch((error) => console.error('[background] weekly projects refresh', error))
+})
+
+chrome.runtime.onInstalled.addListener(() => {
+    restoreProjectsSchedule().catch((error) => console.error('[background] restore schedule', error))
+})
+
+chrome.runtime.onStartup.addListener(() => {
+    restoreProjectsSchedule().catch((error) => console.error('[background] restore schedule', error))
 })

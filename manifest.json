@@ -13,21 +13,15 @@
   "content_scripts": [
     {
       "all_frames": true,
-      "js": [
-        "src/content-script/index.js"
-      ],
+      "js": ["src/content-script/index.js"],
       "matches": ["*://*/*"],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "matches": [
-        "*://*/*"
-      ],
-      "resources": [
-        "src/content-script/index.js"
-      ]
+      "matches": ["*://*/*"],
+      "resources": ["src/content-script/index.js"]
     }
   ],
   "icons": {
@@ -37,12 +31,8 @@
     "128": "src/assets/icons/icon_128.png"
   },
   "options_page": "src/options/index.html",
-  "permissions": [
-    "storage"
-  ],
-  "host_permissions": [
-    "*://*/*"
-  ],
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["*://*/*"],
   "content_security_policy": {
     "script-src": "self",
     "object-src": "self"
