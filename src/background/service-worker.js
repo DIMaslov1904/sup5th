@@ -1,6 +1,7 @@
 const DATA_KEY = 'projectData'
 const SETTINGS_KEY = 'apiSettings'
 const ERRORS_KEY = 'apiErrorLog'
+const AUTH_KEY = 'pendingAdminAuth'
 const PROJECTS_ALARM = 'weekly-projects-refresh'
 const PROJECTS_REFRESH_PERIOD_MINUTES = 7 * 24 * 60
 const REQUEST_TIMEOUT = 30000
@@ -19,21 +20,6 @@ const emptyData = () => ({
 
 const emptySettings = () => ({ projectsUrl: '', accessUrl: '' })
 
-const scheduleProjectsRefresh = async (projectsUrl) => {
-    await chrome.alarms.clear(PROJECTS_ALARM)
-    if (!projectsUrl?.trim()) return
-
-    await chrome.alarms.create(PROJECTS_ALARM, {
-        delayInMinutes: PROJECTS_REFRESH_PERIOD_MINUTES,
-        periodInMinutes: PROJECTS_REFRESH_PERIOD_MINUTES
-    })
-}
-
-const restoreProjectsSchedule = async () => {
-    const settings = await storageGet(SETTINGS_KEY, emptySettings())
-    await scheduleProjectsRefresh(settings.projectsUrl)
-}
-
 const storageGet = (key, fallback) => new Promise((resolve, reject) => {
     chrome.storage.local.get([key], (result) => {
         const error = chrome.runtime.lastError
@@ -50,6 +36,20 @@ const storageSet = (key, value) => new Promise((resolve, reject) => {
     })
 })
 
+const scheduleProjectsRefresh = async (projectsUrl) => {
+    await chrome.alarms.clear(PROJECTS_ALARM)
+    if (!projectsUrl?.trim()) return
+    await chrome.alarms.create(PROJECTS_ALARM, {
+        delayInMinutes: PROJECTS_REFRESH_PERIOD_MINUTES,
+        periodInMinutes: PROJECTS_REFRESH_PERIOD_MINUTES
+    })
+}
+
+const restoreProjectsSchedule = async () => {
+    const settings = await storageGet(SETTINGS_KEY, emptySettings())
+    await scheduleProjectsRefresh(settings.projectsUrl)
+}
+
 const clearAllData = () => new Promise((resolve, reject) => {
     chrome.storage.local.clear(async () => {
         const error = chrome.runtime.lastError
@@ -57,7 +57,6 @@ const clearAllData = () => new Promise((resolve, reject) => {
             reject(new Error(error.message))
             return
         }
-
         try {
             await chrome.alarms.clear(PROJECTS_ALARM)
             resolve()
@@ -70,7 +69,6 @@ const clearAllData = () => new Promise((resolve, reject) => {
 const getStoredData = async () => {
     const stored = await storageGet(DATA_KEY, emptyData())
     if (stored.lastSuccessfulData) return stored
-
     return {
         lastSuccessfulData: {
             projects: stored.projects || [],
@@ -99,7 +97,6 @@ const normalizeProject = (item) => {
     const value = Array.isArray(item)
         ? { name: item[0], url: item[1], subdomain: item[2], manual: item[3], urlAdmin: item[4], cms: item[5], git: item[6], figma: item[7], addDocument: item[8] }
         : item || {}
-
     return {
         name: asText(value.name || value.title || value.project),
         url: getUrlKey(value.url || value.site || value.domain),
@@ -119,7 +116,6 @@ const normalizeAccess = (item) => {
     const value = Array.isArray(item)
         ? { name: item[0], url: item[1], login: item[2], password: item[3] }
         : item || {}
-
     return {
         name: asText(value.name || value.title || value.project),
         url: getUrlKey(value.url || value.site || value.domain),
@@ -136,7 +132,6 @@ const extractRows = (payload) => {
 
 const requestRows = async (url, kind) => {
     if (!url?.trim()) throw new Error(`Не указан адрес API ${kind}`)
-
     let parsedUrl
     try {
         parsedUrl = new URL(url.trim())
@@ -146,7 +141,6 @@ const requestRows = async (url, kind) => {
     if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
         throw new Error(`API ${kind} должен использовать HTTP или HTTPS`)
     }
-
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT)
     try {
@@ -169,23 +163,14 @@ const mergeProjectsAndAccesses = ({ projects, accesses }) => {
     for (const access of accesses) {
         if (!access.url) continue
         const project = merged.get(access.url)
-        merged.set(access.url, {
-            ...(project || { name: access.name }),
-            login: access.login,
-            password: access.password
-        })
+        merged.set(access.url, { ...(project || { name: access.name }), login: access.login, password: access.password })
     }
     return [...merged.values()]
 }
 
 const saveSuccessfulData = async (data, type, rows, url) => {
     const snapshot = data.lastSuccessfulData
-    const nextSnapshot = {
-        ...snapshot,
-        [type]: rows,
-        [`${type}UpdatedAt`]: Date.now(),
-        [`${type}Url`]: url
-    }
+    const nextSnapshot = { ...snapshot, [type]: rows, [`${type}UpdatedAt`]: Date.now(), [`${type}Url`]: url }
     nextSnapshot.projects = mergeProjectsAndAccesses(nextSnapshot)
     await storageSet(DATA_KEY, { lastSuccessfulData: nextSnapshot })
     return { lastSuccessfulData: nextSnapshot }
@@ -200,8 +185,7 @@ const logError = async (type, error) => {
 const refreshProjects = async (url) => {
     try {
         const data = await getStoredData()
-        const rows = (await requestRows(url, 'проектов')).map(normalizeProject)
-        return saveSuccessfulData(data, 'projects', rows, url)
+        return saveSuccessfulData(data, 'projects', (await requestRows(url, 'проектов')).map(normalizeProject), url)
     } catch (error) {
         await logError('projects', error)
         throw error
@@ -211,79 +195,67 @@ const refreshProjects = async (url) => {
 const refreshAccesses = async (url) => {
     try {
         const data = await getStoredData()
-        const rows = (await requestRows(url, 'доступов')).map(normalizeAccess)
-        return saveSuccessfulData(data, 'accesses', rows, url)
+        return saveSuccessfulData(data, 'accesses', (await requestRows(url, 'доступов')).map(normalizeAccess), url)
     } catch (error) {
         await logError('accesses', error)
         throw error
     }
 }
 
+const getAdminUrl = (project) => {
+    const cmsPaths = { UMI: 'admin/content/sitetree/', EzPro: 'ezpro/', Bitrix: 'bitrix/admin/#authorize', ABO: 'login.php', MODX: 'manager/', AdminLTE: 'admin/', Joomla: 'administrator/' }
+    if (!project?.cms || project.cms === 'Нет') return ''
+    if (project.cms === 'Tilda') return 'https://tilda.ru/login/'
+    if (project.cms === 'Своя' || project.cms === 'WordPress') return project.urlAdmin ? `https://${project.urlAdmin}` : ''
+    return cmsPaths[project.cms] ? `https://${project.url}/${cmsPaths[project.cms]}` : project.urlAdmin ? `https://${project.urlAdmin}` : ''
+}
+
+const getAuthPaths = (project, adminUrl) => ({ UMI: ['/admin/'], Bitrix: ['/bitrix/'], MODX: ['/manager/'], ABO: ['/login.php'], Tilda: ['/login/'] }[project.cms] || [new URL(adminUrl).pathname])
+
+const startAdminAuth = async ({ url }) => {
+    const data = await getStoredData()
+    const project = data.lastSuccessfulData.projects.find((item) => item.url === url)
+    if (!project || !project.login || !project.password) throw new Error('Для проекта не сохранены логин и пароль')
+    const adminUrl = getAdminUrl(project)
+    if (!adminUrl) throw new Error('Для CMS проекта не настроен адрес админки')
+    const parsedAdminUrl = new URL(adminUrl)
+    await storageSet(AUTH_KEY, { url: project.url, cms: project.cms, login: project.login, password: project.password, targetOrigin: parsedAdminUrl.origin, targetPaths: getAuthPaths(project, adminUrl), createdAt: Date.now() })
+    await chrome.tabs.create({ url: adminUrl })
+    return { started: true }
+}
+
 const refreshAll = async ({ projectsUrl, accessUrl }) => {
     const errors = []
-    try {
-        await refreshProjects(projectsUrl)
-    } catch (error) {
-        errors.push(`Проекты: ${error.message}`)
-    }
-    try {
-        await refreshAccesses(accessUrl)
-    } catch (error) {
-        errors.push(`Доступы: ${error.message}`)
-    }
+    try { await refreshProjects(projectsUrl) } catch (error) { errors.push(`Проекты: ${error.message}`) }
+    try { await refreshAccesses(accessUrl) } catch (error) { errors.push(`Доступы: ${error.message}`) }
     return { ...(await getStoredData()), refreshErrors: errors }
 }
 
-const toPublicData = (data) => ({
-    ...data,
-    lastSuccessfulData: {
-        ...data.lastSuccessfulData,
-        projects: data.lastSuccessfulData.projects.map(({ password, ...project }) => project),
-        accesses: data.lastSuccessfulData.accesses.map(({ password, ...access }) => access)
-    }
-})
+const toPublicData = (data) => ({ ...data, lastSuccessfulData: { ...data.lastSuccessfulData, projects: data.lastSuccessfulData.projects.map(({ password, ...project }) => project), accesses: data.lastSuccessfulData.accesses.map(({ password, ...access }) => access) } })
 
 const handlers = {
     'data:settings:get': () => storageGet(SETTINGS_KEY, emptySettings()),
-    'data:settings:set': ({ settings }) => {
-        const nextSettings = { ...emptySettings(), ...settings }
-        return storageSet(SETTINGS_KEY, nextSettings)
-            .then(() => scheduleProjectsRefresh(nextSettings.projectsUrl))
-            .then(() => nextSettings)
-    },
+    'data:settings:set': ({ settings }) => { const nextSettings = { ...emptySettings(), ...settings }; return storageSet(SETTINGS_KEY, nextSettings).then(() => scheduleProjectsRefresh(nextSettings.projectsUrl)).then(() => nextSettings) },
     'data:projects:get': () => getStoredData().then(toPublicData),
     'data:projects:refresh': ({ url }) => refreshProjects(url).then(toPublicData),
     'data:accesses:refresh': ({ url }) => refreshAccesses(url).then(toPublicData),
-    'data:all:refresh': (payload) => refreshAll(payload).then(toPublicData),
+    'data:all:refresh': async ({ projectsUrl, accessUrl }) => { const errors = []; try { await refreshProjects(projectsUrl) } catch (error) { errors.push(`Проекты: ${error.message}`) }; try { await refreshAccesses(accessUrl) } catch (error) { errors.push(`Доступы: ${error.message}`) }; return toPublicData({ ...(await getStoredData()), refreshErrors: errors }) },
     'data:errors:get': () => storageGet(ERRORS_KEY, []),
-    'data:clear': () => clearAllData().then(() => ({ cleared: true }))
+    'data:clear': () => clearAllData().then(() => ({ cleared: true })),
+    'auth:start': startAdminAuth
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const handler = handlers[message?.type]
     if (!handler) return false
-
-    Promise.resolve(handler(message.payload || {}))
-        .then((data) => sendResponse({ ok: true, data }))
-        .catch((error) => {
-            console.error(`[background] ${message.type}`, error)
-            sendResponse({ ok: false, error: error.message })
-        })
+    Promise.resolve().then(() => handler(message.payload || {})).then((data) => sendResponse({ ok: true, data })).catch((error) => { console.error(`[background] ${message.type}`, error); sendResponse({ ok: false, error: error.message }) })
     return true
 })
 
 chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name !== PROJECTS_ALARM) return
-
-    storageGet(SETTINGS_KEY, emptySettings())
-        .then((settings) => refreshProjects(settings.projectsUrl))
-        .catch((error) => console.error('[background] weekly projects refresh', error))
+    storageGet(SETTINGS_KEY, emptySettings()).then((settings) => refreshProjects(settings.projectsUrl)).catch((error) => console.error('[background] weekly projects refresh', error))
 })
 
-chrome.runtime.onInstalled.addListener(() => {
-    restoreProjectsSchedule().catch((error) => console.error('[background] restore schedule', error))
-})
-
-chrome.runtime.onStartup.addListener(() => {
-    restoreProjectsSchedule().catch((error) => console.error('[background] restore schedule', error))
-})
+chrome.runtime.onInstalled.addListener(() => restoreProjectsSchedule().catch((error) => console.error('[background] restore schedule', error)))
+chrome.runtime.onStartup.addListener(() => restoreProjectsSchedule().catch((error) => console.error('[background] restore schedule', error)))

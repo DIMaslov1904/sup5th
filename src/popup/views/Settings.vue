@@ -42,8 +42,6 @@ const checkApi = async (type) => {
             : `Загружено доступов: ${data.value.lastSuccessfulData.accesses.length}`
     } catch (error) {
         message.value = error.message
-        data.value = await loadProjectData()
-        errors.value = await loadErrorLog()
     } finally {
         loading.value = ''
     }
