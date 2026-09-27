@@ -105,12 +105,12 @@ onMounted(async () => {
 </script>
 
 <template>
-    <section class="w-full px-4 pt-5 text-slate-200">
-        <div class="flex items-center justify-between gap-3 mb-4">
+    <section class="w-full px-4 text-slate-200">
+        <div v-if="selectedProject" class="flex items-center justify-between gap-3 mb-4">
             <div class="flex items-center gap-2">
-                <button v-if="selectedProject" type="button" title="Назад к списку" aria-label="Назад к списку"
+                <button  type="button" title="Назад к списку" aria-label="Назад списку"
                     class="rounded px-2 py-1 text-slate-300 hover:bg-white/10" @click="selectedProjectUrl = ''">←</button>
-                <h1 class="text-lg font-semibold">{{ selectedProject?.name || 'Проекты' }}</h1>
+                <h1 class="text-lg font-semibold">{{ selectedProject?.name }}</h1>
             </div>
         </div>
 
