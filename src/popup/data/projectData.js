@@ -46,3 +46,7 @@ export const loadErrorLog = () => callBackground('data:errors:get')
 export const clearAllData = () => callBackground('data:clear')
 
 export const startAdminAuth = (url) => callBackground('auth:start', { url })
+
+export const loadServices = () => callBackground('services:get')
+
+export const saveServices = (services) => callBackground('services:save', { services })

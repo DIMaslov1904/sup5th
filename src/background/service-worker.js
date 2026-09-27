@@ -1,4 +1,5 @@
 const DATA_KEY = 'projectData'
+const SERVICES_KEY = 'manualServices'
 const SETTINGS_KEY = 'apiSettings'
 const ERRORS_KEY = 'apiErrorLog'
 const AUTH_KEY = 'pendingAdminAuth'
@@ -269,6 +270,25 @@ const toPublicData = (data) => {
 }
 
 const handlers = {
+    'services:get': () => storageGet(SERVICES_KEY, []),
+    'services:save': ({ services }) => {
+        if (!Array.isArray(services)) throw new Error('Некорректный список сервисов')
+        const normalized = services.map((service) => {
+            const name = String(service.name || '').trim()
+            const rawUrl = String(service.url || '').trim()
+            if (!name || !rawUrl) throw new Error('Название и ссылка обязательны')
+            const parsedUrl = new URL(rawUrl.includes('://') ? rawUrl : `https://${rawUrl}`)
+            if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Ссылка должна использовать HTTP или HTTPS')
+            return {
+                id: String(service.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`),
+                name,
+                url: parsedUrl.href,
+                login: String(service.login || ''),
+                password: String(service.password || '')
+            }
+        })
+        return storageSet(SERVICES_KEY, normalized).then(() => normalized)
+    },
     'data:settings:get': () => storageGet(SETTINGS_KEY, emptySettings()),
     'data:settings:set': ({ settings }) => { const nextSettings = { ...emptySettings(), ...settings }; return storageSet(SETTINGS_KEY, nextSettings).then(() => scheduleProjectsRefresh(nextSettings.projectsUrl)).then(() => nextSettings) },
     'data:projects:get': () => getStoredData().then(toPublicData),
