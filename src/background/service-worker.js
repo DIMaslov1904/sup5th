@@ -66,20 +66,7 @@ const clearAllData = () => new Promise((resolve, reject) => {
     })
 })
 
-const getStoredData = async () => {
-    const stored = await storageGet(DATA_KEY, emptyData())
-    if (stored.lastSuccessfulData) return stored
-    return {
-        lastSuccessfulData: {
-            projects: stored.projects || [],
-            accesses: stored.accesses || [],
-            projectsUpdatedAt: stored.updatedAt || null,
-            accessesUpdatedAt: stored.updatedAt || null,
-            projectsUrl: '',
-            accessesUrl: ''
-        }
-    }
-}
+const getStoredData = () => storageGet(DATA_KEY, emptyData())
 
 const getUrlKey = (value) => {
     if (!value) return ''
@@ -106,9 +93,7 @@ const normalizeProject = (item) => {
         manual: asText(value.manual),
         git: asText(value.git),
         figma: asText(value.figma),
-        addDocument: asText(value.addDocument),
-        login: asText(value.login),
-        password: asText(value.password)
+        addDocument: asText(value.addDocument)
     }
 }
 
@@ -116,12 +101,18 @@ const normalizeAccess = (item) => {
     const value = Array.isArray(item)
         ? { name: item[0], url: item[1], login: item[2], password: item[3] }
         : item || {}
-    return {
-        name: asText(value.name || value.title || value.project),
-        url: getUrlKey(value.url || value.site || value.domain),
-        login: asText(value.login || value.username),
-        password: asText(value.password)
-    }
+    const logins = asText(value.login || value.username).split(/\r?\n/).map((entry) => entry.trim())
+    const passwords = asText(value.password).split(/\r?\n/).map((entry) => entry.trim())
+    const name = asText(value.name || value.title || value.project)
+    const url = getUrlKey(value.url || value.site || value.domain)
+    const count = Math.max(logins.length, passwords.length)
+
+    return Array.from({ length: count }, (_, index) => ({
+        name,
+        url,
+        login: logins[index] || '',
+        password: passwords[index] || ''
+    })).filter((access) => access.login || access.password)
 }
 
 const extractRows = (payload) => {
@@ -158,22 +149,12 @@ const requestRows = async (url, kind) => {
     }
 }
 
-const mergeProjectsAndAccesses = ({ projects, accesses }) => {
-    const merged = new Map(projects.filter((item) => item.url).map((item) => [item.url, item]))
-    for (const access of accesses) {
-        if (!access.url) continue
-        const project = merged.get(access.url)
-        merged.set(access.url, { ...(project || { name: access.name }), login: access.login, password: access.password })
-    }
-    return [...merged.values()]
-}
-
 const saveSuccessfulData = async (data, type, rows, url) => {
     const snapshot = data.lastSuccessfulData
     const nextSnapshot = { ...snapshot, [type]: rows, [`${type}UpdatedAt`]: Date.now(), [`${type}Url`]: url }
-    nextSnapshot.projects = mergeProjectsAndAccesses(nextSnapshot)
-    await storageSet(DATA_KEY, { lastSuccessfulData: nextSnapshot })
-    return { lastSuccessfulData: nextSnapshot }
+    const nextData = { lastSuccessfulData: nextSnapshot }
+    await storageSet(DATA_KEY, nextData)
+    return nextData
 }
 
 const logError = async (type, error) => {
@@ -195,7 +176,7 @@ const refreshProjects = async (url) => {
 const refreshAccesses = async (url) => {
     try {
         const data = await getStoredData()
-        return saveSuccessfulData(data, 'accesses', (await requestRows(url, 'доступов')).map(normalizeAccess), url)
+        return saveSuccessfulData(data, 'accesses', (await requestRows(url, 'доступов')).flatMap(normalizeAccess), url)
     } catch (error) {
         await logError('accesses', error)
         throw error
@@ -215,23 +196,77 @@ const getAuthPaths = (project, adminUrl) => ({ UMI: ['/admin/'], Bitrix: ['/bitr
 const startAdminAuth = async ({ url }) => {
     const data = await getStoredData()
     const project = data.lastSuccessfulData.projects.find((item) => item.url === url)
-    if (!project || !project.login || !project.password) throw new Error('Для проекта не сохранены логин и пароль')
+    const access = data.lastSuccessfulData.accesses.find((item) => item.url === url && item.login && item.password)
+    if (!project) throw new Error('Проект не найден в локальных данных')
+    if (!access) throw new Error('Для проекта не сохранён доступ с логином и паролем')
     const adminUrl = getAdminUrl(project)
     if (!adminUrl) throw new Error('Для CMS проекта не настроен адрес админки')
     const parsedAdminUrl = new URL(adminUrl)
-    await storageSet(AUTH_KEY, { url: project.url, cms: project.cms, login: project.login, password: project.password, targetOrigin: parsedAdminUrl.origin, targetPaths: getAuthPaths(project, adminUrl), createdAt: Date.now() })
+    await storageSet(AUTH_KEY, { url: project.url, cms: project.cms, login: access.login, password: access.password, targetOrigin: parsedAdminUrl.origin, targetPaths: getAuthPaths(project, adminUrl), createdAt: Date.now() })
     await chrome.tabs.create({ url: adminUrl })
     return { started: true }
 }
 
 const refreshAll = async ({ projectsUrl, accessUrl }) => {
+    const [projectsResult, accessesResult] = await Promise.allSettled([
+        requestRows(projectsUrl, 'проектов'),
+        requestRows(accessUrl, 'доступов')
+    ])
     const errors = []
-    try { await refreshProjects(projectsUrl) } catch (error) { errors.push(`Проекты: ${error.message}`) }
-    try { await refreshAccesses(accessUrl) } catch (error) { errors.push(`Доступы: ${error.message}`) }
-    return { ...(await getStoredData()), refreshErrors: errors }
+
+    if (projectsResult.status === 'rejected') {
+        errors.push(`Проекты: ${projectsResult.reason.message}`)
+        await logError('projects', projectsResult.reason)
+    }
+    if (accessesResult.status === 'rejected') {
+        errors.push(`Доступы: ${accessesResult.reason.message}`)
+        await logError('accesses', accessesResult.reason)
+    }
+
+    if (errors.length) return { ...(await getStoredData()), refreshErrors: errors }
+
+    const data = await getStoredData()
+    const now = Date.now()
+    const snapshot = {
+        ...data.lastSuccessfulData,
+        projects: projectsResult.value.map(normalizeProject),
+        accesses: accessesResult.value.flatMap(normalizeAccess),
+        projectsUpdatedAt: now,
+        accessesUpdatedAt: now,
+        projectsUrl,
+        accessesUrl: accessUrl
+    }
+    const nextData = { lastSuccessfulData: snapshot }
+    await storageSet(DATA_KEY, nextData)
+    return nextData
 }
 
-const toPublicData = (data) => ({ ...data, lastSuccessfulData: { ...data.lastSuccessfulData, projects: data.lastSuccessfulData.projects.map(({ password, ...project }) => project), accesses: data.lastSuccessfulData.accesses.map(({ password, ...access }) => access) } })
+const toPublicData = (data) => {
+    const snapshot = data.lastSuccessfulData
+    const projectsByUrl = new Map(snapshot.projects.filter((project) => project.url).map((project) => [project.url, project]))
+    const accessCounts = new Map()
+
+    for (const access of snapshot.accesses) {
+        if (!access.url) continue
+        accessCounts.set(access.url, (accessCounts.get(access.url) || 0) + 1)
+        if (!projectsByUrl.has(access.url)) {
+            projectsByUrl.set(access.url, { name: access.name, url: access.url, cms: 'Нет' })
+        }
+    }
+
+    return {
+        ...data,
+        lastSuccessfulData: {
+            ...snapshot,
+            projects: [...projectsByUrl.values()].map((project) => ({
+                ...project,
+                hasAccess: accessCounts.has(project.url),
+                accessCount: accessCounts.get(project.url) || 0
+            })),
+            accesses: snapshot.accesses.map(({ url, name }) => ({ url, name }))
+        }
+    }
+}
 
 const handlers = {
     'data:settings:get': () => storageGet(SETTINGS_KEY, emptySettings()),
@@ -239,7 +274,7 @@ const handlers = {
     'data:projects:get': () => getStoredData().then(toPublicData),
     'data:projects:refresh': ({ url }) => refreshProjects(url).then(toPublicData),
     'data:accesses:refresh': ({ url }) => refreshAccesses(url).then(toPublicData),
-    'data:all:refresh': async ({ projectsUrl, accessUrl }) => { const errors = []; try { await refreshProjects(projectsUrl) } catch (error) { errors.push(`Проекты: ${error.message}`) }; try { await refreshAccesses(accessUrl) } catch (error) { errors.push(`Доступы: ${error.message}`) }; return toPublicData({ ...(await getStoredData()), refreshErrors: errors }) },
+    'data:all:refresh': (payload) => refreshAll(payload).then(toPublicData),
     'data:errors:get': () => storageGet(ERRORS_KEY, []),
     'data:clear': () => clearAllData().then(() => ({ cleared: true })),
     'auth:start': startAdminAuth

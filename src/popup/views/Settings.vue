@@ -75,7 +75,7 @@ const resetData = async () => {
             <button
                 class="absolute right-1 top-1 rounded bg-slate-800 py-1 px-2.5 border border-transparent text-center text-sm text-white transition-all shadow-sm hover:shadow focus:bg-slate-700 active:bg-slate-700 disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
                 type="button" :disabled="loading === 'projects'" @click="checkApi('projects')">
-                Проверить
+                Загрузить
             </button>
             <label
                 class="absolute cursor-text pointer-events-none px-1 left-2.5 top-2.5 text-slate-400 text-sm transition-all transform origin-left peer-focus:-top-2 peer-focus:text-xs peer-focus:scale-90 peer-valid:-top-2 peer-valid:text-xs peer-valid:scale-90">
@@ -105,7 +105,7 @@ const resetData = async () => {
             <button
                 class="absolute right-1 top-1 rounded bg-slate-800 py-1 px-2.5 border border-transparent text-center text-sm text-white transition-all shadow-sm hover:shadow focus:bg-slate-700 active:bg-slate-700 disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
                 type="button" :disabled="loading === 'access'" @click="checkApi('access')">
-                Проверить
+                Загрузить
             </button>
             <label
                 class="absolute cursor-text pointer-events-none px-1 left-2.5 top-2.5 text-slate-400 text-sm transition-all transform origin-left peer-focus:-top-2 peer-focus:text-xs peer-focus:scale-90 peer-valid:-top-2 peer-valid:text-xs peer-valid:scale-90">

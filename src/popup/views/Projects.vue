@@ -88,7 +88,9 @@ const updateProjects = async () => {
                 class="rounded-lg border border-white/10 bg-slate-900/40 p-3">
                 <div class="flex items-center justify-between gap-3">
                     <h2 class="text-sm font-medium">{{ project.name || project.url }}</h2>
-                    <span v-if="project.login" class="text-xs text-emerald-400">доступ есть</span>
+                    <span v-if="project.hasAccess" class="text-xs text-emerald-400">
+                        {{ project.accessCount > 1 ? `доступов: ${project.accessCount}` : 'доступ есть' }}
+                    </span>
                 </div>
                 <p class="mt-1 text-xs text-slate-400">{{ project.url }}</p>
             </article>
