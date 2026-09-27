@@ -194,12 +194,14 @@ const getAdminUrl = (project) => {
 
 const getAuthPaths = (project, adminUrl) => ({ UMI: ['/admin/'], Bitrix: ['/bitrix/'], MODX: ['/manager/'], ABO: ['/login.php'], Tilda: ['/login/'] }[project.cms] || [new URL(adminUrl).pathname])
 
-const startAdminAuth = async ({ url }) => {
+const startAdminAuth = async ({ url, index = 0 }) => {
     const data = await getStoredData()
     const project = data.lastSuccessfulData.projects.find((item) => item.url === url)
-    const access = data.lastSuccessfulData.accesses.find((item) => item.url === url && item.login && item.password)
+    const accesses = data.lastSuccessfulData.accesses.filter((item) => item.url === url)
+    const access = accesses[index]
     if (!project) throw new Error('Проект не найден в локальных данных')
     if (!access) throw new Error('Для проекта не сохранён доступ с логином и паролем')
+    if (!access.login || !access.password) throw new Error('У выбранного доступа отсутствует логин или пароль')
     const adminUrl = getAdminUrl(project)
     if (!adminUrl) throw new Error('Для CMS проекта не настроен адрес админки')
     const parsedAdminUrl = new URL(adminUrl)
@@ -236,6 +238,15 @@ const getProjectDetails = async ({ url }) => {
                 hasPassword: Boolean(password)
             }))
     }
+}
+
+const getProjectAccessField = async ({ url, index, field }) => {
+    if (!['login', 'password'].includes(field)) throw new Error('Неизвестное поле доступа')
+    const data = await getStoredData()
+    const access = data.lastSuccessfulData.accesses.filter((item) => item.url === url)[index]
+    if (!access) throw new Error('Доступ не найден')
+    if (!access[field]) throw new Error(`${field === 'login' ? 'Логин' : 'Пароль'} отсутствует`)
+    return access[field]
 }
 
 const refreshAll = async ({ projectsUrl, accessUrl }) => {
@@ -334,7 +345,8 @@ const handlers = {
     'data:clear': () => clearAllData().then(() => ({ cleared: true })),
     'auth:start': startAdminAuth,
     'project:copyAccess': copyProjectAccessText,
-    'project:details': getProjectDetails
+    'project:details': getProjectDetails,
+    'project:accessField': getProjectAccessField
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

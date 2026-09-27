@@ -1,33 +1,20 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { loadProjectData, startAdminAuth } from '../data/projectData'
+import { getProjectAccessField, loadProjectData, loadProjectDetails, startAdminAuth } from '../data/projectData'
 import LeftMenu from '../components/LeftMenu.vue'
 
 const menuItem = ref('project')
-const menuList = [
-    { label: 'Проект', name: 'project' },
-    { label: 'SEO', name: 'seo' },
-    { label: 'Доступы', name: 'access' }
-]
 
 const project = ref(null)
 const currentTab = ref(null)
 const loaded = ref(false)
 const authLoading = ref(false)
 const authMessage = ref('')
+const accesses = ref([])
+const copyingAccess = ref('')
 const seo = ref(null)
 const seoLoading = ref(false)
 const seoMessage = ref('')
-
-const cmsPaths = {
-    UMI: 'admin/content/sitetree/',
-    EzPro: 'ezpro/',
-    Bitrix: 'bitrix/admin/#authorize',
-    ABO: 'login.php',
-    MODX: 'manager/',
-    AdminLTE: 'admin/',
-    Joomla: 'administrator/'
-}
 
 const normalizeHost = (value) => {
     try {
@@ -35,13 +22,6 @@ const normalizeHost = (value) => {
     } catch {
         return String(value || '').replace(/^https?:\/\//, '').split('/')[0].toLowerCase()
     }
-}
-
-const getAdminUrl = (item) => {
-    if (!item?.cms || item.cms === 'Нет') return ''
-    if (item.cms === 'Tilda') return 'https://tilda.ru/login/'
-    if (item.cms === 'Своя' || item.cms === 'WordPress') return item.urlAdmin ? `https://${item.urlAdmin}` : ''
-    return cmsPaths[item.cms] ? `https://${item.url}/${cmsPaths[item.cms]}` : item.urlAdmin ? `https://${item.urlAdmin}` : ''
 }
 
 const getInstructionUrl = (item) => item?.manual ? `https://${item.manual}` : ''
@@ -55,6 +35,13 @@ const getCmsIcon = (item) => {
 const siteUrl = computed(() => project.value ? `https://${project.value.url}` : '')
 const faviconUrl = computed(() => currentTab.value?.favIconUrl || (siteUrl.value ? `${siteUrl.value}/favicon.ico` : ''))
 const cmsLabel = computed(() => project.value?.cms && project.value.cms !== 'Нет' ? project.value.cms : 'CMS')
+const menuList = computed(() => {
+    if (!project.value) return [{ label: 'SEO', name: 'seo' }]
+    return [
+        { label: 'Проект', name: 'project' },
+        { label: 'SEO', name: 'seo' }
+    ]
+})
 
 const findProject = (projects, tab) => {
     const host = normalizeHost(tab.url)
@@ -74,9 +61,26 @@ onMounted(async () => {
         currentTab.value = tab
         const projects = data.lastSuccessfulData?.projects || []
         if (tab?.url && /^https?:/.test(tab.url)) project.value = findProject(projects, tab)
+        if (!project.value) {
+            menuItem.value = 'seo'
+            return
+        }
+
+        const siteStateKey = `siteUiState:${normalizeHost(tab.url)}`
+        const savedState = (await chrome.storage.local.get(siteStateKey))[siteStateKey]
+        const details = await loadProjectDetails(project.value.url)
+        accesses.value = details.accesses
+        const allowedTabs = menuList.value.map((item) => item.name)
+        menuItem.value = allowedTabs.includes(savedState?.tab) ? savedState.tab : 'project'
     } finally {
         loaded.value = true
     }
+})
+
+watch(menuItem, (tab) => {
+    if (!currentTab.value?.url || !project.value) return
+    const key = `siteUiState:${normalizeHost(currentTab.value.url)}`
+    chrome.storage.local.set({ [key]: { tab } })
 })
 
 const scanSeo = async () => {
@@ -103,15 +107,31 @@ watch(menuItem, (value) => {
     if (value === 'seo') scanSeo()
 })
 
-const openAdmin = async () => {
+const openAdmin = async (accessIndex = 0) => {
     authLoading.value = true
     authMessage.value = ''
     try {
-        await startAdminAuth(project.value.url)
+        const key = `siteUiState:${normalizeHost(currentTab.value.url)}`
+        await chrome.storage.local.set({ [key]: { tab: 'project' } })
+        await startAdminAuth(project.value.url, accessIndex)
     } catch (error) {
         authMessage.value = error.message
     } finally {
         authLoading.value = false
+    }
+}
+
+const copyAccessField = async (accessIndex, field) => {
+    copyingAccess.value = `${accessIndex}:${field}`
+    authMessage.value = ''
+    try {
+        const value = await getProjectAccessField(project.value.url, accessIndex, field)
+        await navigator.clipboard.writeText(value)
+        authMessage.value = field === 'login' ? 'Логин скопирован' : 'Пароль скопирован'
+    } catch (error) {
+        authMessage.value = error.message
+    } finally {
+        copyingAccess.value = ''
     }
 }
 </script>
@@ -128,21 +148,17 @@ const openAdmin = async () => {
                     <img v-if="faviconUrl" :src="faviconUrl" :alt="project.name"
                         class="h-12 w-12 rounded-lg bg-white object-contain p-1" />
                     <div class="min-w-0">
-                        <h1 class="truncate text-lg font-semibold">{{ project.name || project.url }}</h1>
+                        <div class="flex items-center gap-2">
+                            <img :src="getCmsIcon(project)" :alt="cmsLabel" :title="cmsLabel"
+                                class="h-5 w-5 shrink-0 rounded bg-white p-0.5 object-contain" />
+                            <h1 class="break-words text-lg font-semibold">{{ project.name || project.url }}</h1>
+                        </div>
                         <a :href="siteUrl" target="_blank" rel="noreferrer"
-                            class="truncate text-xs text-slate-400 hover:text-white">{{ project.url }}</a>
+                            class="break-all text-xs text-slate-400 hover:text-white">{{ project.url }}</a>
                     </div>
                 </div>
 
                 <div class="grid grid-cols-3 gap-2">
-                    <button type="button" @click="openAdmin" :disabled="authLoading || !getAdminUrl(project)"
-                        :class="getAdminUrl(project) ? 'hover:bg-slate-700' : 'opacity-40'"
-                        class="flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border border-white/10 bg-slate-900/50 p-2 text-center text-xs text-slate-200">
-                        <span class="flex h-8 w-8 items-center justify-center rounded bg-white p-1">
-                            <img :src="getCmsIcon(project)" :alt="cmsLabel" class="h-full w-full object-contain" />
-                        </span>
-                        <span>Войти в админку</span>
-                    </button>
                     <a :href="getInstructionUrl(project)" target="_blank" rel="noreferrer"
                         :class="getInstructionUrl(project) ? 'hover:bg-slate-700' : 'pointer-events-none opacity-40'"
                         class="flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border border-white/10 bg-slate-900/50 p-2 text-center text-xs text-slate-200">
@@ -156,6 +172,33 @@ const openAdmin = async () => {
                         <span>Репозиторий</span>
                     </a>
                 </div>
+                <section v-if="accesses.length" class="grid gap-2">
+                    <h2 class="text-sm font-semibold">Доступы ({{ accesses.length }})</h2>
+                    <article v-for="(access, index) in accesses" :key="`${access.login}-${index}`"
+                        :role="access.hasLogin && access.hasPassword ? 'button' : undefined"
+                        :tabindex="access.hasLogin && access.hasPassword ? 0 : undefined"
+                        :aria-label="access.hasLogin && access.hasPassword ? `Войти как ${access.login}` : undefined"
+                        class="grid gap-3 rounded-lg border border-white/10 bg-slate-900/40 p-3"
+                        :class="access.hasLogin && access.hasPassword ? 'cursor-pointer hover:border-white/20 hover:bg-slate-900/70' : 'opacity-75'"
+                        @click="access.hasLogin && access.hasPassword && openAdmin(index)"
+                        @keydown.enter="access.hasLogin && access.hasPassword && openAdmin(index)">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="break-all text-sm font-medium text-slate-100">{{ access.login || access.name || `Доступ ${index + 1}` }}</span>
+                            <span v-if="access.hasLogin && access.hasPassword" class="shrink-0 text-[10px] text-slate-500">Войти →</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2" @click.stop>
+                            <button v-if="access.hasLogin" type="button" :disabled="copyingAccess === `${index}:login`"
+                                class="rounded border border-white/10 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/10 disabled:opacity-50"
+                                @click="copyAccessField(index, 'login')">{{ copyingAccess === `${index}:login` ? 'Копирую...' : 'Копировать логин' }}</button>
+                            <button v-if="access.hasPassword" type="button" :disabled="copyingAccess === `${index}:password`"
+                                class="rounded border border-white/10 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/10 disabled:opacity-50"
+                                @click="copyAccessField(index, 'password')">{{ copyingAccess === `${index}:password` ? 'Копирую...' : 'Копировать пароль' }}</button>
+                            <span v-if="!access.hasLogin || !access.hasPassword" class="self-center text-[11px] text-amber-300">
+                                {{ !access.hasLogin ? 'Логин не указан' : 'Пароль не указан' }}
+                            </span>
+                        </div>
+                    </article>
+                </section>
                 <p v-if="authMessage" class="rounded bg-[#c1a100cc] p-2 text-xs text-white">{{ authMessage }}</p>
             </div>
         </section>

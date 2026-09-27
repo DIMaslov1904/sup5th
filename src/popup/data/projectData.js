@@ -45,7 +45,7 @@ export const loadErrorLog = () => callBackground('data:errors:get')
 
 export const clearAllData = () => callBackground('data:clear')
 
-export const startAdminAuth = (url) => callBackground('auth:start', { url })
+export const startAdminAuth = (url, index = 0) => callBackground('auth:start', { url, index })
 
 export const loadServices = () => callBackground('services:get')
 
@@ -56,3 +56,6 @@ export const getProjectAccessText = (url, index) =>
 
 export const loadProjectDetails = (url) =>
     callBackground('project:details', { url })
+
+export const getProjectAccessField = (url, index, field) =>
+    callBackground('project:accessField', { url, index, field })
