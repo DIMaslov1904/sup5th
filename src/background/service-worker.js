@@ -208,6 +208,36 @@ const startAdminAuth = async ({ url }) => {
     return { started: true }
 }
 
+const copyProjectAccessText = async ({ url, index }) => {
+    const data = await getStoredData()
+    const project = data.lastSuccessfulData.projects.find((item) => item.url === url)
+    if (!project) throw new Error('Проект не найден в локальных данных')
+
+    const accesses = data.lastSuccessfulData.accesses.filter((item) => item.url === url)
+    const access = accesses[index]
+    if (!access?.login || !access?.password) throw new Error('У этого доступа отсутствуют логин или пароль')
+
+    const adminUrl = getAdminUrl(project) || project.urlAdmin || `https://${project.url}`
+    return `Доступ: ${adminUrl}\nЛогин: ${access.login}\nПароль: ${access.password}`
+}
+
+const getProjectDetails = async ({ url }) => {
+    const data = await getStoredData()
+    const project = data.lastSuccessfulData.projects.find((item) => item.url === url)
+    if (!project) throw new Error('Проект не найден в локальных данных')
+
+    return {
+        accesses: data.lastSuccessfulData.accesses
+            .filter((access) => access.url === url)
+            .map(({ name, login, password }) => ({
+                name,
+                login,
+                hasLogin: Boolean(login),
+                hasPassword: Boolean(password)
+            }))
+    }
+}
+
 const refreshAll = async ({ projectsUrl, accessUrl }) => {
     const [projectsResult, accessesResult] = await Promise.allSettled([
         requestRows(projectsUrl, 'проектов'),
@@ -264,7 +294,12 @@ const toPublicData = (data) => {
                 hasAccess: accessCounts.has(project.url),
                 accessCount: accessCounts.get(project.url) || 0
             })),
-            accesses: snapshot.accesses.map(({ url, name }) => ({ url, name }))
+            accesses: snapshot.accesses.map(({ url, name, login, password }) => ({
+                url,
+                name,
+                hasLogin: Boolean(login),
+                hasPassword: Boolean(password)
+            }))
         }
     }
 }
@@ -297,7 +332,9 @@ const handlers = {
     'data:all:refresh': (payload) => refreshAll(payload).then(toPublicData),
     'data:errors:get': () => storageGet(ERRORS_KEY, []),
     'data:clear': () => clearAllData().then(() => ({ cleared: true })),
-    'auth:start': startAdminAuth
+    'auth:start': startAdminAuth,
+    'project:copyAccess': copyProjectAccessText,
+    'project:details': getProjectDetails
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
