@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { getProjectAccessField, loadProjectData, loadProjectDetails, startAdminAuth } from '../data/projectData'
+import { findProjectByUrl, getAdminUrl, getCmsIconPath } from '../../utils/projectUtils'
 import LeftMenu from '../components/LeftMenu.vue'
 
 const menuItem = ref('project')
@@ -16,22 +17,9 @@ const seo = ref(null)
 const seoLoading = ref(false)
 const seoMessage = ref('')
 
-const normalizeHost = (value) => {
-    try {
-        return new URL(value).hostname.toLowerCase()
-    } catch {
-        return String(value || '').replace(/^https?:\/\//, '').split('/')[0].toLowerCase()
-    }
-}
-
 const getInstructionUrl = (item) => item?.manual ? `https://${item.manual}` : ''
 const getGitUrl = (item) => item?.git ? `https://${item.git}` : ''
-const getCmsIcon = (item) => {
-    const iconName = item?.cms === 'Своя' ? 'cms' : String(item?.cms || '').toLowerCase()
-    return ['/assets/icons/abo.svg', '/assets/icons/adminlte.svg', '/assets/icons/bitrix.svg', '/assets/icons/cms.svg', '/assets/icons/ezpro.svg', '/assets/icons/joomla.svg', '/assets/icons/modx.svg', '/assets/icons/tilda.svg', '/assets/icons/umi.svg', '/assets/icons/wordpress.svg'].includes(`/assets/icons/${iconName}.svg`)
-        ? `/assets/icons/${iconName}.svg`
-        : '/assets/icons/cms.svg'
-}
+const getCmsIcon = (item) => getCmsIconPath(item?.cms)
 const siteUrl = computed(() => project.value ? `https://${project.value.url}` : '')
 const faviconUrl = computed(() => currentTab.value?.favIconUrl || (siteUrl.value ? `${siteUrl.value}/favicon.ico` : ''))
 const cmsLabel = computed(() => project.value?.cms && project.value.cms !== 'Нет' ? project.value.cms : 'CMS')
@@ -43,15 +31,6 @@ const menuList = computed(() => {
     ]
 })
 
-const findProject = (projects, tab) => {
-    const host = normalizeHost(tab.url)
-    return projects.find((item) => {
-        if (!item.url) return false
-        const projectHost = normalizeHost(item.url)
-        return item.subdomain ? (host === projectHost || host.endsWith(`.${projectHost}`)) : host === projectHost
-    }) || null
-}
-
 onMounted(async () => {
     try {
         const [tab, data] = await Promise.all([
@@ -60,7 +39,7 @@ onMounted(async () => {
         ])
         currentTab.value = tab
         const projects = data.lastSuccessfulData?.projects || []
-        if (tab?.url && /^https?:/.test(tab.url)) project.value = findProject(projects, tab)
+        if (tab?.url && /^https?:/.test(tab.url)) project.value = findProjectByUrl(projects, tab.url)
         if (!project.value) {
             menuItem.value = 'seo'
             return
@@ -159,6 +138,15 @@ const copyAccessField = async (accessIndex, field) => {
                 </div>
 
                 <div class="grid grid-cols-3 gap-2">
+                    <a :href="getAdminUrl(project)" target="_blank" rel="noreferrer"
+                        :class="getAdminUrl(project) ? 'hover:bg-slate-700' : 'pointer-events-none opacity-40'"
+                        title="Перейти в панель администрирования"
+                        class="flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border border-white/10 bg-slate-900/50 p-2 text-center text-xs text-slate-200">
+                        <span class="flex h-8 w-8 items-center justify-center rounded bg-white p-1">
+                            <img :src="getCmsIcon(project)" :alt="cmsLabel" class="h-full w-full object-contain" />
+                        </span>
+                        <span>В админку</span>
+                    </a>
                     <a :href="getInstructionUrl(project)" target="_blank" rel="noreferrer"
                         :class="getInstructionUrl(project) ? 'hover:bg-slate-700' : 'pointer-events-none opacity-40'"
                         class="flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border border-white/10 bg-slate-900/50 p-2 text-center text-xs text-slate-200">
@@ -244,6 +232,16 @@ const copyAccessField = async (accessIndex, field) => {
                     <div class="flex justify-between gap-3"><span>X-Robots-Tag</span>
                         <strong>{{ seo.xRobots || `Не указан` }}</strong>
                     </div>
+                    <div class="flex justify-between gap-3"><span>Генератор (CMS)</span><strong
+                            class="max-w-[210px] truncate">{{ seo.generator || 'Не определён' }}</strong></div>
+                    <div class="flex justify-between gap-3"><span>Заголовков H1</span><strong
+                            :class="seo.h1Count === 1 ? 'text-emerald-400' : 'text-amber-300'">{{ seo.h1Count }}</strong></div>
+                    <div v-if="seo.duplicateH1?.length" class="flex justify-between gap-3"><span>Дубли H1</span><strong
+                            class="text-amber-300">{{ seo.duplicateH1.length }}</strong></div>
+                    <div class="flex justify-between gap-3"><span>JSON-LD разметка</span><strong>{{ seo.jsonLdBlocks
+                        }}</strong></div>
+                    <div class="flex justify-between gap-3"><span>Редирект</span><strong
+                            :class="seo.redirected ? 'text-amber-300' : 'text-emerald-400'">{{ seo.redirected ? 'Есть' : 'Нет' }}</strong></div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-2">

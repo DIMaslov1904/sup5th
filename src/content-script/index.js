@@ -1,3 +1,5 @@
+import { registerSeoHandler } from './seo.js'
+
 const AUTH_KEY = 'pendingAdminAuth'
 const AUTH_TTL = 5 * 60 * 1000
 
@@ -65,99 +67,5 @@ const startAdminAuth = async () => {
     setTimeout(() => observer.disconnect(), 15000)
 }
 
-const getMeta = (selector) => document.querySelector(selector)?.getAttribute('content')?.trim() || ''
-
-const getHeadings = (level) => [...document.querySelectorAll(`h${level}`)]
-    .map((element) => element.textContent.trim())
-    .filter(Boolean)
-
-const fetchPageInfo = async (url, options = {}) => {
-    try {
-        const response = await fetch(url, { ...options, credentials: 'include' })
-        return {
-            ok: response.ok,
-            status: response.status,
-            headers: Object.fromEntries(response.headers.entries()),
-            text: await response.text()
-        }
-    } catch {
-        return { ok: false, status: 0, headers: {}, text: '' }
-    }
-}
-
-const scanSeo = async () => {
-    const headings = Object.fromEntries([1, 2, 3, 4, 5, 6].map((level) => [`h${level}`, getHeadings(level)]))
-    let pageInfo = await fetchPageInfo(location.href, { method: 'HEAD' })
-    if (!pageInfo.ok) pageInfo = await fetchPageInfo(location.href)
-    const robotsUrl = new URL('/robots.txt', location.href).href
-    const robotsInfo = await fetchPageInfo(robotsUrl)
-    const sitemapFromRobots = robotsInfo.text.match(/^\s*Sitemap:\s*(\S+)/im)?.[1]
-    const sitemapUrl = sitemapFromRobots || new URL('/sitemap.xml', location.href).href
-    let sitemapInfo = await fetchPageInfo(sitemapUrl, { method: 'HEAD' })
-    if (!sitemapInfo.ok) sitemapInfo = await fetchPageInfo(sitemapUrl)
-    const robots = getMeta('meta[name="robots"]')
-    const xRobots = pageInfo.headers['x-robots-tag'] || ''
-
-    return {
-        url: location.href,
-        urlLength: location.href.length,
-        title: document.title.trim(),
-        titleLength: document.title.trim().length,
-        description: getMeta('meta[name="description"]'),
-        descriptionLength: getMeta('meta[name="description"]').length,
-        keywords: getMeta('meta[name="keywords"]'),
-        canonical: document.querySelector('link[rel="canonical"]')?.href || '',
-        robots,
-        robotsAllowed: !/(noindex|none)/i.test(robots),
-        xRobots,
-        xRobotsAllowed: !/(noindex|none)/i.test(xRobots),
-        lang: document.documentElement.lang || '',
-        viewport: getMeta('meta[name="viewport"]'),
-        headings,
-        openGraph: {
-            title: getMeta('meta[property="og:title"]'),
-            description: getMeta('meta[property="og:description"]'),
-            image: getMeta('meta[property="og:image"]'),
-            type: getMeta('meta[property="og:type"]')
-        },
-        response: {
-            status: pageInfo.status,
-            ok: pageInfo.ok
-        },
-        robotsFile: {
-            url: robotsUrl,
-            exists: robotsInfo.ok,
-            status: robotsInfo.status,
-            content: robotsInfo.text.slice(0, 4000),
-            allowed: !/(Disallow:\s*\/\s*$)/im.test(robotsInfo.text)
-        },
-        sitemap: {
-            url: sitemapUrl,
-            exists: sitemapInfo.ok,
-            status: sitemapInfo.status
-        },
-        images: {
-            total: document.images.length,
-            withoutAlt: [...document.images].filter((image) => !image.hasAttribute('alt')).length,
-            emptyAlt: [...document.images].filter((image) => image.hasAttribute('alt') && !image.alt.trim()).length
-        },
-        links: {
-            total: document.links.length,
-            internal: [...document.links].filter((link) => link.hostname === location.hostname).length,
-            external: [...document.links].filter((link) => link.hostname && link.hostname !== location.hostname).length,
-            withoutText: [...document.links].filter((link) => !link.textContent.trim() && !link.querySelector('img[alt]')).length
-        },
-        wordCount: (document.body?.innerText || '').trim().split(/\s+/).filter(Boolean).length,
-        htmlSize: document.documentElement.outerHTML.length
-    }
-}
-
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type !== 'seo:scan') return false
-    scanSeo()
-        .then((data) => sendResponse({ ok: true, data }))
-        .catch((error) => sendResponse({ ok: false, error: error.message }))
-    return true
-})
-
 startAdminAuth().catch((error) => console.error('[content] admin auth', error))
+registerSeoHandler()

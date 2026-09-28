@@ -93,65 +93,28 @@ const setField = (input, value) => {
 
 const enhanceTimeFields = (targetDoc) => {
     ensureStyles(targetDoc)
-    const startInput = targetDoc.querySelector('input[name*="time_start"], input[name*="start_time"]')
-    const endInput = startInput?.closest('tr')?.querySelector('input[name*="time_end"], input[name*="end_time"]')
-        || targetDoc.querySelector('input[name*="time_end"], input[name*="end_time"]')
-    if (!(startInput instanceof HTMLInputElement) || !(endInput instanceof HTMLInputElement)) return
-    if (targetDoc.querySelector('.sup5th-duration')) return
+    const timeInputs = [...targetDoc.querySelectorAll('input[name*="time"]')]
+        .filter((input) => input instanceof HTMLInputElement)
+    if (!timeInputs.length) return
 
-    const duration = targetDoc.createElement('div')
-    duration.className = 'sup5th-duration'
-    const title = targetDoc.createElement('span')
-    title.className = 'sup5th-duration__title'
-    title.textContent = 'Время выполнения'
-
-    const hoursInput = targetDoc.createElement('input')
-    hoursInput.className = 'sup5th-duration__input'
-    hoursInput.type = 'number'
-    hoursInput.min = '0'
-    hoursInput.max = '720'
-    hoursInput.step = '1'
-    hoursInput.inputMode = 'numeric'
-    hoursInput.setAttribute('aria-label', 'Часы выполнения')
-    hoursInput.placeholder = '0'
-
-    const hoursLabel = targetDoc.createElement('span')
-    hoursLabel.textContent = 'ч'
-
-    const minutesInput = targetDoc.createElement('input')
-    minutesInput.className = 'sup5th-duration__input'
-    minutesInput.type = 'number'
-    minutesInput.min = '0'
-    minutesInput.max = '59'
-    minutesInput.step = '1'
-    minutesInput.inputMode = 'numeric'
-    minutesInput.setAttribute('aria-label', 'Минуты выполнения')
-    minutesInput.placeholder = '0'
-
-    const minutesLabel = targetDoc.createElement('span')
-    minutesLabel.textContent = 'мин'
-
-    const summary = targetDoc.createElement('span')
-    summary.className = 'sup5th-duration__summary'
-    const error = targetDoc.createElement('span')
-    error.className = 'sup5th-duration__error'
-
-    const initialStart = parseSupportDate(startInput.value)
-    const initialEnd = parseSupportDate(endInput.value)
-    if (initialStart && initialEnd && initialEnd >= initialStart) {
-        const totalMinutes = Math.floor((initialEnd.getTime() - initialStart.getTime()) / 60000)
-        hoursInput.value = String(Math.floor(totalMinutes / 60))
-        minutesInput.value = String(totalMinutes % 60)
-    }
+    const startInput = timeInputs.find((input) => /time_start|start_time/.test(input.name)) || null
+    const endInput = timeInputs.find((input) => /time_end|end_time/.test(input.name)) || null
 
     let updatingFields = false
+    let hoursInput = null
+    let minutesInput = null
+    let summary = null
+    let error = null
+
     const renderDates = () => {
+        if (!startInput || !endInput) return
         const start = parseSupportDate(startInput.value)
         const end = parseSupportDate(endInput.value)
         const invalid = !start || !end || end < start
         startInput.style.border = invalid ? '1px solid #dc2626' : ''
         endInput.style.border = invalid ? '1px solid #dc2626' : ''
 
+        if (!error) return
         if (!start) error.textContent = 'Укажите дату и время начала.'
         else if (!end) error.textContent = 'Укажите длительность или дату окончания.'
         else if (end < start) error.textContent = 'Дата окончания раньше даты начала.'
@@ -159,15 +122,18 @@ const enhanceTimeFields = (targetDoc) => {
 
         if (start && end && end >= start) {
             const totalMinutes = Math.floor((end.getTime() - start.getTime()) / 60000)
-            hoursInput.value = String(Math.floor(totalMinutes / 60))
-            minutesInput.value = String(totalMinutes % 60)
-            summary.textContent = `Продолжительность: ${formatDuration((end.getTime() - start.getTime()) / 60000)}`
-        } else {
+            if (hoursInput && minutesInput) {
+                hoursInput.value = String(Math.floor(totalMinutes / 60))
+                minutesInput.value = String(totalMinutes % 60)
+            }
+            if (summary) summary.textContent = `Продолжительность: ${formatDuration((end.getTime() - start.getTime()) / 60000)}`
+        } else if (summary) {
             summary.textContent = ''
         }
     }
 
     const updateDuration = () => {
+        if (!startInput || !endInput || !hoursInput || !minutesInput) return
         const parsedHours = Number(hoursInput.value || 0)
         const parsedMinutes = Number(minutesInput.value || 0)
         const invalid = !Number.isInteger(parsedHours) || !Number.isInteger(parsedMinutes) || parsedHours < 0 || parsedHours > 720 || parsedMinutes < 0 || parsedMinutes > 59
@@ -176,9 +142,7 @@ const enhanceTimeFields = (targetDoc) => {
             error.textContent = 'Проверьте длительность: часы от 0 до 720, минуты от 0 до 59.'
             return
         }
-        const hours = parsedHours
-        const minutes = parsedMinutes
-        const totalMinutes = hours * 60 + minutes
+        const totalMinutes = parsedHours * 60 + parsedMinutes
         if (totalMinutes <= 0) {
             renderDates()
             return
@@ -194,12 +158,9 @@ const enhanceTimeFields = (targetDoc) => {
         renderDates()
     }
 
-    hoursInput.addEventListener('input', updateDuration)
-    minutesInput.addEventListener('input', updateDuration)
-    duration.append(title, hoursInput, hoursLabel, minutesInput, minutesLabel, summary, error)
-
-    endInput.insertAdjacentElement('afterend', duration)
-
+    // Замена полей даты: text <-> datetime-local при фокусе/блуре.
+    // Применяется ко ВСЕМ полям времени (как в старом расширении),
+    // чтобы календарь работал независимо от имён полей.
     const restoreCalendarInput = (input) => {
         if (input.dataset.sup5thTimeEnhanced) return
         input.dataset.sup5thTimeEnhanced = 'true'
@@ -224,9 +185,79 @@ const enhanceTimeFields = (targetDoc) => {
             renderDates()
         })
     }
-    restoreCalendarInput(startInput)
-    restoreCalendarInput(endInput)
+
+    timeInputs.forEach(restoreCalendarInput)
+
+    // Блок «Время выполнения» добавляем только если есть пара начало/конец
+    if (!startInput || !endInput) return
+    if (targetDoc.querySelector('.sup5th-duration')) return
+
+    const duration = targetDoc.createElement('div')
+    duration.className = 'sup5th-duration'
+    const title = targetDoc.createElement('span')
+    title.className = 'sup5th-duration__title'
+    title.textContent = 'Время выполнения'
+
+    hoursInput = targetDoc.createElement('input')
+    hoursInput.className = 'sup5th-duration__input'
+    hoursInput.type = 'number'
+    hoursInput.min = '0'
+    hoursInput.max = '720'
+    hoursInput.step = '1'
+    hoursInput.inputMode = 'numeric'
+    hoursInput.setAttribute('aria-label', 'Часы выполнения')
+    hoursInput.placeholder = '0'
+
+    const hoursLabel = targetDoc.createElement('span')
+    hoursLabel.textContent = 'ч'
+
+    minutesInput = targetDoc.createElement('input')
+    minutesInput.className = 'sup5th-duration__input'
+    minutesInput.type = 'number'
+    minutesInput.min = '0'
+    minutesInput.max = '59'
+    minutesInput.step = '1'
+    minutesInput.inputMode = 'numeric'
+    minutesInput.setAttribute('aria-label', 'Минуты выполнения')
+    minutesInput.placeholder = '0'
+
+    const minutesLabel = targetDoc.createElement('span')
+    minutesLabel.textContent = 'мин'
+
+    summary = targetDoc.createElement('span')
+    summary.className = 'sup5th-duration__summary'
+    error = targetDoc.createElement('span')
+    error.className = 'sup5th-duration__error'
+
+    const initialStart = parseSupportDate(startInput.value)
+    const initialEnd = parseSupportDate(endInput.value)
+    if (initialStart && initialEnd && initialEnd >= initialStart) {
+        const totalMinutes = Math.floor((initialEnd.getTime() - initialStart.getTime()) / 60000)
+        hoursInput.value = String(Math.floor(totalMinutes / 60))
+        minutesInput.value = String(totalMinutes % 60)
+    }
+
+    hoursInput.addEventListener('input', updateDuration)
+    minutesInput.addEventListener('input', updateDuration)
+    duration.append(title, hoursInput, hoursLabel, minutesInput, minutesLabel, summary, error)
+
+    endInput.insertAdjacentElement('afterend', duration)
     renderDates()
+}
+
+// Наблюдение за динамическим появлением полей времени внутри iframe
+const observeTimeFields = (targetDoc) => {
+    if (!targetDoc) return
+    let timer
+    const check = () => {
+        clearTimeout(timer)
+        timer = setTimeout(() => enhanceTimeFields(targetDoc), 250)
+    }
+    const root = targetDoc.documentElement || targetDoc
+    if (!root) return
+    const observer = new MutationObserver(check)
+    observer.observe(root, { childList: true, subtree: true })
+    check()
 }
 
 const createIframe = (id) => {
@@ -236,7 +267,10 @@ const createIframe = (id) => {
     frame.addEventListener('load', () => {
         try {
             const frameDoc = frame.contentWindow?.document
-            if (frameDoc) enhanceTimeFields(frameDoc)
+            if (frameDoc) {
+                enhanceTimeFields(frameDoc)
+                observeTimeFields(frameDoc)
+            }
         } catch (error) {
             console.error('[support] Cannot access work-log iframe', error)
         }

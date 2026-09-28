@@ -1,3 +1,5 @@
+import { findProjectByUrl, getAdminUrl } from '../utils/projectUtils.js'
+
 const DATA_KEY = 'projectData'
 const SERVICES_KEY = 'manualServices'
 const SETTINGS_KEY = 'apiSettings'
@@ -68,6 +70,96 @@ const clearAllData = () => new Promise((resolve, reject) => {
 })
 
 const getStoredData = () => storageGet(DATA_KEY, emptyData())
+
+// --- Индикатор "проект" на иконке расширения ---
+const ICON_SIZES = [16, 32]
+const PROJECT_ICONS = new Map() // size -> ImageData
+
+const loadIconBitmap = async (size) => {
+    const url = chrome.runtime.getURL(`src/assets/icons/icon_${size}.png`)
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`Не удалось загрузить иконку ${size}`)
+    return createImageBitmap(await response.blob())
+}
+
+const buildProjectIcon = async (size) => {
+    const bitmap = await loadIconBitmap(size)
+    const canvas = new OffscreenCanvas(size, size)
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(bitmap, 0, 0, size, size)
+
+    // Зелёный кружок в правом нижнем углу
+    const padding = Math.max(1, Math.round(size * 0.05))
+    const radius = Math.max(4, Math.round(size * 0.28))
+    const cx = size - radius - padding
+    const cy = size - radius - padding
+
+    ctx.beginPath()
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+    ctx.fillStyle = '#22c55e'
+    ctx.fill()
+    ctx.lineWidth = Math.max(1, Math.round(size * 0.07))
+    ctx.strokeStyle = '#ffffff'
+    ctx.stroke()
+
+    return ctx.getImageData(0, 0, size, size)
+}
+
+const getProjectIconData = async () => {
+    if (PROJECT_ICONS.size === ICON_SIZES.length) return PROJECT_ICONS
+    for (const size of ICON_SIZES) {
+        if (!PROJECT_ICONS.has(size)) PROJECT_ICONS.set(size, await buildProjectIcon(size))
+    }
+    return PROJECT_ICONS
+}
+
+const defaultIconPaths = () => Object.fromEntries(ICON_SIZES.map((size) => [size, `src/assets/icons/icon_${size}.png`]))
+
+const setProjectBadge = async (tabId) => {
+    try {
+        const imageData = {}
+        for (const [size, data] of await getProjectIconData()) imageData[size] = data
+        await chrome.action.setIcon({ tabId, imageData })
+        await chrome.action.setBadgeText({ tabId, text: '' })
+    } catch (error) {
+        // Fallback: если кастомная иконка недоступна — зелёный badge
+        console.warn('[background] custom icon failed, fallback to badge', error)
+        await chrome.action.setBadgeBackgroundColor({ tabId, color: '#22c55e' })
+        await chrome.action.setBadgeText({ tabId, text: '✓' })
+    }
+}
+
+const clearProjectBadge = async (tabId) => {
+    try {
+        await chrome.action.setIcon({ tabId, path: defaultIconPaths() })
+        await chrome.action.setBadgeText({ tabId, text: '' })
+    } catch (error) {
+        console.warn('[background] reset icon failed', error)
+    }
+}
+
+const updateBadgeForTab = async (tabId) => {
+    try {
+        const tab = await chrome.tabs.get(tabId)
+        if (!tab?.url || !/^https?:/.test(tab.url)) {
+            await clearProjectBadge(tabId)
+            return
+        }
+        const data = await getStoredData()
+        const project = findProjectByUrl(data.lastSuccessfulData.projects, tab.url)
+        if (project) await setProjectBadge(tabId)
+        else await clearProjectBadge(tabId)
+    } catch {
+        // Вкладка закрыта или недоступна — игнорируем
+    }
+}
+
+const updateActiveTabIcon = async () => {
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+        if (tab?.id) await updateBadgeForTab(tab.id)
+    } catch { }
+}
 
 const getUrlKey = (value) => {
     if (!value) return ''
@@ -182,14 +274,6 @@ const refreshAccesses = async (url) => {
         await logError('accesses', error)
         throw error
     }
-}
-
-const getAdminUrl = (project) => {
-    const cmsPaths = { UMI: 'admin/content/sitetree/', EzPro: 'ezpro/', Bitrix: 'bitrix/admin/#authorize', ABO: 'login.php', MODX: 'manager/', AdminLTE: 'admin/', Joomla: 'administrator/' }
-    if (!project?.cms || project.cms === 'Нет') return ''
-    if (project.cms === 'Tilda') return 'https://tilda.ru/login/'
-    if (project.cms === 'Своя' || project.cms === 'WordPress') return project.urlAdmin ? `https://${project.urlAdmin}` : ''
-    return cmsPaths[project.cms] ? `https://${project.url}/${cmsPaths[project.cms]}` : project.urlAdmin ? `https://${project.urlAdmin}` : ''
 }
 
 const getAuthPaths = (project, adminUrl) => ({ UMI: ['/admin/'], Bitrix: ['/bitrix/'], MODX: ['/manager/'], ABO: ['/login.php'], Tilda: ['/login/'] }[project.cms] || [new URL(adminUrl).pathname])
@@ -352,7 +436,12 @@ const handlers = {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const handler = handlers[message?.type]
     if (!handler) return false
-    Promise.resolve().then(() => handler(message.payload || {})).then((data) => sendResponse({ ok: true, data })).catch((error) => { console.error(`[background] ${message.type}`, error); sendResponse({ ok: false, error: error.message }) })
+    Promise.resolve().then(() => handler(message.payload || {}))
+        .then((data) => {
+            if (message?.type?.startsWith('data:')) updateActiveTabIcon()
+            sendResponse({ ok: true, data })
+        })
+        .catch((error) => { console.error(`[background] ${message.type}`, error); sendResponse({ ok: false, error: error.message }) })
     return true
 })
 
@@ -363,3 +452,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 chrome.runtime.onInstalled.addListener(() => restoreProjectsSchedule().catch((error) => console.error('[background] restore schedule', error)))
 chrome.runtime.onStartup.addListener(() => restoreProjectsSchedule().catch((error) => console.error('[background] restore schedule', error)))
+
+// Обновление индикатора при переключении вкладок
+chrome.tabs.onActivated.addListener(({ tabId }) => updateBadgeForTab(tabId))
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status === 'complete') updateBadgeForTab(tabId)
+})

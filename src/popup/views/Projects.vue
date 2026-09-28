@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { getProjectAccessText, loadErrorLog, loadProjectData, loadProjectDetails } from '../data/projectData'
+import switcher from '../../utils/switcher'
 
 const projects = ref([])
 const detailAccesses = ref([])
@@ -11,12 +12,23 @@ const message = ref('')
 const errors = ref([])
 const selectedProjectUrl = ref('')
 
-const filteredProjects = computed(() => {
+// Варианты запроса с учётом исправления раскладки клавиатуры
+// (например, "ghbdtn" -> "привет", "руддщ" -> "hello")
+const searchVariants = computed(() => {
     const query = search.value.trim().toLowerCase()
-    if (!query) return projects.value
-    return projects.value.filter((project) =>
-        `${project.name} ${project.url}`.toLowerCase().includes(query)
-    )
+    if (!query) return []
+    const ru = switcher(query)
+    const en = ru === query ? switcher(query, { type: 'rueng' }) : ''
+    return [...new Set([query, ru, en].filter(Boolean))]
+})
+
+const filteredProjects = computed(() => {
+    const variants = searchVariants.value
+    if (!variants.length) return projects.value
+    return projects.value.filter((project) => {
+        const haystack = `${project.name} ${project.url}`.toLowerCase()
+        return variants.some((variant) => haystack.includes(variant))
+    })
 })
 
 const formatDate = (value) => value ? new Date(value).toLocaleString() : ''

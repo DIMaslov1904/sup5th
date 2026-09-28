@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "ExtensionBoilerplate",
-  "version": "1.0.0",
-  "description": "And awesome extension boilerplate",
+  "name": "SUP 5th",
+  "short_name": "SUP5th",
+  "version": "1.1.0",
+  "description": "Ассистент 5th: проекты и доступы, автовход в админки, SEO-анализ страниц и интеграция с тикетами поддержки",
   "action": {
     "default_popup": "src/popup/index.html"
   },
@@ -37,7 +38,8 @@
         "*://*/*"
       ],
       "resources": [
-        "src/content-script/index.js"
+        "src/content-script/index.js",
+        "src/content-script/seo.js"
       ]
     }
   ],
@@ -50,7 +52,8 @@
   "options_page": "src/options/index.html",
   "permissions": [
     "storage",
-    "alarms"
+    "alarms",
+    "tabs"
   ],
   "host_permissions": [
     "*://*/*"

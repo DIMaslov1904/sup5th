@@ -33,7 +33,8 @@ const buildZip = (src, dist, zipFilename) => {
 
 const main = () => {
   const { name, version } = extractExtensionData()
-  const zipFilename = `${name}-v${version}.zip`
+  const slugName = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  const zipFilename = `${slugName}-v${version}.zip`
 
   makeDestZipDirIfNotExists()
 

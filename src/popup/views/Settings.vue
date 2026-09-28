@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { clearAllData, loadApiSettings, loadErrorLog, loadProjectData, refreshAccesses, refreshProjects, saveApiSettings } from '../data/projectData'
 
+const optionsUrl = chrome.runtime.getURL('src/options/index.html')
+
 const settings = ref({ projectsUrl: '', accessUrl: '' })
 const data = ref({ lastSuccessfulData: { projects: [], accesses: [], projectsUpdatedAt: null, accessesUpdatedAt: null } })
 const errors = ref([])
@@ -96,7 +98,7 @@ const resetData = async () => {
             </div>
 
             <p class="flex items-start mt-2 text-xs text-slate-400">
-                Инструкция по получению - <a href="#" class="hover:text-sky-300 text-white/70">инструкция</a>
+                Инструкция по получению - <a :href="optionsUrl" target="_blank" rel="noreferrer" class="hover:text-sky-300 text-white/70 underline decoration-sky-300/40 underline-offset-2">инструкция</a>
             </p>
         </label>
 

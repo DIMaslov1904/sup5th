@@ -1,6 +1,6 @@
 {
-  "name": "extensionboilerplate",
-  "version": "1.0.1",
+  "name": "sup5th",
+  "version": "4.0.1",
   "private": true,
   "scripts": {
     "dev": "vite",
