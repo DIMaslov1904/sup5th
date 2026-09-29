@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "SUP 5th",
   "short_name": "SUP5th",
-  "version": "1.1.0",
-  "description": "Ассистент 5th: проекты и доступы, автовход в админки, SEO-анализ страниц и интеграция с тикетами поддержки",
+  "version": "4.0.1",
+  "description": "Ассистент 5th: проекты и доступы, SEO-анализ страниц и интеграция с тикетами поддержки",
   "action": {
     "default_popup": "src/popup/index.html"
   },
@@ -59,9 +59,6 @@
     "128": "src/assets/icons/icon_128.png"
   },
   "options_page": "src/options/index.html",
-  "omnibox": {
-    "keyword": "sup"
-  },
   "permissions": [
     "storage",
     "alarms",

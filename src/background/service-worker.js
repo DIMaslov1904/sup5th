@@ -108,41 +108,6 @@ const fetchExternal = async ({ url, method = 'GET', timeout = 20000 }) => {
     }
 }
 
-// --- Omnibox: поиск проекта из адресной строки ("sup <запрос>") ---
-const matchProjectScore = (project, query) => {
-    const name = String(project.name || '').toLowerCase()
-    const url = String(project.url || '').toLowerCase()
-    if (name.startsWith(query)) return 3
-    if (url.startsWith(query)) return 3
-    if (name.includes(query) || url.includes(query)) return 2
-    return 0
-}
-
-if (chrome.omnibox) {
-    try {
-        chrome.omnibox.setDefaultSuggestion({ description: 'Поиск проекта SUP 5th' })
-    } catch (error) {
-        console.warn('[background] omnibox init', error)
-    }
-    chrome.omnibox.onInputChanged.addListener((text, suggest) => {
-        const query = text.trim().toLowerCase()
-        getStoredData().then((data) => {
-            const matches = data.lastSuccessfulData.projects
-                .map((project) => ({ project, score: matchProjectScore(project, query) }))
-                .filter((entry) => entry.score > 0)
-                .sort((a, b) => b.score - a.score)
-                .slice(0, 6)
-            suggest(matches.map(({ project }) => ({
-                content: project.url,
-                description: `${project.name} (${project.url}) — https://${project.url}`
-            })))
-        }).catch(() => suggest([]))
-    })
-    chrome.omnibox.onInputEntered.addListener((text) => {
-        chrome.tabs.create({ url: /^https?:/.test(text) ? text : `https://${text}` })
-    })
-}
-
 // --- Контекстное меню ---
 if (chrome.contextMenus) {
     const ensureContextMenus = () => {
