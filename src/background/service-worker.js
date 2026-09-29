@@ -71,6 +71,153 @@ const clearAllData = () => new Promise((resolve, reject) => {
 
 const getStoredData = () => storageGet(DATA_KEY, emptyData())
 
+// --- Универсальный fetch для SEO и внешних проверок (обходит CSP страницы) ---
+const fetchExternal = async ({ url, method = 'GET', timeout = 20000 }) => {
+    let parsedUrl
+    try {
+        parsedUrl = new URL(url)
+    } catch {
+        return { ok: false, status: 0, url: '', headers: {}, text: '' }
+    }
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) return { ok: false, status: 0, url: '', headers: {}, text: '' }
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
+    const startedAt = performance.now()
+    try {
+        const response = await fetch(parsedUrl.href, {
+            method,
+            credentials: 'omit',
+            redirect: 'follow',
+            signal: controller.signal
+        })
+        const text = await response.text()
+        return {
+            ok: response.ok,
+            status: response.status,
+            url: response.url,
+            headers: Object.fromEntries(response.headers.entries()),
+            text: text.slice(0, 200000),
+            ttfb: Math.round(performance.now() - startedAt)
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') return { ok: false, status: 0, url: '', headers: {}, text: '', ttfb: null }
+        return { ok: false, status: 0, url: '', headers: {}, text: '', ttfb: null }
+    } finally {
+        clearTimeout(timeoutId)
+    }
+}
+
+// --- Omnibox: поиск проекта из адресной строки ("sup <запрос>") ---
+const matchProjectScore = (project, query) => {
+    const name = String(project.name || '').toLowerCase()
+    const url = String(project.url || '').toLowerCase()
+    if (name.startsWith(query)) return 3
+    if (url.startsWith(query)) return 3
+    if (name.includes(query) || url.includes(query)) return 2
+    return 0
+}
+
+if (chrome.omnibox) {
+    try {
+        chrome.omnibox.setDefaultSuggestion({ description: 'Поиск проекта SUP 5th' })
+    } catch (error) {
+        console.warn('[background] omnibox init', error)
+    }
+    chrome.omnibox.onInputChanged.addListener((text, suggest) => {
+        const query = text.trim().toLowerCase()
+        getStoredData().then((data) => {
+            const matches = data.lastSuccessfulData.projects
+                .map((project) => ({ project, score: matchProjectScore(project, query) }))
+                .filter((entry) => entry.score > 0)
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 6)
+            suggest(matches.map(({ project }) => ({
+                content: project.url,
+                description: `${project.name} (${project.url}) — https://${project.url}`
+            })))
+        }).catch(() => suggest([]))
+    })
+    chrome.omnibox.onInputEntered.addListener((text) => {
+        chrome.tabs.create({ url: /^https?:/.test(text) ? text : `https://${text}` })
+    })
+}
+
+// --- Контекстное меню ---
+if (chrome.contextMenus) {
+    const ensureContextMenus = () => {
+        chrome.contextMenus.removeAll(() => {
+            chrome.contextMenus.create({
+                id: 'sup5th-admin',
+                title: 'Открыть админку проекта',
+                contexts: ['page', 'link']
+            })
+            chrome.contextMenus.create({
+                id: 'sup5th-copy-access',
+                title: 'Скопировать доступ к проекту',
+                contexts: ['page', 'link']
+            })
+        })
+    }
+    chrome.runtime.onInstalled.addListener(() => {
+        try {
+            ensureContextMenus()
+        } catch (error) {
+            console.warn('[background] context menus init', error)
+        }
+    })
+    chrome.runtime.onStartup.addListener(() => {
+        try {
+            ensureContextMenus()
+        } catch (error) {
+            console.warn('[background] context menus startup', error)
+        }
+    })
+
+    chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+        try {
+            const targetUrl = info.linkUrl || info.pageUrl || tab?.url
+            if (!targetUrl || !/^https?:/.test(targetUrl)) return
+            const data = await getStoredData()
+            const project = findProjectByUrl(data.lastSuccessfulData.projects, targetUrl)
+            if (!project) return
+
+            if (info.menuItemId === 'sup5th-admin') {
+                const adminUrl = getAdminUrl(project)
+                if (adminUrl) await chrome.tabs.create({ url: adminUrl })
+                return
+            }
+
+            if (info.menuItemId === 'sup5th-copy-access') {
+                const accesses = data.lastSuccessfulData.accesses.filter((access) => access.url === project.url)
+                const access = accesses[0]
+                if (!access?.login || !access?.password) return
+                const adminUrl = getAdminUrl(project) || project.urlAdmin || `https://${project.url}`
+                const text = `Доступ: ${adminUrl}\nЛогин: ${access.login}\nПароль: ${access.password}`
+                if (tab?.id != null) {
+                    await chrome.scripting.executeScript({
+                        target: { tabId: tab.id },
+                        func: (value) => {
+                            const textarea = document.createElement('textarea')
+                            textarea.value = value
+                            textarea.style.position = 'fixed'
+                            textarea.style.opacity = '0'
+                            document.body.appendChild(textarea)
+                            textarea.select()
+                            const ok = document.execCommand('copy')
+                            textarea.remove()
+                            return ok
+                        },
+                        args: [text]
+                    })
+                }
+            }
+        } catch (error) {
+            console.error('[background] context menu', error)
+        }
+    })
+}
+
 // --- Индикатор "проект" на иконке расширения ---
 const ICON_SIZES = [16, 32]
 const PROJECT_ICONS = new Map() // size -> ImageData
@@ -315,20 +462,27 @@ const getProjectDetails = async ({ url }) => {
     return {
         accesses: data.lastSuccessfulData.accesses
             .filter((access) => access.url === url)
-            .map(({ name, login, password }) => ({
+            .map(({ name, login, password, ftp }) => ({
                 name,
                 login,
                 hasLogin: Boolean(login),
-                hasPassword: Boolean(password)
+                hasPassword: Boolean(password),
+                hasFtp: Boolean(ftp?.url),
+                ftpUrl: ftp?.url || ''
             }))
     }
 }
 
 const getProjectAccessField = async ({ url, index, field }) => {
-    if (!['login', 'password'].includes(field)) throw new Error('Неизвестное поле доступа')
+    if (!['login', 'password', 'ftpLogin', 'ftpPassword'].includes(field)) throw new Error('Неизвестное поле доступа')
     const data = await getStoredData()
     const access = data.lastSuccessfulData.accesses.filter((item) => item.url === url)[index]
     if (!access) throw new Error('Доступ не найден')
+    if (field === 'ftpLogin' || field === 'ftpPassword') {
+        const ftpValue = field === 'ftpLogin' ? access.ftp?.login : access.ftp?.password
+        if (!ftpValue) throw new Error(`${field === 'ftpLogin' ? 'FTP логин' : 'FTP пароль'} отсутствует`)
+        return ftpValue
+    }
     if (!access[field]) throw new Error(`${field === 'login' ? 'Логин' : 'Пароль'} отсутствует`)
     return access[field]
 }
@@ -389,11 +543,13 @@ const toPublicData = (data) => {
                 hasAccess: accessCounts.has(project.url),
                 accessCount: accessCounts.get(project.url) || 0
             })),
-            accesses: snapshot.accesses.map(({ url, name, login, password }) => ({
+            accesses: snapshot.accesses.map(({ url, name, login, password, ftp }) => ({
                 url,
                 name,
                 hasLogin: Boolean(login),
-                hasPassword: Boolean(password)
+                hasPassword: Boolean(password),
+                hasFtp: Boolean(ftp?.url),
+                ftpUrl: ftp?.url || ''
             }))
         }
     }
@@ -430,7 +586,8 @@ const handlers = {
     'auth:start': startAdminAuth,
     'project:copyAccess': copyProjectAccessText,
     'project:details': getProjectDetails,
-    'project:accessField': getProjectAccessField
+    'project:accessField': getProjectAccessField,
+    'seo:fetch': fetchExternal
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -447,7 +604,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name !== PROJECTS_ALARM) return
-    storageGet(SETTINGS_KEY, emptySettings()).then((settings) => refreshProjects(settings.projectsUrl)).catch((error) => console.error('[background] weekly projects refresh', error))
+    storageGet(SETTINGS_KEY, emptySettings())
+        .then((settings) => refreshAll({ projectsUrl: settings.projectsUrl, accessUrl: settings.accessUrl }))
+        .catch((error) => console.error('[background] weekly refresh', error))
 })
 
 chrome.runtime.onInstalled.addListener(() => restoreProjectsSchedule().catch((error) => console.error('[background] restore schedule', error)))

@@ -15,6 +15,16 @@ export default defineConfig({
       "@": resolve(rootDir, "src")
     }
   },
+  build: {
+    modulePreload: false,
+    rollupOptions: {
+      input: {
+        "src/popup/index": resolve(rootDir, "src/popup/index.html"),
+        "src/options/index": resolve(rootDir, "src/options/index.html"),
+        "src/seo/index": resolve(rootDir, "src/seo/index.html")
+      }
+    }
+  },
   server: {
     watch: {
       usePolling: true

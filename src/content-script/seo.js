@@ -1,6 +1,9 @@
 /**
  * SEO-анализ текущей страницы.
- * Выполняется в контексте content script (доступ к DOM и fetch с credentials).
+ * Выполняется в контексте content script (доступ к DOM).
+ * Сетевые запросы (robots.txt, sitemap, проверка ссылок) выполняются в
+ * фоновом процессе через сообщение 'seo:fetch' — это обходит CSP страницы
+ * и не нагружает вкладку.
  * Зарегистрирован через registerSeoHandler() в index.js.
  */
 
@@ -10,20 +13,30 @@ const getHeadings = (level) => [...document.querySelectorAll(`h${level}`)]
     .map((element) => element.textContent.trim())
     .filter(Boolean)
 
-const fetchPageInfo = async (url, options = {}) => {
-    try {
-        const response = await fetch(url, { ...options, credentials: 'include' })
-        return {
-            ok: response.ok,
-            status: response.status,
-            url: response.url,
-            headers: Object.fromEntries(response.headers.entries()),
-            text: await response.text()
+// Запрос выполняется в background (нет ограничений CSP страницы)
+const fetchViaBackground = (url, options = {}) => new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+        { type: 'seo:fetch', payload: { url, method: options.method || 'GET' } },
+        (response) => {
+            const error = chrome.runtime.lastError
+            if (error || !response?.ok) {
+                resolve({ ok: false, status: 0, url: '', headers: {}, text: '', ttfb: null })
+                return
+            }
+            const data = response.data || {}
+            resolve({
+                ok: Boolean(data.ok),
+                status: data.status || 0,
+                url: data.url || '',
+                headers: data.headers || {},
+                text: data.text || '',
+                ttfb: data.ttfb ?? null
+            })
         }
-    } catch {
-        return { ok: false, status: 0, url: '', headers: {}, text: '' }
-    }
-}
+    )
+})
+
+const fetchPageInfo = fetchViaBackground
 
 const hasCyrillic = (value) => /[а-яё]/i.test(value)
 
@@ -45,6 +58,16 @@ export const scanSeo = async () => {
     const h1List = headings.h1
     const duplicateH1 = h1List.filter((heading, index) => h1List.indexOf(heading) !== index)
     const faviconLink = document.querySelector('link[rel~="icon"]')?.href || ''
+
+    // Уникальные внутренние ссылки (для расширенного аудита на отдельной странице)
+    const allLinks = [...document.links].map((link) => link.href).filter((href) => /^https?:/.test(href))
+    const internalLinks = [...new Set(allLinks.filter((href) => {
+        try {
+            return new URL(href).hostname === location.hostname
+        } catch {
+            return false
+        }
+    }))].slice(0, 50)
 
     return {
         url: location.href,
@@ -84,8 +107,10 @@ export const scanSeo = async () => {
         })),
         response: {
             status: pageInfo.status,
-            ok: pageInfo.ok
+            ok: pageInfo.ok,
+            ttfb: pageInfo.ttfb ?? null
         },
+        internalLinks,
         robotsFile: {
             url: robotsUrl,
             exists: robotsInfo.ok,
@@ -116,7 +141,7 @@ export const scanSeo = async () => {
 }
 
 /** Регистрирует обработчик сообщений 'seo:scan' */
-export const registerSeoHandler = () => {
+const registerSeoHandler = () => {
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         if (message?.type !== 'seo:scan') return false
         scanSeo()
@@ -125,3 +150,5 @@ export const registerSeoHandler = () => {
         return true
     })
 }
+
+registerSeoHandler()

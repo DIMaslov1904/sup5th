@@ -1,7 +1,9 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { getProjectAccessField, loadProjectData, loadProjectDetails, startAdminAuth } from '../data/projectData'
-import { findProjectByUrl, getAdminUrl, getCmsIconPath } from '../../utils/projectUtils'
+import { findProjectByUrl, getAdminUrl, getCmsIconPath, normalizeHost } from '../../utils/projectUtils'
+import Button from '../components/ui/Button.vue'
+import Message from '../components/ui/Message.vue'
 import LeftMenu from '../components/LeftMenu.vue'
 
 const menuItem = ref('project')
@@ -55,6 +57,8 @@ onMounted(async () => {
         loaded.value = true
     }
 })
+
+const openSeoAudit = () => chrome.tabs.create({ url: chrome.runtime.getURL('src/seo/index.html') })
 
 watch(menuItem, (tab) => {
     if (!currentTab.value?.url || !project.value) return
@@ -163,31 +167,30 @@ const copyAccessField = async (accessIndex, field) => {
                 <section v-if="accesses.length" class="grid gap-2">
                     <h2 class="text-sm font-semibold">Доступы ({{ accesses.length }})</h2>
                     <article v-for="(access, index) in accesses" :key="`${access.login}-${index}`"
-                        :role="access.hasLogin && access.hasPassword ? 'button' : undefined"
-                        :tabindex="access.hasLogin && access.hasPassword ? 0 : undefined"
-                        :aria-label="access.hasLogin && access.hasPassword ? `Войти как ${access.login}` : undefined"
                         class="grid gap-3 rounded-lg border border-white/10 bg-slate-900/40 p-3"
-                        :class="access.hasLogin && access.hasPassword ? 'cursor-pointer hover:border-white/20 hover:bg-slate-900/70' : 'opacity-75'"
-                        @click="access.hasLogin && access.hasPassword && openAdmin(index)"
-                        @keydown.enter="access.hasLogin && access.hasPassword && openAdmin(index)">
+                        :class="!access.hasLogin || !access.hasPassword ? 'opacity-75' : ''">
                         <div class="flex items-center justify-between gap-2">
-                            <span class="break-all text-sm font-medium text-slate-100">{{ access.login || access.name || `Доступ ${index + 1}` }}</span>
-                            <span v-if="access.hasLogin && access.hasPassword" class="shrink-0 text-[10px] text-slate-500">Войти →</span>
+                            <span class="min-w-0 break-all text-sm font-medium text-slate-100">{{ access.login || access.name || `Доступ ${index + 1}` }}</span>
+                            <button v-if="access.hasLogin && access.hasPassword" type="button"
+                                :disabled="authLoading" :title="`Войти как ${access.login}`"
+                                aria-label="Войти в админку под этим доступом"
+                                class="shrink-0 rounded bg-sky-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50 cursor-pointer"
+                                @click="openAdmin(index)">
+                                {{ authLoading ? 'Вход...' : 'Войти' }}
+                            </button>
                         </div>
-                        <div class="flex flex-wrap gap-2" @click.stop>
-                            <button v-if="access.hasLogin" type="button" :disabled="copyingAccess === `${index}:login`"
-                                class="rounded border border-white/10 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/10 disabled:opacity-50"
-                                @click="copyAccessField(index, 'login')">{{ copyingAccess === `${index}:login` ? 'Копирую...' : 'Копировать логин' }}</button>
-                            <button v-if="access.hasPassword" type="button" :disabled="copyingAccess === `${index}:password`"
-                                class="rounded border border-white/10 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/10 disabled:opacity-50"
-                                @click="copyAccessField(index, 'password')">{{ copyingAccess === `${index}:password` ? 'Копирую...' : 'Копировать пароль' }}</button>
+                        <div class="flex flex-wrap gap-2">
+                            <Button v-if="access.hasLogin" variant="ghost" size="sm" :disabled="copyingAccess === `${index}:login`"
+                                @click="copyAccessField(index, 'login')">{{ copyingAccess === `${index}:login` ? 'Копирую...' : 'Копировать логин' }}</Button>
+                            <Button v-if="access.hasPassword" variant="ghost" size="sm" :disabled="copyingAccess === `${index}:password`"
+                                @click="copyAccessField(index, 'password')">{{ copyingAccess === `${index}:password` ? 'Копирую...' : 'Копировать пароль' }}</Button>
                             <span v-if="!access.hasLogin || !access.hasPassword" class="self-center text-[11px] text-amber-300">
                                 {{ !access.hasLogin ? 'Логин не указан' : 'Пароль не указан' }}
                             </span>
                         </div>
                     </article>
                 </section>
-                <p v-if="authMessage" class="rounded bg-[#c1a100cc] p-2 text-xs text-white">{{ authMessage }}</p>
+                <Message v-if="authMessage" type="error">{{ authMessage }}</Message>
             </div>
         </section>
 
@@ -197,13 +200,15 @@ const copyAccessField = async (accessIndex, field) => {
                     <h1 class="text-lg font-semibold">SEO</h1>
                     <p class="text-xs text-slate-400">Анализ текущей страницы без внешних сервисов</p>
                 </div>
-                <button type="button" @click="scanSeo" :disabled="seoLoading"
-                    class="rounded bg-slate-800 px-3 py-2 text-xs text-white hover:bg-slate-700 disabled:pointer-events-none disabled:opacity-50">
-                    {{ seoLoading ? 'Проверка...' : 'Проверить' }}
-                </button>
+                <div class="flex shrink-0 gap-2">
+                    <Button variant="secondary" size="sm" @click="openSeoAudit">Расширенный аудит</Button>
+                    <Button variant="secondary" size="sm" :disabled="seoLoading" @click="scanSeo">
+                        {{ seoLoading ? 'Проверка...' : 'Проверить' }}
+                    </Button>
+                </div>
             </div>
 
-            <p v-if="seoMessage" class="rounded bg-[#c1a100cc] p-2 text-xs text-white">{{ seoMessage }}</p>
+            <Message v-if="seoMessage" type="error">{{ seoMessage }}</Message>
             <div v-else-if="seo" class="grid gap-3 text-xs">
                 <div class="grid gap-2 rounded-lg border border-white/10 bg-slate-900/40 p-3">
                     <div class="flex justify-between gap-3"><span>Title</span><strong>{{ seo.title || 'Нет' }}</strong>

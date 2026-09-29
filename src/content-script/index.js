@@ -1,5 +1,3 @@
-import { registerSeoHandler } from './seo.js'
-
 const AUTH_KEY = 'pendingAdminAuth'
 const AUTH_TTL = 5 * 60 * 1000
 
@@ -68,4 +66,3 @@ const startAdminAuth = async () => {
 }
 
 startAdminAuth().catch((error) => console.error('[content] admin auth', error))
-registerSeoHandler()

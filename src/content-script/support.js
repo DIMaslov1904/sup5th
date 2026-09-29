@@ -91,10 +91,52 @@ const setField = (input, value) => {
     input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
+const toLocalValue = (parsed) => `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`
+
+const isTimeLikeInput = (input) => {
+    if (!(input instanceof HTMLInputElement)) return false
+    const name = String(input.name || '').toLowerCase()
+    const id = String(input.id || '').toLowerCase()
+    if (/time/.test(name) || /time/.test(id)) return true
+    if (input.type === 'text') {
+        const value = String(input.value || '').trim()
+        return /^\d{4}-\d{2}-\d{2}[ T]\d{1,2}:\d{2}/.test(value) || /^\d{2}[./]\d{2}[./]\d{4}/.test(value)
+    }
+    return false
+}
+
+// Делегирование событий: перехватывает фокус на любых полях даты/времени,
+// даже если они появились динамически после нашей обработки.
+const attachTimeDelegation = (targetDoc) => {
+    if (!targetDoc || targetDoc.__sup5thTimeDelegated) return
+    targetDoc.__sup5thTimeDelegated = true
+
+    targetDoc.addEventListener('focusin', (event) => {
+        const input = event.target
+        if (!isTimeLikeInput(input)) return
+        input.dataset.sup5thTimeEnhanced = 'true'
+        const parsed = parseSupportDate(input.value)
+        input.type = 'datetime-local'
+        input.step = '1'
+        if (parsed) input.value = toLocalValue(parsed)
+    }, true)
+
+    targetDoc.addEventListener('focusout', (event) => {
+        const input = event.target
+        if (!isTimeLikeInput(input) || !input.dataset.sup5thTimeEnhanced) return
+        const parsed = parseSupportDate(input.value)
+        input.type = 'text'
+        if (parsed) input.value = formatSupportDate(parsed)
+    }, true)
+}
+
 const enhanceTimeFields = (targetDoc) => {
     ensureStyles(targetDoc)
-    const timeInputs = [...targetDoc.querySelectorAll('input[name*="time"]')]
+    attachTimeDelegation(targetDoc)
+    const timeInputs = [...targetDoc.querySelectorAll('input[name*="time"], input[id*="time"]')]
         .filter((input) => input instanceof HTMLInputElement)
+    // Поля могут появляться динамически — делегирование focusin/focusout
+    // перехватит их в любом случае, поэтому молча возвращаемся.
     if (!timeInputs.length) return
 
     const startInput = timeInputs.find((input) => /time_start|start_time/.test(input.name)) || null
@@ -248,6 +290,7 @@ const enhanceTimeFields = (targetDoc) => {
 // Наблюдение за динамическим появлением полей времени внутри iframe
 const observeTimeFields = (targetDoc) => {
     if (!targetDoc) return
+    attachTimeDelegation(targetDoc)
     let timer
     const check = () => {
         clearTimeout(timer)
@@ -268,6 +311,7 @@ const createIframe = (id) => {
         try {
             const frameDoc = frame.contentWindow?.document
             if (frameDoc) {
+                attachTimeDelegation(frameDoc)
                 enhanceTimeFields(frameDoc)
                 observeTimeFields(frameDoc)
             }
