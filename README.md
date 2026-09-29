@@ -1,39 +1,21 @@
-# Browser Extension Boilerplate
+# Браузерное расширение 5th
 
-> Start creating browser extension in minutes with this easy-to-use boilerplate for a Vue3 + Vite boilerplate.
-
-## Features
+### Стек
 * Vue 3
 * Vite
 * TailwindCSS 4
-* Packaging Script
 
-## Installation
-
+### Сценарии
 ```bash
-$ npm install
+# Установка
+npm i
+
+# Запуск в режиме разработки
+npm run dev
+
+# Сборка
+npm run build
+
+# Собрать для отправки
+npm run pack
 ```
-
-## Build - Development
-
-```bash
-$ npm run dev
-```
-
-## Build - Production
-
-```bash
-$ npm run build
-```
-
-## Package for distribution
-
-```bash
-$ npm run pack
-```
-
-## Contributing
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
-## License
-[GNU General Public License v3.0](https://github.com/AndrewR3K/browser-extension-boilerplate/blob/master/LICENSE)

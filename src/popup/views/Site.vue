@@ -134,7 +134,7 @@ const copyAccessField = async (accessIndex, field) => {
                         <div class="flex items-center gap-2">
                             <img :src="getCmsIcon(project)" :alt="cmsLabel" :title="cmsLabel"
                                 class="h-5 w-5 shrink-0 rounded bg-white p-0.5 object-contain" />
-                            <h1 class="break-words text-lg font-semibold">{{ project.name || project.url }}</h1>
+                            <h1 class="text-lg font-semibold">{{ project.name || project.url }}</h1>
                         </div>
                         <a :href="siteUrl" target="_blank" rel="noreferrer"
                             class="break-all text-xs text-slate-400 hover:text-white">{{ project.url }}</a>
