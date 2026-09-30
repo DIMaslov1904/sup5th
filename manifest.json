@@ -4,6 +4,7 @@
   "short_name": "SUP5th",
   "version": "4.0.1",
   "description": "Ассистент 5th: проекты и доступы, SEO-анализ страниц и интеграция с тикетами поддержки",
+  "homepage_url": "https://github.com/DIMaslov1904",
   "action": {
     "default_popup": "src/popup/index.html"
   },
@@ -18,7 +19,8 @@
         "src/content-script/index.js"
       ],
       "matches": [
-        "*://*/*"
+        "http://*/*",
+        "https://*/*"
       ],
       "run_at": "document_idle"
     },
@@ -28,7 +30,8 @@
         "src/content-script/seo.js"
       ],
       "matches": [
-        "*://*/*"
+        "http://*/*",
+        "https://*/*"
       ],
       "run_at": "document_idle"
     },
@@ -45,7 +48,8 @@
   "web_accessible_resources": [
     {
       "matches": [
-        "*://*/*"
+        "http://*/*",
+        "https://*/*"
       ],
       "resources": [
         "src/content-script/index.js"
@@ -54,7 +58,10 @@
   ],
   "icons": {
     "16": "src/assets/icons/icon_16.png",
+    "19": "src/assets/icons/icon_16.png",
     "32": "src/assets/icons/icon_32.png",
+    "38": "src/assets/icons/icon_32.png",
+    "48": "src/assets/icons/icon_32.png",
     "64": "src/assets/icons/icon_64.png",
     "128": "src/assets/icons/icon_128.png"
   },
@@ -67,7 +74,8 @@
     "contextMenus"
   ],
   "host_permissions": [
-    "*://*/*"
+    "http://*/*",
+    "https://*/*"
   ],
   "content_security_policy": {
     "script-src": "self",
