@@ -21,7 +21,6 @@ const VAULT_KEY = 'credentialVault'
 const UNLOCKED_KEY = 'unlockedCredentialVaultKey'
 const PENDING_AUTH_SESSIONS_KEY = 'pendingAdminAuthSessions'
 const PIN_KDF_ITERATIONS = 600000
-const VAULT_SESSION_TTL = 15 * 60 * 1000
 const PROJECTS_ALARM = 'weekly-projects-refresh'
 const PROJECTS_REFRESH_PERIOD_MINUTES = 7 * 24 * 60
 const REQUEST_TIMEOUT = 30000
@@ -93,12 +92,14 @@ const sessionRemove = async (key) => new Promise((resolve, reject) => {
 
 const getSecurityConfig = () => storageGet(SECURITY_KEY, null)
 
+// Ключ разблокировки живёт только в chrome.storage.session — он очищается
+// при завершении сессии браузера, поэтому хранилище автоматически блокируется
+// при закрытии браузера (без TTL).
 const getUnlockedKey = async ({ required = true } = {}) => {
     const config = await getSecurityConfig()
     if (!config?.enabled) return null
     const session = await sessionGet(UNLOCKED_KEY)
-    if (!session || session.expiresAt <= Date.now()) {
-        if (session) await sessionRemove(UNLOCKED_KEY)
+    if (!session?.key) {
         if (required) throw new Error('Хранилище заблокировано. Разблокируйте его в настройках.')
         return null
     }
@@ -106,8 +107,7 @@ const getUnlockedKey = async ({ required = true } = {}) => {
 }
 
 const storeUnlockedKey = async (rawKey) => sessionSet(UNLOCKED_KEY, {
-    key: bytesToBase64(rawKey),
-    expiresAt: Date.now() + VAULT_SESSION_TTL
+    key: bytesToBase64(rawKey)
 })
 
 const readCredentialVault = async (key) => {
@@ -201,8 +201,7 @@ const getSecurityStatus = async ({ helloAvailable = false, prfSupported = false 
     const base = { helloAvailable: Boolean(helloAvailable), prfSupported: Boolean(prfSupported) }
     if (!config?.enabled) return { enabled: false, mode: 'off', unlocked: true, ...base }
     const session = await sessionGet(UNLOCKED_KEY)
-    const unlocked = Boolean(session && session.expiresAt > Date.now())
-    if (!unlocked && session) await sessionRemove(UNLOCKED_KEY)
+    const unlocked = Boolean(session?.key)
     return {
         enabled: true,
         mode: config.mode,

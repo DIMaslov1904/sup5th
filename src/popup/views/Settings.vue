@@ -288,7 +288,7 @@ const resetData = async () => {
                         <Button variant="secondary" size="sm" :disabled="securityLoading" @click="lockProtection">Заблокировать</Button>
                         <Button variant="danger" size="sm" :disabled="securityLoading" @click="disableProtection">Отключить защиту</Button>
                     </div>
-                    <p class="text-xs text-slate-400">Хранилище автоматически блокируется через 15 минут. Для разблокировки потребуется Windows Hello.</p>
+                    <p class="text-xs text-slate-400">Хранилище автоматически блокируется при закрытии браузера. Для разблокировки потребуется Windows Hello.</p>
                 </template>
 
                 <template v-else>
@@ -303,7 +303,7 @@ const resetData = async () => {
                         <Button variant="secondary" size="sm" :disabled="securityLoading" @click="lockProtection">Заблокировать</Button>
                         <Button variant="danger" size="sm" :disabled="securityLoading" @click="disableProtection">Отключить защиту</Button>
                     </div>
-                    <p class="text-xs text-slate-400">Хранилище автоматически блокируется через 15 минут. PIN не синхронизируется и не имеет восстановления.</p>
+                    <p class="text-xs text-slate-400">Хранилище автоматически блокируется при закрытии браузера. PIN не синхронизируется и не имеет восстановления.</p>
                 </template>
             </div>
         </Card>
