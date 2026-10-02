@@ -799,7 +799,9 @@ const getServices = async () => {
     return services.map((service) => ({ ...service, ...secretsById.get(service.id) }))
 }
 
-const saveServices = async (services) => {
+const saveServices = async (payload) => {
+    // Роутер передаёт message.payload ({ services: [...] }), но допускаем и прямой массив
+    const services = Array.isArray(payload) ? payload : payload?.services
     if (!Array.isArray(services)) throw new Error('Некорректный список сервисов')
     const normalized = services.map((service) => {
         const name = String(service.name || '').trim()
