@@ -234,7 +234,12 @@ const enableWindowsHelloProtection = async ({ rawVaultKey, credentialId, prfSalt
         throw new Error('Параметры Windows Hello повреждены')
     }
     if (!wrappedKey?.iv || !wrappedKey?.ciphertext) throw new Error('Отсутствует обёрнутый ключ Windows Hello')
-    return enableProtectedVault('hello', null, { rawVaultKey, credentialId, prfSalt, wrappedKey })
+    return enableProtectedVault('hello', null, {
+        rawVaultKey: base64ToBytes(rawVaultKey),
+        credentialId,
+        prfSalt,
+        wrappedKey
+    })
 }
 
 const unlockWithPin = async ({ pin }) => {

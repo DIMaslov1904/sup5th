@@ -4,6 +4,10 @@
 //
 // Модуль работает ТОЛЬКО в страницах расширения (popup/options), где доступен
 // navigator.credentials (в service worker WebAuthn недоступен).
+//
+// Важно: часть аутентификаторов/браузеров не возвращает PRF-результат в момент
+// create (prf.enabled может быть false), но отдаёт его при повторном get с
+// prf.evalByCredential. Поэтому регистрация двухшаговая: create -> get.
 
 const encoder = new TextEncoder()
 
@@ -47,10 +51,29 @@ export const isBiometricAvailable = async () => {
     }
 }
 
-// PRF для платформенных аутентификаторов появился в Chrome 130 (Windows/macOS)
-export const isPrfLikelySupported = () => {
+// Возможности браузера (Chrome 131+): { prf: bool, userVerifyingPlatformAuthenticator: bool, ... }
+const getClientCapabilities = async () => {
+    if (typeof PublicKeyCredential?.getClientCapabilities === 'function') {
+        try {
+            return await PublicKeyCredential.getClientCapabilities()
+        } catch {
+            return null
+        }
+    }
+    return null
+}
+
+export const getBiometricCapabilities = async () => {
+    const caps = await getClientCapabilities()
     const match = navigator.userAgent.match(/\bChrome\/(\d+)/)
-    return Boolean(match && Number(match[1]) >= 130)
+    const chromeMajor = match ? Number(match[1]) : 0
+    return {
+        helloAvailable: await isBiometricAvailable(),
+        // В Chrome возможности расширений WebAuthn именуются как "extension:prf"
+        prf: Boolean(caps && typeof caps['extension:prf'] === 'boolean' ? caps['extension:prf'] : chromeMajor >= 130),
+        capabilities: caps || null,
+        chromeMajor
+    }
 }
 
 const getRpId = () => (typeof chrome !== 'undefined' && chrome.runtime?.id) ? chrome.runtime.id : location.hostname
@@ -82,7 +105,15 @@ export const unwrapKey = async (wrapped, kek) => {
     return new Uint8Array(plaintext)
 }
 
-// Получение детерминированного PRF-секрета после проверки Windows Hello
+const prfUnsupportedMessage = () => (
+    'Windows Hello/PRF не поддерживается: браузер не выдал PRF-секрет для passkey. ' +
+    'Проверьте, что passkey создаётся как device-bound (Windows Hello), а не в Google Password Manager ' +
+    '(chrome://settings/passkeys → переключатель «Создавать passkey в Windows Hello»), ' +
+    'и удалите лишние passkey для этого расширения.'
+)
+
+// Получение детерминированного PRF-секрета после проверки Windows Hello.
+// Используем evalByCredential — каноничная форма get для одного известного credential.
 const getBiometricSecret = async ({ credentialId, salt }) => {
     const options = {
         publicKey: {
@@ -95,20 +126,27 @@ const getBiometricSecret = async ({ credentialId, salt }) => {
                 type: 'public-key',
                 transports: ['internal']
             }],
-            extensions: { prf: { eval: { first: base64UrlToBytes(salt) } } }
+            extensions: {
+                prf: {
+                    evalByCredential: {
+                        [credentialId]: { first: base64ToBytes(salt) }
+                    }
+                }
+            }
         }
     }
     const credential = await navigator.credentials.get(options)
     if (!credential) throw new Error('Проверка Windows Hello отменена')
-    const results = credential.getClientExtensionResults?.().prf
-    if (!results?.results?.first) throw new Error('Windows Hello не вернул секрет (PRF недоступен)')
-    return new Uint8Array(results.results.first)
+    const results = credential.getClientExtensionResults?.().prf?.results
+    if (!results?.first) throw new Error(prfUnsupportedMessage())
+    return new Uint8Array(results.first)
 }
 
-// Регистрация passkey: create (prf enabled) + get (prf eval) -> PRF-секрет.
-// Двухшаговый процесс надёжнее: создание с eval поддерживается не во всех браузерах.
+// Регистрация passkey. Часть аутентификаторов возвращает PRF-результат прямо в create,
+// остальные — только при повторном get с prf.evalByCredential.
 const registerBiometricPasskey = async () => {
     const salt = randomBytes(32)
+    const saltB64 = bytesToBase64(salt)
     const options = {
         publicKey: {
             rp: { id: getRpId(), name: RP_NAME },
@@ -129,21 +167,26 @@ const registerBiometricPasskey = async () => {
             },
             attestation: 'none',
             timeout: 120000,
-            extensions: { prf: { enable: true } }
+            extensions: {
+                prf: { enable: true, eval: { first: salt } }
+            }
         }
     }
     const credential = await navigator.credentials.create(options)
     if (!credential) throw new Error('Создание пасскея отменено')
-    const enabled = credential.getClientExtensionResults?.().prf?.enabled
-    if (!enabled) throw new Error('Windows Hello/PRF не поддерживается этим браузером (нужен Chrome 130+ на Windows)')
 
-    const prfSecret = await getBiometricSecret({
-        credentialId: credential.id,
-        salt: bytesToBase64Url(salt)
-    })
+    const createPrf = credential.getClientExtensionResults?.().prf
+    let prfSecret = null
+    if (createPrf?.results?.first) {
+        prfSecret = new Uint8Array(createPrf.results.first)
+    } else {
+        // Второй шаг: некоторые аутентификаторы не вычисляют PRF в момент create,
+        // но отдают секрет при get (это нормальное поведение, см. WebAuthn PRF).
+        prfSecret = await getBiometricSecret({ credentialId: credential.id, salt: saltB64 })
+    }
     return {
         credentialId: credential.id,
-        salt: bytesToBase64Url(salt),
+        salt: saltB64,
         prfSecret
     }
 }

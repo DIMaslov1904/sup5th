@@ -18,8 +18,7 @@ import {
 } from '../data/projectData'
 import {
     enableBiometricProtectionFlow,
-    isBiometricAvailable,
-    isPrfLikelySupported,
+    getBiometricCapabilities,
     unlockWithBiometricFlow
 } from '../../utils/biometricHello'
 import Button from '../components/ui/Button.vue'
@@ -54,9 +53,9 @@ const mergeSecurity = (result) => ({
 
 onMounted(async () => {
     try {
-        const flags = await Promise.all([isBiometricAvailable(), isPrfLikelySupported()])
-        helloAvailable.value = flags[0]
-        prfSupported.value = flags[1]
+        const caps = await getBiometricCapabilities()
+        helloAvailable.value = caps.helloAvailable
+        prfSupported.value = caps.prf
         const [savedSettings, savedData, savedErrors, savedSecurity] = await Promise.all([
             loadApiSettings(),
             loadProjectData(),
@@ -256,7 +255,7 @@ const resetData = async () => {
                         <input type="radio" checked disabled class="accent-sky-500" />
                         Windows Hello (биометрия)
                     </label>
-                    <Button variant="secondary" :disabled="securityLoading || !security.helloAvailable || !security.prfSupported"
+                    <Button variant="secondary" :disabled="securityLoading || !security.helloAvailable"
                         @click="enableHelloProtectionFn">
                         {{ securityLoading ? 'Включение...' : 'Включить вход по Windows Hello' }}
                     </Button>
@@ -264,7 +263,7 @@ const resetData = async () => {
                         Windows Hello недоступен на этом устройстве. Он появится в Chrome на Windows 10/11 с настроенной биометрией или PIN.
                     </p>
                     <p v-else-if="!security.prfSupported" class="text-xs text-amber-300">
-                        Для биометрии нужен Chrome 130 или новее.
+                        Chrome не подтверждает PRF-расширение для passkey. Попробуйте включить — если браузер не выдаст секрет, включите «Создавать passkey в Windows Hello» в chrome://settings/passkeys и удалите лишние passkey этого расширения.
                     </p>
                     <p v-else class="text-xs text-slate-400">
                         Будет создан passkey, привязанный к Windows Hello (PIN / отпечаток / лицо). Ключ хранилища шифруется секретом passkey и не покидает систему.
