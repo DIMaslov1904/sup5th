@@ -59,3 +59,18 @@ export const loadProjectDetails = (url) =>
 
 export const getProjectAccessField = (url, index, field) =>
     callBackground('project:accessField', { url, index, field })
+
+export const getCredentialSecurityStatus = (helloAvailable = false, prfSupported = false) =>
+    callBackground('security:status', { helloAvailable, prfSupported })
+
+export const enablePinProtection = (pin) => callBackground('security:enablePin', { pin })
+
+export const enableHelloProtection = (payload) => callBackground('security:enableHello', payload)
+
+export const unlockCredentialVault = (pin) => callBackground('security:unlockPin', { pin })
+
+export const unlockCredentialVaultWithHello = (key) => callBackground('security:unlockHelloKey', { key })
+
+export const lockCredentialVault = () => callBackground('security:lock')
+
+export const disableCredentialProtection = () => callBackground('security:disable')

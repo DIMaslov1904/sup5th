@@ -1,4 +1,3 @@
-const AUTH_KEY = 'pendingAdminAuth'
 const AUTH_TTL = 5 * 60 * 1000
 
 const setInputValue = (input, value) => {
@@ -42,24 +41,16 @@ const fillAdminForm = (auth) => {
 }
 
 const startAdminAuth = async () => {
-    const result = await chrome.storage.local.get([AUTH_KEY])
-    const auth = result[AUTH_KEY]
-    if (!auth || Date.now() - auth.createdAt > AUTH_TTL) {
-        if (auth) await chrome.storage.local.remove(AUTH_KEY)
-        return
-    }
+    if (window.top !== window) return
+    const response = await chrome.runtime.sendMessage({ type: 'auth:consume' })
+    const auth = response?.ok ? response.data : null
+    if (!auth || Date.now() - auth.createdAt > AUTH_TTL) return
 
-    if (location.origin !== auth.targetOrigin || !auth.targetPaths?.some((path) => location.pathname.startsWith(path))) return
+    if (fillAdminForm(auth)) return
 
-    if (fillAdminForm(auth)) {
-        await chrome.storage.local.remove(AUTH_KEY)
-        return
-    }
-
-    const observer = new MutationObserver(async () => {
+    const observer = new MutationObserver(() => {
         if (!document.body || !fillAdminForm(auth)) return
         observer.disconnect()
-        await chrome.storage.local.remove(AUTH_KEY)
     })
     observer.observe(document.documentElement, { childList: true, subtree: true })
     setTimeout(() => observer.disconnect(), 15000)

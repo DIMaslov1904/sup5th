@@ -48,7 +48,9 @@ const applyData = (data) => {
 
 const selectedProject = computed(() => projects.value.find((project) => project.url === selectedProjectUrl.value) || null)
 const selectedProjectAccesses = computed(() => detailAccesses.value)
-const ftpAccesses = computed(() => detailAccesses.value.filter((access) => access.hasFtp))
+const ftpAccesses = computed(() => detailAccesses.value
+    .map((access, sourceIndex) => ({ ...access, sourceIndex }))
+    .filter((access) => access.hasFtp))
 
 const linkHref = (value) => {
     if (!value) return ''
@@ -193,10 +195,10 @@ onMounted(async () => {
                     class="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/40 p-3">
                     <span class="min-w-0 break-all text-xs text-slate-300">{{ access.ftpUrl }}</span>
                     <div class="flex shrink-0 gap-2">
-                        <Button variant="ghost" size="sm" :disabled="copying === `ftp:${index}:ftpLogin`"
-                            @click="copyFtpField(index, 'ftpLogin')">Логин</Button>
-                        <Button variant="ghost" size="sm" :disabled="copying === `ftp:${index}:ftpPassword`"
-                            @click="copyFtpField(index, 'ftpPassword')">Пароль</Button>
+                        <Button variant="ghost" size="sm" :disabled="copying === `ftp:${access.sourceIndex}:ftpLogin`"
+                            @click="copyFtpField(access.sourceIndex, 'ftpLogin')">Логин</Button>
+                        <Button variant="ghost" size="sm" :disabled="copying === `ftp:${access.sourceIndex}:ftpPassword`"
+                            @click="copyFtpField(access.sourceIndex, 'ftpPassword')">Пароль</Button>
                     </div>
                 </article>
             </section>
