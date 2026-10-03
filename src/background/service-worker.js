@@ -11,9 +11,13 @@ import {
     sealJson
 } from './credentialCrypto.js'
 
+const textEncoder = new TextEncoder()
+const textDecoder = new TextDecoder()
+
 const DATA_KEY = 'projectData'
 const SERVICES_KEY = 'manualServices'
 const SETTINGS_KEY = 'apiSettings'
+const API_SETTINGS_KEY_STORAGE = 'apiSettingsKey'
 const ERRORS_KEY = 'apiErrorLog'
 const AUTH_KEY = 'pendingAdminAuth'
 const SECURITY_KEY = 'credentialSecurity'
@@ -38,6 +42,64 @@ const emptyData = () => ({
 })
 
 const emptySettings = () => ({ projectsUrl: '', accessUrl: '' })
+
+// --- Шифрование адресов API ---
+// Ключ приложения лежит в chrome.storage.local рядом с зашифрованными значениями:
+// это защита от чтения адресов в открытую, а не от злоумышленника с доступом
+// к хранилищу (фон должен работать без разблокировки vault).
+const getApiSettingsKey = async () => {
+    let raw = await storageGet(API_SETTINGS_KEY_STORAGE, null)
+    if (!raw) {
+        raw = bytesToBase64(randomBytes(32))
+        await storageSet(API_SETTINGS_KEY_STORAGE, raw)
+    }
+    return importAesKey(base64ToBytes(raw))
+}
+
+// Внутреннее чтение реальных адресов (расшифровка; старый открытый формат читается как есть)
+const readApiSettingsRaw = async () => {
+    const stored = await storageGet(SETTINGS_KEY, {})
+    const source = stored && typeof stored === 'object' ? stored : {}
+    const key = await getApiSettingsKey()
+    const decode = async (sealed) => {
+        if (!sealed) return ''
+        if (typeof sealed === 'string') return sealed // устаревший формат
+        try {
+            return textDecoder.decode(await openBytes(sealed, key))
+        } catch {
+            return ''
+        }
+    }
+    return {
+        projectsUrl: await decode(source.projectsUrl),
+        accessUrl: await decode(source.accessUrl)
+    }
+}
+
+const writeApiSettingsRaw = async (raw) => {
+    const key = await getApiSettingsKey()
+    const seal = async (value) => value ? sealBytes(textEncoder.encode(value), key) : null
+    await storageSet(SETTINGS_KEY, {
+        projectsUrl: await seal(raw.projectsUrl),
+        accessUrl: await seal(raw.accessUrl)
+    })
+}
+
+const toPublicApiSettings = (raw) => ({
+    hasProjectsUrl: Boolean(raw.projectsUrl),
+    hasAccessUrl: Boolean(raw.accessUrl)
+})
+
+// Patch-сохранение: передаются только изменённые поля; пустая строка удаляет адрес
+const saveApiSettings = async ({ projectsUrl, accessUrl } = {}) => {
+    const current = await readApiSettingsRaw()
+    const next = { ...current }
+    if (projectsUrl !== undefined) next.projectsUrl = String(projectsUrl ?? '').trim()
+    if (accessUrl !== undefined) next.accessUrl = String(accessUrl ?? '').trim()
+    await writeApiSettingsRaw(next)
+    await scheduleProjectsRefresh(next.projectsUrl)
+    return next
+}
 
 const storageGet = (key, fallback) => new Promise((resolve, reject) => {
     chrome.storage.local.get([key], (result) => {
@@ -118,9 +180,11 @@ const readCredentialVault = async (key) => {
 
 const encryptCredentialVault = (vault, key) => sealJson(vault, key)
 
+// Логины сайтов храним открыто (показываются в интерфейсе), шифруются пароли и FTP.
 const publicAccess = (access) => ({
     url: access.url,
     name: access.name,
+    login: access.login || '',
     hasLogin: Boolean(access.login || access.hasLogin),
     hasPassword: Boolean(access.password || access.hasPassword),
     hasFtp: Boolean(access.ftp?.url || access.hasFtp),
@@ -137,7 +201,12 @@ const enableProtectedVault = async (mode, wrappingKey, options = {}) => {
     const data = await getStoredData()
     const services = await storageGet(SERVICES_KEY, [])
     const vault = {
-        accesses: data.lastSuccessfulData.accesses.map((access) => ({ ...access })),
+        // В vault — только секреты: пароль и FTP. Логин остаётся в открытых данных.
+        accesses: data.lastSuccessfulData.accesses.map((access) => ({
+            url: access.url,
+            password: access.password || '',
+            ftp: access.ftp || null
+        })),
         services: services.map(({ id, login, password }) => ({ id, login: login || '', password: password || '' }))
     }
     const rawVaultKey = suppliedVaultKey || randomBytes(32)
@@ -214,8 +283,8 @@ const getSecurityStatus = async ({ helloAvailable = false, prfSupported = false 
 }
 
 const enablePinProtection = async ({ pin }) => {
-    if (typeof pin !== 'string' || !/^\d{8,12}$/.test(pin)) {
-        throw new Error('PIN должен содержать от 8 до 12 цифр')
+    if (typeof pin !== 'string' || !/^\d{4,12}$/.test(pin)) {
+        throw new Error('PIN должен содержать от 4 до 12 цифр')
     }
     const salt = randomBytes(16)
     const iterations = PIN_KDF_ITERATIONS
@@ -244,7 +313,7 @@ const enableWindowsHelloProtection = async ({ rawVaultKey, credentialId, prfSalt
 const unlockWithPin = async ({ pin }) => {
     const config = await getSecurityConfig()
     if (!config?.enabled || config.mode !== 'pin') throw new Error('PIN-защита не настроена')
-    if (typeof pin !== 'string' || !/^\d{8,12}$/.test(pin)) throw new Error('Введите PIN от 8 до 12 цифр')
+    if (typeof pin !== 'string' || !/^\d{4,12}$/.test(pin)) throw new Error('Введите PIN от 4 до 12 цифр')
     if (!Number.isInteger(config.iterations) || config.iterations < 100000 || config.iterations > 2000000 ||
         base64ToBytes(config.salt || '').length !== 16) {
         throw new Error('Параметры PIN-хранилища повреждены')
@@ -281,7 +350,7 @@ const disableCredentialProtection = async () => {
         const { hasLogin, hasPassword, hasFtp, ftpUrl, ftpHasLogin, ftpHasPassword, ...metadata } = access
         return {
             ...metadata,
-            login: secret?.login || '',
+            login: access.login || secret?.login || '',
             password: secret?.password || '',
             ...(secret?.ftp ? { ftp: secret.ftp } : {})
         }
@@ -318,7 +387,7 @@ const scheduleProjectsRefresh = async (projectsUrl) => {
 }
 
 const restoreProjectsSchedule = async () => {
-    const settings = await storageGet(SETTINGS_KEY, emptySettings())
+    const settings = await readApiSettingsRaw()
     await scheduleProjectsRefresh(settings.projectsUrl)
 }
 
@@ -632,7 +701,11 @@ const saveSuccessfulData = async (data, type, rows, url) => {
     if (type === 'accesses' && (await getSecurityConfig())?.enabled) {
         const key = await getUnlockedKey()
         const vault = await readCredentialVault(key)
-        vault.accesses = rows
+        vault.accesses = rows.map((access) => ({
+            url: access.url,
+            password: access.password || '',
+            ftp: access.ftp || null
+        }))
         encryptedVault = await encryptCredentialVault(vault, key)
         values = rows.map(publicAccess)
     }
@@ -672,11 +745,19 @@ const refreshAccesses = async (url) => {
 }
 
 const getProjectAccessRecords = async (data, url, requireUnlocked = true) => {
-    if (!(await getSecurityConfig())?.enabled) return data.lastSuccessfulData.accesses.filter((access) => access.url === url)
+    const publicRecords = data.lastSuccessfulData.accesses.filter((access) => access.url === url)
+    if (!(await getSecurityConfig())?.enabled) return publicRecords
     const key = await getUnlockedKey({ required: requireUnlocked })
-    if (!key) return data.lastSuccessfulData.accesses.filter((access) => access.url === url)
+    if (!key) return publicRecords
     const vault = await readCredentialVault(key)
-    return vault.accesses.filter((access) => access.url === url)
+    const vaultRecords = vault.accesses.filter((access) => access.url === url)
+    // Слияние: логин из открытых данных, пароль и FTP из vault (с запасом на старые записи)
+    return publicRecords.map((record, index) => ({
+        ...record,
+        login: record.login || vaultRecords[index]?.login || '',
+        password: vaultRecords[index]?.password || '',
+        ...(vaultRecords[index]?.ftp ? { ftp: vaultRecords[index].ftp } : record.ftp ? { ftp: record.ftp } : {})
+    }))
 }
 
 const getAuthPaths = (project, adminUrl) => ({ UMI: ['/admin/'], Bitrix: ['/bitrix/'], MODX: ['/manager/'], ABO: ['/login.php'], Tilda: ['/login/'] }[project.cms] || [new URL(adminUrl).pathname])
@@ -753,18 +834,15 @@ const getProjectDetails = async ({ url }) => {
     const project = data.lastSuccessfulData.projects.find((item) => item.url === url)
     if (!project) throw new Error('Проект не найден в локальных данных')
 
-    const accesses = await getProjectAccessRecords(data, url, false)
     const protectedMode = Boolean((await getSecurityConfig())?.enabled)
     const key = protectedMode ? await getUnlockedKey({ required: false }) : null
-    const vaultAccesses = key ? accesses : null
-    const metadataAccesses = data.lastSuccessfulData.accesses.filter((access) => access.url === url)
-    const displayAccesses = vaultAccesses || metadataAccesses
+    const displayAccesses = await getProjectAccessRecords(data, url, false)
 
     return {
         locked: protectedMode && !key,
         accesses: displayAccesses.map(({ name, login, password, ftp, hasLogin, hasPassword, hasFtp, ftpUrl, ftpHasLogin, ftpHasPassword }) => ({
             name,
-            login: key || !protectedMode ? login || '' : '',
+            login: login || '',
             hasLogin: Boolean(login || hasLogin),
             hasPassword: Boolean(password || hasPassword),
             hasFtp: Boolean(ftp?.url || hasFtp),
@@ -835,7 +913,8 @@ const saveServices = async (payload) => {
     return normalized
 }
 
-const refreshAll = async ({ projectsUrl, accessUrl }) => {
+const refreshAll = async () => {
+    const { projectsUrl, accessUrl } = await readApiSettingsRaw()
     const [projectsResult, accessesResult] = await Promise.allSettled([
         requestRows(projectsUrl, 'проектов'),
         requestRows(accessUrl, 'доступов')
@@ -862,7 +941,11 @@ const refreshAll = async ({ projectsUrl, accessUrl }) => {
     let encryptedVault = null
     if (protectedMode && key) {
         const vault = await readCredentialVault(key)
-        vault.accesses = accesses
+        vault.accesses = accesses.map((access) => ({
+            url: access.url,
+            password: access.password || '',
+            ftp: access.ftp || null
+        }))
         encryptedVault = await encryptCredentialVault(vault, key)
         accesses = accesses.map(publicAccess)
     }
@@ -914,12 +997,12 @@ const toPublicData = (data) => {
 const handlers = {
     'services:get': getServices,
     'services:save': saveServices,
-    'data:settings:get': () => storageGet(SETTINGS_KEY, emptySettings()),
-    'data:settings:set': ({ settings }) => { const nextSettings = { ...emptySettings(), ...settings }; return storageSet(SETTINGS_KEY, nextSettings).then(() => scheduleProjectsRefresh(nextSettings.projectsUrl)).then(() => nextSettings) },
+    'data:settings:get': () => readApiSettingsRaw().then(toPublicApiSettings),
+    'data:settings:set': (payload) => saveApiSettings(payload).then(toPublicApiSettings),
     'data:projects:get': () => getStoredData().then(toPublicData),
     'data:projects:refresh': ({ url }) => refreshProjects(url).then(toPublicData),
     'data:accesses:refresh': ({ url }) => refreshAccesses(url).then(toPublicData),
-    'data:all:refresh': (payload) => refreshAll(payload).then(toPublicData),
+    'data:all:refresh': () => refreshAll().then(toPublicData),
     'data:errors:get': () => storageGet(ERRORS_KEY, []),
     'data:clear': () => clearAllData().then(() => ({ cleared: true })),
     'auth:start': startAdminAuth,
@@ -956,8 +1039,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name !== PROJECTS_ALARM) return
-    storageGet(SETTINGS_KEY, emptySettings())
-        .then((settings) => refreshAll({ projectsUrl: settings.projectsUrl, accessUrl: settings.accessUrl }))
+    refreshAll()
         .catch((error) => console.error('[background] weekly refresh', error))
 })
 

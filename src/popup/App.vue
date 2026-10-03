@@ -1,6 +1,7 @@
 <script setup>
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import Layout from './components/Layout.vue'
+import UnlockModal from './components/UnlockModal.vue'
 import Site from './views/Site.vue'
 import Projects from './views/Projects.vue'
 import Services from './views/Services.vue'
@@ -73,4 +74,5 @@ onUnmounted(() => {
     <Services v-if="view === 'services'" />
     <Settings v-if="view === 'settings'" />
   </Layout>
+  <UnlockModal />
 </template>

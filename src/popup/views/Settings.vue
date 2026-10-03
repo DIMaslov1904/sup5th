@@ -10,8 +10,7 @@ import {
     loadErrorLog,
     loadProjectData,
     lockCredentialVault,
-    refreshAccesses,
-    refreshProjects,
+    refreshAll,
     saveApiSettings,
     unlockCredentialVault,
     unlockCredentialVaultWithHello
@@ -28,7 +27,10 @@ import Message from '../components/ui/Message.vue'
 
 const optionsUrl = chrome.runtime.getURL('src/options/index.html')
 
-const settings = ref({ projectsUrl: '', accessUrl: '' })
+const settings = ref({ hasProjectsUrl: false, hasAccessUrl: false })
+const projectsUrlInput = ref('')
+const accessUrlInput = ref('')
+const savingApi = ref('')
 const data = ref({ lastSuccessfulData: { projects: [], accesses: [], projectsUpdatedAt: null, accessesUpdatedAt: null } })
 const errors = ref([])
 const loading = ref('')
@@ -44,6 +46,14 @@ const prfSupported = ref(false)
 const successfulData = computed(() => data.value.lastSuccessfulData)
 
 const formatDate = (value) => value ? new Date(value).toLocaleString() : ''
+
+const projectsPlaceholder = computed(() => settings.value.hasProjectsUrl
+    ? 'Указан, введите чтобы изменить'
+    : 'URL веб-приложения Apps Script')
+
+const accessPlaceholder = computed(() => settings.value.hasAccessUrl
+    ? 'Указан, введите чтобы изменить'
+    : 'URL веб-приложения Apps Script')
 
 const mergeSecurity = (result) => ({
     ...result,
@@ -161,22 +171,45 @@ const disableProtection = async () => {
     }
 }
 
-const checkApi = async (type) => {
-    const urlKey = type === 'projects' ? 'projectsUrl' : 'accessUrl'
-    loading.value = type
+const saveProjectsUrl = async () => {
+    savingApi.value = 'projects'
     message.value = { type: 'error', text: '' }
     try {
-        await saveApiSettings(settings.value)
-        data.value = type === 'projects'
-            ? await refreshProjects(settings.value[urlKey])
-            : await refreshAccesses(settings.value[urlKey])
+        settings.value = await saveApiSettings({ projectsUrl: projectsUrlInput.value })
+        projectsUrlInput.value = ''
+        message.value = { type: 'success', text: 'URL проектов сохранён' }
+    } catch (error) {
+        message.value = { type: 'error', text: error.message }
+    } finally {
+        savingApi.value = ''
+    }
+}
+
+const saveAccessUrl = async () => {
+    savingApi.value = 'access'
+    message.value = { type: 'error', text: '' }
+    try {
+        settings.value = await saveApiSettings({ accessUrl: accessUrlInput.value })
+        accessUrlInput.value = ''
+        message.value = { type: 'success', text: 'URL доступов сохранён' }
+    } catch (error) {
+        message.value = { type: 'error', text: error.message }
+    } finally {
+        savingApi.value = ''
+    }
+}
+
+const loadAll = async () => {
+    loading.value = 'all'
+    message.value = { type: 'error', text: '' }
+    try {
+        data.value = await refreshAll()
         errors.value = await loadErrorLog()
-        message.value = {
-            type: 'success',
-            text: type === 'projects'
-                ? `Загружено проектов: ${data.value.lastSuccessfulData.projects.length}`
-                : `Загружено доступов: ${data.value.lastSuccessfulData.accesses.length}`
-        }
+        const snapshot = data.value.lastSuccessfulData
+        const counts = []
+        if (snapshot.projectsUpdatedAt) counts.push(`проектов: ${snapshot.projects.length}`)
+        if (snapshot.accessesUpdatedAt) counts.push(`доступов: ${snapshot.accesses.length}`)
+        message.value = { type: 'success', text: counts.length ? `Загружено: ${counts.join(', ')}` : 'Данные загружены' }
     } catch (error) {
         message.value = { type: 'error', text: error.message }
     } finally {
@@ -191,7 +224,9 @@ const resetData = async () => {
     message.value = { type: 'error', text: '' }
     try {
         await clearAllData()
-        settings.value = { projectsUrl: '', accessUrl: '' }
+        settings.value = { hasProjectsUrl: false, hasAccessUrl: false }
+        projectsUrlInput.value = ''
+        accessUrlInput.value = ''
         data.value = { lastSuccessfulData: { projects: [], accesses: [], projectsUpdatedAt: null, accessesUpdatedAt: null, projectsUrl: '', accessesUrl: '' } }
         errors.value = []
         message.value = { type: 'success', text: 'Все данные расширения удалены' }
@@ -207,10 +242,10 @@ const resetData = async () => {
     <div class="grid gap-5 w-full px-4">
         <Card title="API получения всех проектов">
             <div class="flex gap-1">
-                <Input v-model="settings.projectsUrl" placeholder="URL веб-приложения Apps Script"
-                    :disabled="loading === 'projects'" />
-                <Button variant="secondary" :disabled="loading === 'projects'" @click="checkApi('projects')">
-                    {{ loading === 'projects' ? 'Загрузка...' : 'Загрузить' }}
+                <Input v-model="projectsUrlInput" :placeholder="projectsPlaceholder"
+                    :disabled="loading === 'all' || savingApi === 'projects'" />
+                <Button variant="secondary" :disabled="loading === 'all' || savingApi === 'projects'" @click="saveProjectsUrl">
+                    {{ savingApi === 'projects' ? 'Сохранение...' : 'Сохранить' }}
                 </Button>
             </div>
             <p class="flex items-start mt-2 text-xs text-slate-400">
@@ -220,10 +255,10 @@ const resetData = async () => {
 
         <Card title="API получения личных доступов">
             <div class="flex gap-1">
-                <Input v-model="settings.accessUrl" placeholder="URL веб-приложения Apps Script"
-                    :disabled="loading === 'access'" />
-                <Button variant="secondary" :disabled="loading === 'access'" @click="checkApi('access')">
-                    {{ loading === 'access' ? 'Загрузка...' : 'Загрузить' }}
+                <Input v-model="accessUrlInput" :placeholder="accessPlaceholder"
+                    :disabled="loading === 'all' || savingApi === 'access'" />
+                <Button variant="secondary" :disabled="loading === 'all' || savingApi === 'access'" @click="saveAccessUrl">
+                    {{ savingApi === 'access' ? 'Сохранение...' : 'Сохранить' }}
                 </Button>
             </div>
             <p class="flex items-start mt-2 text-xs text-slate-400">
@@ -233,16 +268,25 @@ const resetData = async () => {
             </p>
         </Card>
 
+        <Card title="Загрузка данных">
+            <Button variant="secondary" :disabled="Boolean(loading)" @click="loadAll">
+                {{ loading === 'all' ? 'Загрузка...' : 'Загрузить всё' }}
+            </Button>
+            <p class="flex items-start mt-2 text-xs text-slate-400">
+                Загружает проекты и доступы по сохранённым адресам API.
+            </p>
+        </Card>
+
         <Card title="Защита паролей">
             <div v-if="!security.enabled" class="grid gap-3">
-                <p class="text-xs text-slate-300">Защита выключена. При включении логины, пароли и FTP-доступы будут зашифрованы локальным ключом.</p>
+                <p class="text-xs text-slate-300">Защита выключена. При включении пароли и FTP-доступы будут зашифрованы локальным ключом, логины останутся открытыми.</p>
 
                 <label class="flex items-center gap-2 text-sm text-slate-200">
                     <input type="radio" checked disabled class="accent-sky-500" />
                     PIN-код
                 </label>
                 <Input v-model="pin" type="password" inputmode="numeric" autocomplete="new-password"
-                    maxlength="12" placeholder="PIN, 8–12 цифр" :disabled="securityLoading" />
+                    maxlength="12" placeholder="PIN, 4–12 цифр" :disabled="securityLoading" />
                 <Input v-model="pinConfirm" type="password" inputmode="numeric" autocomplete="new-password"
                     maxlength="12" placeholder="Повторите PIN" :disabled="securityLoading" />
                 <Button variant="secondary" :disabled="securityLoading || !pin || !pinConfirm" @click="enableProtection">

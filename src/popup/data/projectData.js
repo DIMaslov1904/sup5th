@@ -27,8 +27,9 @@ const callBackground = (type, payload = {}) => new Promise((resolve, reject) => 
 
 export const loadApiSettings = () => callBackground('data:settings:get')
 
-export const saveApiSettings = (settings) =>
-    callBackground('data:settings:set', { settings })
+// Patch-сохранение: передаются только изменённые поля ({ projectsUrl } и/или { accessUrl })
+export const saveApiSettings = (patch) =>
+    callBackground('data:settings:set', patch)
 
 export const loadProjectData = () => callBackground('data:projects:get')
 

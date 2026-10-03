@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { getProjectAccessField, loadProjectData, loadProjectDetails, startAdminAuth } from '../data/projectData'
 import { findProjectByUrl, getAdminUrl, getCmsIconPath, normalizeHost } from '../../utils/projectUtils'
+import { ensureUnlocked } from '../unlockStore'
 import Button from '../components/ui/Button.vue'
 import Message from '../components/ui/Message.vue'
 import LeftMenu from '../components/LeftMenu.vue'
@@ -15,6 +16,10 @@ const authLoading = ref(false)
 const authMessage = ref('')
 const accesses = ref([])
 const copyingAccess = ref('')
+
+const ftpAccesses = computed(() => accesses.value
+    .map((access, sourceIndex) => ({ ...access, sourceIndex }))
+    .filter((access) => access.hasFtp))
 const seo = ref(null)
 const seoLoading = ref(false)
 const seoMessage = ref('')
@@ -96,7 +101,7 @@ const openAdmin = async (accessIndex = 0) => {
     try {
         const key = `siteUiState:${normalizeHost(currentTab.value.url)}`
         await chrome.storage.local.set({ [key]: { tab: 'project' } })
-        await startAdminAuth(project.value.url, accessIndex)
+        await ensureUnlocked(() => startAdminAuth(project.value.url, accessIndex))
     } catch (error) {
         authMessage.value = error.message
     } finally {
@@ -108,9 +113,10 @@ const copyAccessField = async (accessIndex, field) => {
     copyingAccess.value = `${accessIndex}:${field}`
     authMessage.value = ''
     try {
-        const value = await getProjectAccessField(project.value.url, accessIndex, field)
+        const value = await ensureUnlocked(() => getProjectAccessField(project.value.url, accessIndex, field))
         await navigator.clipboard.writeText(value)
-        authMessage.value = field === 'login' ? 'Логин скопирован' : 'Пароль скопирован'
+        authMessage.value = field === 'login' ? 'Логин скопирован'
+            : field.startsWith('ftp') ? 'FTP данные скопированы' : 'Пароль скопирован'
     } catch (error) {
         authMessage.value = error.message
     } finally {
@@ -187,6 +193,26 @@ const copyAccessField = async (accessIndex, field) => {
                             <span v-if="!access.hasLogin || !access.hasPassword" class="self-center text-[11px] text-amber-300">
                                 {{ !access.hasLogin ? 'Логин не указан' : 'Пароль не указан' }}
                             </span>
+                        </div>
+                    </article>
+                </section>
+                <section v-if="ftpAccesses.length" class="grid gap-2">
+                    <h2 class="text-sm font-semibold">FTP доступы ({{ ftpAccesses.length }})</h2>
+                    <article v-for="(access, index) in ftpAccesses" :key="`ftp-${access.ftpUrl}-${index}`"
+                        class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/40 p-3">
+                        <div class="min-w-0">
+                            <span class="break-all text-sm font-medium text-slate-100">{{ access.ftpUrl }}</span>
+                            <span v-if="access.ftpHasLogin" class="block text-xs text-slate-400">
+                                Логин: {{ access.ftpLogin || '…' }}
+                            </span>
+                        </div>
+                        <div class="flex shrink-0 gap-2">
+                            <Button v-if="access.ftpHasLogin" variant="ghost" size="sm"
+                                :disabled="copyingAccess === `ftp:${access.sourceIndex}:ftpLogin`"
+                                @click="copyAccessField(access.sourceIndex, 'ftpLogin')">FTP логин</Button>
+                            <Button v-if="access.ftpHasPassword" variant="ghost" size="sm"
+                                :disabled="copyingAccess === `ftp:${access.sourceIndex}:ftpPassword`"
+                                @click="copyAccessField(access.sourceIndex, 'ftpPassword')">FTP пароль</Button>
                         </div>
                     </article>
                 </section>

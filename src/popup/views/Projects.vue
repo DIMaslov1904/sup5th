@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { getProjectAccessField, getProjectAccessText, loadErrorLog, loadProjectData, loadProjectDetails } from '../data/projectData'
+import { ensureUnlocked } from '../unlockStore'
 import switcher from '../../utils/switcher'
 import { getAdminUrl, getCmsIconPath } from '../../utils/projectUtils'
 import Button from '../components/ui/Button.vue'
@@ -71,7 +72,7 @@ const projectLinks = computed(() => {
 
 const copyAccess = async (project, index) => {
     try {
-        const text = await getProjectAccessText(project.url, index)
+        const text = await ensureUnlocked(() => getProjectAccessText(project.url, index))
         await navigator.clipboard.writeText(text)
         message.value = { type: 'success', text: 'Доступ скопирован' }
     } catch (error) {
@@ -82,7 +83,7 @@ const copyAccess = async (project, index) => {
 const copyFtpField = async (index, field) => {
     copying.value = `ftp:${index}:${field}`
     try {
-        const value = await getProjectAccessField(selectedProject.value.url, index, field)
+        const value = await ensureUnlocked(() => getProjectAccessField(selectedProject.value.url, index, field))
         await navigator.clipboard.writeText(value)
         message.value = { type: 'success', text: field === 'ftpLogin' ? 'FTP логин скопирован' : 'FTP пароль скопирован' }
     } catch (error) {
