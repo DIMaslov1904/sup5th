@@ -13,7 +13,7 @@ export const CMS_PATHS = {
     Joomla: 'administrator/'
 }
 
-export const CMS_ICONS = ['abo', 'adminlte', 'bitrix', 'cms', 'ezpro', 'joomla', 'modx', 'tilda', 'umi', 'wordpress']
+export const CMS_ICONS = ['abo', 'adminlte', 'bitrix', 'cms', 'ezpro', 'joomla', 'modx', 'tilda', 'umi', 'wordpress', 'drupal', 'opencart']
 
 /** Приводит значение к нормализованному имени хоста (без www, в нижнем регистре) */
 export const normalizeHost = (value) => {
