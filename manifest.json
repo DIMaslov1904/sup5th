@@ -58,10 +58,10 @@
   ],
   "icons": {
     "16": "src/assets/icons/icon_16.png",
-    "19": "src/assets/icons/icon_16.png",
+    "19": "src/assets/icons/icon_19.png",
     "32": "src/assets/icons/icon_32.png",
-    "38": "src/assets/icons/icon_32.png",
-    "48": "src/assets/icons/icon_32.png",
+    "38": "src/assets/icons/icon_38.png",
+    "48": "src/assets/icons/icon_48.png",
     "64": "src/assets/icons/icon_64.png",
     "128": "src/assets/icons/icon_128.png"
   },
