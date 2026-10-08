@@ -17,6 +17,7 @@ const message = ref({ type: 'error', text: '' })
 const errors = ref([])
 const selectedProjectUrl = ref('')
 const copying = ref('')
+const openAccessMenuId = ref('')
 
 // Варианты запроса с учётом исправления раскладки клавиатуры
 // (например, "ghbdtn" -> "привет", "руддщ" -> "hello")
@@ -70,13 +71,17 @@ const projectLinks = computed(() => {
     ]
 })
 
-const copyAccess = async (project, index) => {
+const copyAccess = async (project, index, field, label) => {
+    copying.value = `access:${index}:${field}`
     try {
-        const text = await ensureUnlocked(() => getProjectAccessText(project.url, index))
-        await navigator.clipboard.writeText(text)
-        message.value = { type: 'success', text: 'Доступ скопирован' }
+        const value = await ensureUnlocked(() => field === 'text' ?  getProjectAccessText(project.url, index) : getProjectAccessField(project.url, index, field))
+        await navigator.clipboard.writeText(value)
+        message.value = { type: 'success', text: `${label} скопирован` }
     } catch (error) {
-        message.value = { type: 'error', text: error.message || 'Не удалось скопировать доступ' }
+        message.value = { type: 'error', text: error.message || `Не удалось скопировать ${label.toLowerCase()}` }
+    } finally {
+        copying.value = ''
+        openAccessMenuId.value = ''
     }
 }
 
@@ -182,10 +187,30 @@ onMounted(async () => {
                 <p v-if="detailLoading" class="text-xs text-slate-400">Загрузка доступов...</p>
                 <p v-else-if="!selectedProjectAccesses.length" class="text-xs text-slate-400">Для проекта нет сохранённых доступов</p>
                 <article v-for="(access, index) in selectedProjectAccesses" :key="`${access.login}-${index}`"
-                    class="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/40 p-3">
+                    class="relative flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/40 p-3">
                     <span class="min-w-0 break-all text-xs text-slate-300">{{ access.login || `Доступ ${index + 1}` }}</span>
-                    <Button v-if="access.hasLogin && access.hasPassword" variant="secondary" size="sm"
-                        @click="copyAccess(selectedProject, index)">Скопировать доступ</Button>
+                    <template v-if="access.hasLogin && access.hasPassword">
+                        <button type="button" title="Действия с доступом" :aria-label="`Действия: ${access.login || index + 1}`"
+                            @click.stop="openAccessMenuId = openAccessMenuId === `${access.login}-menu` ? '' : `${access.login}-menu`"
+                            class="rounded px-2 py-1 text-lg leading-none text-slate-400 hover:bg-white/10 hover:text-white cursor-pointer">
+                            ⋮
+                        </button>
+                        <div v-if="openAccessMenuId == `${access.login}-menu`"
+                            class="absolute right-2 top-11 z-20 grid min-w-40 gap-1 rounded border border-white/10 bg-slate-800 p-1 shadow-lg">
+                            <button type="button" class="rounded px-3 py-2 text-left text-xs hover:bg-white/10 cursor-pointer"
+                                @click="copyAccess(selectedProject, index, 'login', 'Логин')">
+                                Скопировать логин
+                            </button>
+                            <button type="button" class="rounded px-3 py-2 text-left text-xs hover:bg-white/10 cursor-pointer"
+                                @click="copyAccess(selectedProject, index, 'password', 'Пароль')">
+                                Скопировать пароль
+                            </button>
+                            <button type="button" class="rounded px-3 py-2 text-left text-xs hover:bg-white/10 cursor-pointer"
+                                @click="copyAccess(selectedProject, index, 'text', 'Доступ')">
+                                Скопировать доступ
+                            </button>
+                        </div>
+                    </template>
                     <span v-else class="text-[11px] text-amber-300">Логин или пароль не заполнен</span>
                 </article>
             </section>
