@@ -5,9 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "serve": "vite preview",
-    "pack": "npm run build && npm run zip"
+    "build": "vite build"
   },
   "dependencies": {
     "vue": "^3.5.43"
