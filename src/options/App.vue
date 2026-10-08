@@ -63,23 +63,38 @@ const copyCode = () => {
   navigator.clipboard
     .writeText(
       `
-const ss = SpreadsheetApp.getActiveSpreadsheet()
+const SHEET_NAME = 'Доступы к сайтам';
 
-const getData = (range = 'A:D') => {
-  const s = ss.getSheetByName("Доступы к сайтам")
-  if (!s) throw new Error("Лист 'Доступы к сайтам' не найден")
-  const v = s.getRange(range).getValues()
-  return v.slice(1, s.getLastRow())
-}
+const getData = () => {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const s = ss.getSheetByName(SHEET_NAME);
+  if (!s) throw new Error(\`Лист '${SHEET_NAME}' не найден\`);
 
-const doGet = (e) => {
+  const lastRow = s.getLastRow() - 1;
+  if (lastRow < 1) return []; // только шапка или пусто
+
+  return s.getRange(2, 1, lastRow, 8).getValues();
+};
+
+const doGet = () => {
   try {
-    const result = e?.parameter?.get === 'ftp' ? getData('A:H') : getData()
-    return ContentService.createTextOutput(JSON.stringify({result})).setMimeType(ContentService.MimeType.JSON)
-  } catch (e) {
-    return ContentService.createTextOutput(JSON.stringify({'error': e.message})).setMimeType(ContentService.MimeType.JSON)
+    const cache = CacheService.getScriptCache();
+    const cached = cache.get('sheet_data');
+    const result = cached ? JSON.parse(cached) : getData();
+
+    if (!cached) {
+      cache.put('sheet_data', JSON.stringify(result), 60); // 60 сек
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ result }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
-}
+};
 `,
     )
     .then(() => {
