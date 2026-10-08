@@ -39,6 +39,8 @@ export const refreshProjects = (url) =>
 export const refreshAccesses = (url) =>
     callBackground('data:accesses:refresh', { url })
 
+export const authorizeAccessApi = () => callBackground('data:accesses:authorize')
+
 export const refreshAll = (settings) =>
     callBackground('data:all:refresh', settings)
 

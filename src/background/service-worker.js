@@ -31,6 +31,8 @@ const REQUEST_TIMEOUT = 30000
 const MAX_ERROR_ENTRIES = 50
 
 const emptyData = () => ({
+    accessAuthRequired: false,
+    refreshErrors: [],
     lastSuccessfulData: {
         projects: [],
         accesses: [],
@@ -591,7 +593,13 @@ const extractRows = (payload) => {
     return rows
 }
 
-const requestRows = async (url, kind) => {
+const accessAuthorizationError = () => {
+    const error = new Error('Авторизуйтесь в Google под аккаунтом владельца API доступов и повторите загрузку')
+    error.code = 'ACCESS_AUTH_REQUIRED'
+    return error
+}
+
+const requestRows = async (url, kind, { authenticated = false } = {}) => {
     if (!url?.trim()) throw new Error(`Не указан адрес API ${kind}`)
     let parsedUrl
     try {
@@ -607,13 +615,27 @@ const requestRows = async (url, kind) => {
     try {
         const response = await fetch(parsedUrl.href, {
             headers: { Accept: 'application/json' },
+            credentials: authenticated ? 'include' : 'omit',
             signal: controller.signal
         })
+        const googleLogin = response.url && new URL(response.url).hostname === 'accounts.google.com'
+        if (authenticated && ([401, 403].includes(response.status) || googleLogin)) throw accessAuthorizationError()
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return extractRows(await response.json())
+        const text = await response.text()
+        if (authenticated && response.headers.get('content-type')?.includes('text/html') &&
+            /accounts\.google\.com|ServiceLogin|Sign in|Войдите|You need access|Authorization required/i.test(text)) {
+            throw accessAuthorizationError()
+        }
+        let payload
+        try {
+            payload = JSON.parse(text)
+        } catch {
+            throw new Error(`Ответ API ${kind} не является JSON`)
+        }
+        return extractRows(payload)
     } catch (error) {
         if (error.name === 'AbortError') throw new Error('Превышено время ожидания API')
-        throw new Error(error.message || `Ошибка запроса API ${kind}`)
+        throw error
     } finally {
         clearTimeout(timeoutId)
     }
@@ -635,7 +657,11 @@ const saveSuccessfulData = async (data, type, rows, url) => {
         values = rows.map(publicAccess)
     }
     const nextSnapshot = { ...snapshot, [type]: values, [`${type}UpdatedAt`]: Date.now(), [`${type}Url`]: url }
-    const nextData = { lastSuccessfulData: nextSnapshot }
+    const nextData = {
+        ...data,
+        lastSuccessfulData: nextSnapshot,
+        ...(type === 'accesses' ? { accessAuthRequired: false } : {})
+    }
     await storageSetMany({
         [DATA_KEY]: nextData,
         ...(encryptedVault ? { [VAULT_KEY]: encryptedVault } : {})
@@ -662,11 +688,32 @@ const refreshProjects = async (url) => {
 const refreshAccesses = async (url) => {
     try {
         const data = await getStoredData()
-        return saveSuccessfulData(data, 'accesses', (await requestRows(url, 'доступов')).flatMap(normalizeAccess), url)
+        return await saveSuccessfulData(data, 'accesses', (await requestRows(url, 'доступов', { authenticated: true })).flatMap(normalizeAccess), url)
     } catch (error) {
+        if (error.code === 'ACCESS_AUTH_REQUIRED') {
+            const data = await getStoredData()
+            await storageSet(DATA_KEY, { ...data, accessAuthRequired: true })
+        }
         await logError('accesses', error)
         throw error
     }
+}
+
+const openAccessAuthorization = async () => {
+    const { accessUrl } = await readApiSettingsRaw()
+    if (!accessUrl) throw new Error('Сначала сохраните адрес API доступов')
+    let parsedUrl
+    try {
+        parsedUrl = new URL(accessUrl)
+    } catch {
+        throw new Error('Некорректный адрес API доступов')
+    }
+    if (!['http:', 'https:'].includes(parsedUrl.protocol) ||
+        parsedUrl.username || parsedUrl.password) {
+        throw new Error('Адрес API доступов должен использовать HTTP или HTTPS и не содержать логин и пароль в URL')
+    }
+    await chrome.tabs.create({ url: parsedUrl.href })
+    return { opened: true }
 }
 
 const getProjectAccessRecords = async (data, url, requireUnlocked = true) => {
@@ -840,56 +887,35 @@ const saveServices = async (payload) => {
 
 const refreshAll = async () => {
     const { projectsUrl, accessUrl } = await readApiSettingsRaw()
+    if (!projectsUrl && !accessUrl) throw new Error('Сначала сохраните адрес API проектов или доступов')
+    const protectedMode = Boolean((await getSecurityConfig())?.enabled)
+    const locked = protectedMode && !(await getUnlockedKey({ required: false }))
     const [projectsResult, accessesResult] = await Promise.allSettled([
-        requestRows(projectsUrl, 'проектов'),
-        requestRows(accessUrl, 'доступов')
+        projectsUrl ? requestRows(projectsUrl, 'проектов') : Promise.resolve(null),
+        accessUrl && !locked ? requestRows(accessUrl, 'доступов', { authenticated: true }) : Promise.resolve(null)
     ])
+    let data = await getStoredData()
     const errors = []
-
-    if (projectsResult.status === 'rejected') {
-        errors.push(`Проекты: ${projectsResult.reason.message}`)
-        await logError('projects', projectsResult.reason)
+    const refreshed = { projects: false, accesses: false }
+    let accessAuthRequired = Boolean(data.accessAuthRequired) && Boolean(accessUrl)
+    for (const [type, result, url] of [['projects', projectsResult, projectsUrl], ['accesses', accessesResult, accessUrl]]) {
+        try {
+            if (result.status === 'rejected') throw result.reason
+            if (result.value === null) continue
+            const rows = type === 'projects' ? result.value.map(normalizeProject) : result.value.flatMap(normalizeAccess)
+            data = await saveSuccessfulData(data, type, rows, url)
+            refreshed[type] = true
+            if (type === 'accesses') accessAuthRequired = false
+        } catch (error) {
+            if (type === 'accesses' && error.code === 'ACCESS_AUTH_REQUIRED') accessAuthRequired = true
+            errors.push(`${type === 'projects' ? 'Проекты' : 'Доступы'}: ${error.message}`)
+            await logError(type, error)
+        }
     }
-    if (accessesResult.status === 'rejected') {
-        errors.push(`Доступы: ${accessesResult.reason.message}`)
-        await logError('accesses', accessesResult.reason)
-    }
-
-    if (errors.length) return { ...(await getStoredData()), refreshErrors: errors }
-
-    const data = await getStoredData()
-    const securityConfig = await getSecurityConfig()
-    const protectedMode = Boolean(securityConfig?.enabled)
-    const key = protectedMode ? await getUnlockedKey({ required: false }) : null
-    const updateAccesses = !protectedMode || Boolean(key)
-    let accesses = updateAccesses ? accessesResult.value.flatMap(normalizeAccess) : data.lastSuccessfulData.accesses
-    let encryptedVault = null
-    if (protectedMode && key) {
-        const vault = await readCredentialVault(key)
-        vault.accesses = accesses.map((access) => ({
-            url: access.url,
-            password: access.password || '',
-            ftp: access.ftp || null
-        }))
-        encryptedVault = await encryptCredentialVault(vault, key)
-        accesses = accesses.map(publicAccess)
-    }
-    if (protectedMode && !key) errors.push('Доступы: обновление пропущено, хранилище заблокировано')
-    const now = Date.now()
-    const snapshot = {
-        ...data.lastSuccessfulData,
-        projects: projectsResult.value.map(normalizeProject),
-        ...(updateAccesses ? { accesses } : {}),
-        projectsUpdatedAt: now,
-        projectsUrl,
-        ...(updateAccesses ? { accessesUpdatedAt: now, accessesUrl: accessUrl } : {})
-    }
-    const nextData = { lastSuccessfulData: snapshot }
-    await storageSetMany({
-        [DATA_KEY]: nextData,
-        ...(encryptedVault ? { [VAULT_KEY]: encryptedVault } : {})
-    })
-    return errors.length ? { ...nextData, refreshErrors: errors } : nextData
+    if (accessUrl && locked) errors.push('Доступы: обновление пропущено, хранилище заблокировано')
+    const nextData = { ...data, accessAuthRequired, refreshErrors: errors }
+    await storageSet(DATA_KEY, nextData)
+    return { ...nextData, refreshed }
 }
 
 const toPublicData = (data) => {
@@ -927,6 +953,7 @@ const handlers = {
     'data:projects:get': () => getStoredData().then(toPublicData),
     'data:projects:refresh': ({ url }) => refreshProjects(url).then(toPublicData),
     'data:accesses:refresh': ({ url }) => refreshAccesses(url).then(toPublicData),
+    'data:accesses:authorize': openAccessAuthorization,
     'data:all:refresh': () => refreshAll().then(toPublicData),
     'data:errors:get': () => storageGet(ERRORS_KEY, []),
     'data:clear': () => clearAllData().then(() => ({ cleared: true })),
@@ -948,7 +975,7 @@ const handlers = {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const handler = handlers[message?.type]
     if (!handler) return false
-    const internalOnly = message.type.startsWith('security:')
+    const internalOnly = !['auth:consume', 'seo:fetch'].includes(message.type)
     if (internalOnly && (!sender?.url?.startsWith(chrome.runtime.getURL('')) || sender.id !== chrome.runtime.id)) {
         sendResponse({ ok: false, error: 'Операция доступна только в интерфейсе расширения' })
         return false

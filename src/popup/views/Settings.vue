@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import {
+    authorizeAccessApi,
     clearAllData,
     disableCredentialProtection,
     enableHelloProtection,
@@ -31,6 +32,7 @@ const settings = ref({ hasProjectsUrl: false, hasAccessUrl: false })
 const projectsUrlInput = ref('')
 const accessUrlInput = ref('')
 const savingApi = ref('')
+const authorizing = ref(false)
 const data = ref({ lastSuccessfulData: { projects: [], accesses: [], projectsUpdatedAt: null, accessesUpdatedAt: null } })
 const errors = ref([])
 const loading = ref('')
@@ -74,6 +76,9 @@ onMounted(async () => {
         ])
         settings.value = savedSettings
         data.value = savedData
+        if (savedData.refreshErrors?.length) {
+            message.value = { type: 'error', text: savedData.refreshErrors.join('\n') }
+        }
         errors.value = savedErrors
         security.value = mergeSecurity(savedSecurity)
     } catch (error) {
@@ -199,6 +204,19 @@ const saveAccessUrl = async () => {
     }
 }
 
+const authorizeAccess = async () => {
+    authorizing.value = true
+    message.value = { type: 'error', text: '' }
+    try {
+        await authorizeAccessApi()
+        message.value = { type: 'info', text: 'Войдите в Google под аккаунтом владельца API. Затем вернитесь в расширение и нажмите «Загрузить всё».' }
+    } catch (error) {
+        message.value = { type: 'error', text: error.message }
+    } finally {
+        authorizing.value = false
+    }
+}
+
 const loadAll = async () => {
     loading.value = 'all'
     message.value = { type: 'error', text: '' }
@@ -207,9 +225,14 @@ const loadAll = async () => {
         errors.value = await loadErrorLog()
         const snapshot = data.value.lastSuccessfulData
         const counts = []
-        if (snapshot.projectsUpdatedAt) counts.push(`проектов: ${snapshot.projects.length}`)
-        if (snapshot.accessesUpdatedAt) counts.push(`доступов: ${snapshot.accesses.length}`)
-        message.value = { type: 'success', text: counts.length ? `Загружено: ${counts.join(', ')}` : 'Данные загружены' }
+        if (data.value.refreshed?.projects) counts.push(`проектов: ${snapshot.projects.length}`)
+        if (data.value.refreshed?.accesses) counts.push(`доступов: ${snapshot.accesses.length}`)
+        const refreshErrors = data.value.refreshErrors || []
+        const summary = counts.length ? `Загружено: ${counts.join(', ')}` : ''
+        message.value = {
+            type: refreshErrors.length ? 'error' : 'success',
+            text: [summary, ...refreshErrors].filter(Boolean).join('\n')
+        }
     } catch (error) {
         message.value = { type: 'error', text: error.message }
     } finally {
@@ -261,6 +284,16 @@ const resetData = async () => {
                     {{ savingApi === 'access' ? 'Сохранение...' : 'Сохранить' }}
                 </Button>
             </div>
+            <Message v-if="data.accessAuthRequired" type="error">
+                Требуется вход в Google под аккаунтом владельца API доступов. После входа повторите загрузку.
+            </Message>
+            <Button v-if="settings.hasAccessUrl" variant="secondary" size="sm" class="mt-2"
+                :disabled="authorizing || Boolean(loading) || savingApi === 'access'" @click="authorizeAccess">
+                {{ authorizing ? 'Открываю...' : 'Авторизоваться в Google' }}
+            </Button>
+            <p v-if="settings.hasAccessUrl" class="mt-2 text-xs text-slate-400">
+                Войдите в открывшейся вкладке, затем вернитесь и нажмите «Загрузить всё».
+            </p>
             <p class="flex items-start mt-2 text-xs text-slate-400">
                 Инструкция по получению -
                 <a :href="optionsUrl" target="_blank" rel="noreferrer"
@@ -352,7 +385,7 @@ const resetData = async () => {
             </div>
         </Card>
 
-        <Message v-if="message.text" :type="message.type">{{ message.text }}</Message>
+        <Message v-if="message.text" :type="message.type" class="whitespace-pre-line">{{ message.text }}</Message>
 
         <details v-if="errors.length" class="rounded border border-white/10 bg-slate-900/30 p-3 text-xs text-slate-300">
             <summary class="cursor-pointer">Журнал ошибок ({{ errors.length }})</summary>
