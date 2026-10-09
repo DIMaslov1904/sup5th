@@ -15,7 +15,7 @@ const search = ref('')
 const detailLoading = ref(false)
 const message = ref({ type: 'error', text: '' })
 const errors = ref([])
-const selectedProjectUrl = ref('')
+const selectedProjectUrl = defineModel('selectedProjectUrl', { type: String, default: '' })
 const copying = ref('')
 const openAccessMenuId = ref('')
 
@@ -121,6 +121,11 @@ onMounted(async () => {
         ])
         applyData(data)
         errors.value = savedErrors
+        if (selectedProjectUrl.value) {
+            const project = projects.value.find((item) => item.url === selectedProjectUrl.value)
+            if (project) await openProjectDetails(project)
+            else selectedProjectUrl.value = ''
+        }
     } catch (error) {
         message.value = { type: 'error', text: error.message }
     }

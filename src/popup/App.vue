@@ -1,5 +1,6 @@
 <script setup>
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { POPUP_PORT_NAME } from '../utils/popupState.js'
 import Layout from './components/Layout.vue'
 import UnlockModal from './components/UnlockModal.vue'
 import Site from './views/Site.vue'
@@ -9,7 +10,9 @@ import Settings from './views/Settings.vue'
 
 const view = ref('site')
 const stateReady = ref(false)
-let persistTimer
+const selectedProjectUrl = ref('')
+let statePort = null
+let heartbeat
 
 const viewList = [
   {
@@ -31,46 +34,44 @@ const viewList = [
 ]
 
 const saveUiState = () => {
-  if (!stateReady.value) return
-  clearTimeout(persistTimer)
-  persistTimer = setTimeout(() => {
-    chrome.storage.local.set({ popupUiState: { view: view.value, scrollY: window.scrollY } })
-  }, 120)
+  if (!stateReady.value || !statePort) return
+  statePort.postMessage({ type: 'state', state: { view: view.value, projectUrl: selectedProjectUrl.value } })
 }
 
-const flushUiState = () => {
-  if (!stateReady.value) return
-  clearTimeout(persistTimer)
-  chrome.storage.local.set({ popupUiState: { view: view.value, scrollY: window.scrollY } })
-}
+watch(view, (value) => {
+  if (value !== 'projects') selectedProjectUrl.value = ''
+}, { flush: 'sync' })
+watch([view, selectedProjectUrl], saveUiState, { flush: 'sync' })
 
-watch(view, saveUiState)
-
-onMounted(async () => {
-  const result = await chrome.storage.local.get('popupUiState')
-  const savedState = result.popupUiState
-  if (['site', 'projects', 'services', 'settings'].includes(savedState?.view)) {
-    view.value = savedState.view
-  }
-  await nextTick()
-  window.scrollTo(0, savedState?.scrollY || 0)
-  stateReady.value = true
-  window.addEventListener('scroll', saveUiState, { passive: true })
-  window.addEventListener('pagehide', flushUiState)
-  window.addEventListener('beforeunload', flushUiState)
+onMounted(() => {
+  statePort = chrome.runtime.connect({ name: POPUP_PORT_NAME })
+  statePort.onMessage.addListener((message) => {
+    if (message?.type !== 'restore') return
+    view.value = message.state.view
+    selectedProjectUrl.value = message.state.projectUrl
+    stateReady.value = true
+    saveUiState()
+  })
+  statePort.onDisconnect.addListener(() => {
+    clearInterval(heartbeat)
+    statePort = null
+    // Read lastError if the extension is reloaded while the popup is open.
+    if (chrome.runtime.lastError) console.warn('[popup] session disconnected', chrome.runtime.lastError.message)
+    stateReady.value = true
+  })
+  // MV3 workers need messages, not just an open port, to stay alive.
+  heartbeat = setInterval(() => statePort?.postMessage({ type: 'ping' }), 20000)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('scroll', saveUiState)
-  window.removeEventListener('pagehide', flushUiState)
-  window.removeEventListener('beforeunload', flushUiState)
-  flushUiState()
+  clearInterval(heartbeat)
+  statePort?.disconnect()
 })
 </script>
 <template>
-  <Layout v-model="view" :menuList="viewList">
+  <Layout v-if="stateReady" v-model="view" :menuList="viewList">
     <Site v-if="view === 'site'" />
-    <Projects v-if="view === 'projects'" />
+    <Projects v-if="view === 'projects'" v-model:selected-project-url="selectedProjectUrl" />
     <Services v-if="view === 'services'" />
     <Settings v-if="view === 'settings'" />
   </Layout>

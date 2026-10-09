@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { getProjectAccessField, loadProjectData, loadProjectDetails, startAdminAuth } from '../data/projectData'
-import { findProjectByUrl, getAdminUrl, getCmsIconPath, normalizeHost } from '../../utils/projectUtils'
+import { findProjectByUrl, getAdminUrl, getCmsIconPath } from '../../utils/projectUtils'
 import { ensureUnlocked } from '../unlockStore'
 import Button from '../components/ui/Button.vue'
 import Message from '../components/ui/Message.vue'
@@ -52,24 +52,14 @@ onMounted(async () => {
             return
         }
 
-        const siteStateKey = `siteUiState:${normalizeHost(tab.url)}`
-        const savedState = (await chrome.storage.local.get(siteStateKey))[siteStateKey]
         const details = await loadProjectDetails(project.value.url)
         accesses.value = details.accesses
-        const allowedTabs = menuList.value.map((item) => item.name)
-        menuItem.value = allowedTabs.includes(savedState?.tab) ? savedState.tab : 'project'
     } finally {
         loaded.value = true
     }
 })
 
 const openSeoAudit = () => chrome.tabs.create({ url: chrome.runtime.getURL('src/seo/index.html') })
-
-watch(menuItem, (tab) => {
-    if (!currentTab.value?.url || !project.value) return
-    const key = `siteUiState:${normalizeHost(currentTab.value.url)}`
-    chrome.storage.local.set({ [key]: { tab } })
-})
 
 const scanSeo = async () => {
     if (!currentTab.value?.id) return
@@ -99,8 +89,6 @@ const openAdmin = async (accessIndex = 0) => {
     authLoading.value = true
     authMessage.value = ''
     try {
-        const key = `siteUiState:${normalizeHost(currentTab.value.url)}`
-        await chrome.storage.local.set({ [key]: { tab: 'project' } })
         await ensureUnlocked(() => startAdminAuth(project.value.url, accessIndex))
     } catch (error) {
         authMessage.value = error.message

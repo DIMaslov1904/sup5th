@@ -1,4 +1,5 @@
 import { findProjectByUrl, getAdminUrl } from '../utils/projectUtils.js'
+import { registerPopupSession } from './popupSession.js'
 import {
     base64ToBytes,
     bytesToBase64,
@@ -13,6 +14,8 @@ import {
 
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
+
+registerPopupSession()
 
 const DATA_KEY = 'projectData'
 const SERVICES_KEY = 'manualServices'
