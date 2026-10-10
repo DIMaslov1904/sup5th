@@ -67,8 +67,7 @@ const projectLinks = computed(() => {
     return [
         ['Админка', getAdminUrl(project)],
         ['Инструкция', project.manual],
-        ['Git', project.git],
-        ['Дополнительный документ', project.addDocument]
+        ['Git', project.git]
     ]
 })
 

@@ -550,8 +550,7 @@ const normalizeProject = (item) => {
         cms: asText(value.cms) || 'Нет',
         manual: asText(value.manual),
         ticketKey: asText(value.ticketKey),
-        git: asText(value.git),
-        addDocument: asText(value.addDocument)
+        git: asText(value.git)
     }
 }
 

@@ -31,7 +31,7 @@ const copy = async (field) => {
         <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 text-xs">
                 <p class="break-all font-medium text-slate-200">{{ access.ftpUrl || 'FTP / SSH host' }}</p>
-                <p class="mt-1 text-slate-400">Логин: {{ access.ftpLogin || (access.ftpHasLogin ? 'Скрыт до разблокировки' : 'Не указан') }}</p>
+                <p class="mt-1 text-slate-400">Логин: {{ access.ftpLogin || (access.ftpHasLogin ? 'Скрыт' : 'Не указан') }}</p>
             </div>
             <details ref="menu" class="relative shrink-0" @keydown.esc="menu.open = false">
                 <summary class="cursor-pointer list-none rounded px-2 py-1 text-lg leading-none hover:bg-white/10" aria-label="Действия FTP" title="Действия FTP">⋮</summary>
