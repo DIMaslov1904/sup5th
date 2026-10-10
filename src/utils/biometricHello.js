@@ -114,8 +114,9 @@ const prfUnsupportedMessage = () => (
 
 // Получение детерминированного PRF-секрета после проверки Windows Hello.
 // Используем evalByCredential — каноничная форма get для одного известного credential.
-const getBiometricSecret = async ({ credentialId, salt }) => {
+const getBiometricSecret = async ({ credentialId, salt, signal }) => {
     const options = {
+        signal,
         publicKey: {
             rpId: getRpId(),
             challenge: randomBytes(32),
@@ -136,6 +137,7 @@ const getBiometricSecret = async ({ credentialId, salt }) => {
         }
     }
     const credential = await navigator.credentials.get(options)
+    signal?.throwIfAborted()
     if (!credential) throw new Error('Проверка Windows Hello отменена')
     const results = credential.getClientExtensionResults?.().prf?.results
     if (!results?.first) throw new Error(prfUnsupportedMessage())
@@ -208,13 +210,15 @@ export const enableBiometricProtectionFlow = async () => {
 
 // Разблокировка биометрией: Windows Hello -> PRF-секрет -> разворачиваем vault-ключ.
 // Возвращает { key } (base64) для background (security:unlockHelloKey).
-export const unlockWithBiometricFlow = async ({ credentialId, prfSalt, wrappedKey }) => {
+export const unlockWithBiometricFlow = async ({ credentialId, prfSalt, wrappedKey, signal }) => {
+    signal?.throwIfAborted()
     if (!credentialId || !prfSalt || !wrappedKey?.iv || !wrappedKey?.ciphertext) {
         throw new Error('Параметры Windows Hello повреждены. Перевключите защиту.')
     }
-    const prfSecret = await getBiometricSecret({ credentialId, salt: prfSalt })
+    const prfSecret = await getBiometricSecret({ credentialId, salt: prfSalt, signal })
     const kek = await deriveKek(prfSecret)
     const rawKey = await unwrapKey(wrappedKey, kek)
+    signal?.throwIfAborted()
     if (rawKey.length !== 32) throw new Error('Windows Hello вернул некорректный ключ')
     return { key: bytesToBase64(rawKey) }
 }

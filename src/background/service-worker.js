@@ -107,7 +107,7 @@ const saveApiSettings = async ({ projectsUrl, accessUrl } = {}) => {
     if (projectsUrl !== undefined) next.projectsUrl = String(projectsUrl ?? '').trim()
     if (accessUrl !== undefined) next.accessUrl = String(accessUrl ?? '').trim()
     await writeApiSettingsRaw(next)
-    await scheduleProjectsRefresh(next.projectsUrl)
+    await scheduleProjectsRefresh(next)
     return next
 }
 
@@ -253,20 +253,21 @@ const enableProtectedVault = async (mode, wrappingKey, options = {}) => {
     return { enabled: true, mode, unlocked: true }
 }
 
-const unlockWithWrappingKey = async (config, wrappingKey) => {
+const unlockWithWrappingKey = async (config, wrappingKey, options) => {
     try {
         const rawKey = await openBytes(config.wrappedKey, wrappingKey)
-        return unlockWithVaultKey(config, rawKey)
+        return unlockWithVaultKey(config, rawKey, options)
     } catch {
         throw new Error('Неверный PIN или хранилище повреждено')
     }
 }
 
-const unlockWithVaultKey = async (config, rawKey) => {
+const unlockWithVaultKey = async (config, rawKey, { refreshAfterUnlock = true } = {}) => {
     if (rawKey.length !== 32) throw new Error('Получен некорректный ключ хранилища')
     const vaultKey = await importAesKey(rawKey)
     await readCredentialVault(vaultKey)
     await storeUnlockedKey(rawKey)
+    if (refreshAfterUnlock) refreshDueData().catch(error => console.error('[background] refresh after unlock', error))
     return { enabled: true, mode: config.mode, unlocked: true }
 }
 
@@ -320,7 +321,7 @@ const enableWindowsHelloProtection = async ({ rawVaultKey, credentialId, prfSalt
     })
 }
 
-const unlockWithPin = async ({ pin }) => {
+const unlockWithPin = async ({ pin, refreshAfterUnlock = true }) => {
     const config = await getSecurityConfig()
     if (!config?.enabled || config.mode !== 'pin') throw new Error('PIN-защита не настроена')
     if (typeof pin !== 'string' || !/^\d{4,12}$/.test(pin)) throw new Error('Введите PIN от 4 до 12 цифр')
@@ -329,14 +330,14 @@ const unlockWithPin = async ({ pin }) => {
         throw new Error('Параметры PIN-хранилища повреждены')
     }
     const wrappingKey = await derivePinWrappingKey(pin, base64ToBytes(config.salt), config.iterations)
-    return unlockWithWrappingKey(config, wrappingKey)
+    return unlockWithWrappingKey(config, wrappingKey, { refreshAfterUnlock })
 }
 
-const unlockWithWindowsHelloKey = async ({ key }) => {
+const unlockWithWindowsHelloKey = async ({ key, refreshAfterUnlock = true }) => {
     const config = await getSecurityConfig()
     if (!config?.enabled || config.mode !== 'hello') throw new Error('Windows Hello-защита не настроена')
     if (typeof key !== 'string') throw new Error('Windows Hello не вернул ключ vault')
-    return unlockWithVaultKey(config, base64ToBytes(key))
+    return unlockWithVaultKey(config, base64ToBytes(key), { refreshAfterUnlock })
 }
 
 const lockCredentialVault = async () => {
@@ -387,9 +388,12 @@ const disableCredentialProtection = async () => {
     return { enabled: false, mode: 'off', unlocked: true }
 }
 
-const scheduleProjectsRefresh = async (projectsUrl) => {
-    await chrome.alarms.clear(PROJECTS_ALARM)
-    if (!projectsUrl?.trim()) return
+const scheduleProjectsRefresh = async ({ projectsUrl, accessUrl }) => {
+    if (!projectsUrl?.trim() && !accessUrl?.trim()) {
+        await chrome.alarms.clear(PROJECTS_ALARM)
+        return
+    }
+    if (await chrome.alarms.get(PROJECTS_ALARM)) return
     await chrome.alarms.create(PROJECTS_ALARM, {
         delayInMinutes: PROJECTS_REFRESH_PERIOD_MINUTES,
         periodInMinutes: PROJECTS_REFRESH_PERIOD_MINUTES
@@ -398,7 +402,8 @@ const scheduleProjectsRefresh = async (projectsUrl) => {
 
 const restoreProjectsSchedule = async () => {
     const settings = await readApiSettingsRaw()
-    await scheduleProjectsRefresh(settings.projectsUrl)
+    await scheduleProjectsRefresh(settings)
+    await refreshDueData()
 }
 
 const clearAllData = async () => {
@@ -741,6 +746,7 @@ const refreshProjects = async (url, { interactive = false } = {}) => {
 
 const refreshAccesses = async (url, { interactive = false } = {}) => {
     try {
+        if ((await getSecurityConfig())?.enabled) await getUnlockedKey()
         const data = await getStoredData()
         return await saveSuccessfulData(data, 'accesses', normalizeAccessData(await requestRows(url, 'доступов')), url)
     } catch (error) {
@@ -923,16 +929,25 @@ const getServiceField = async ({ id, field }) => {
     return service[field]
 }
 
-const refreshAll = async ({ interactive = false } = {}) => {
+const refreshAll = async ({ interactive = false, onlyIfDue = false } = {}) => {
     const { projectsUrl, accessUrl } = await readApiSettingsRaw()
     if (!projectsUrl && !accessUrl) throw new Error('Сначала сохраните адрес API проектов или доступов')
     const protectedMode = Boolean((await getSecurityConfig())?.enabled)
     const locked = protectedMode && !(await getUnlockedKey({ required: false }))
-    const [projectsResult, accessesResult] = await Promise.allSettled([
-        projectsUrl ? requestRows(projectsUrl, 'проектов') : Promise.resolve(null),
-        accessUrl && !locked ? requestRows(accessUrl, 'доступов') : Promise.resolve(null)
-    ])
+    if (interactive && accessUrl && locked) await getUnlockedKey()
     let data = await getStoredData()
+    const snapshot = data.lastSuccessfulData
+    const due = (type, url) => !onlyIfDue || snapshot[`${type}Url`] !== url ||
+        !Number.isFinite(snapshot[`${type}UpdatedAt`]) || snapshot[`${type}UpdatedAt`] <= 0 ||
+        Date.now() - snapshot[`${type}UpdatedAt`] >= PROJECTS_REFRESH_PERIOD_MINUTES * 60000
+    const loadProjects = Boolean(projectsUrl) && due('projects', projectsUrl)
+    const loadAccesses = Boolean(accessUrl) && !locked && due('accesses', accessUrl)
+    if (!loadProjects && !loadAccesses) return { ...data, refreshed: { projects: false, accesses: false } }
+    const [projectsResult, accessesResult] = await Promise.allSettled([
+        loadProjects ? requestRows(projectsUrl, 'проектов') : Promise.resolve(null),
+        loadAccesses ? requestRows(accessUrl, 'доступов') : Promise.resolve(null)
+    ])
+    data = await getStoredData()
     const errors = []
     const refreshed = { projects: false, accesses: false }
     let accessAuthRequired = Boolean(data.accessAuthRequired) && Boolean(accessUrl)
@@ -962,6 +977,18 @@ const refreshAll = async ({ interactive = false } = {}) => {
     const nextData = { ...data, projectApiStatus, accessApiStatus, accessAuthRequired, refreshErrors: errors }
     await storageSet(DATA_KEY, nextData)
     return { ...nextData, refreshed }
+}
+
+let dueRefresh = null
+const refreshDueData = () => {
+    if (dueRefresh) return dueRefresh
+    dueRefresh = (async () => {
+        if ((await getSecurityConfig())?.enabled && !(await getUnlockedKey({ required: false }))) return
+        const settings = await readApiSettingsRaw()
+        if (!settings.projectsUrl && !settings.accessUrl) return
+        return refreshAll({ onlyIfDue: true })
+    })().finally(() => { dueRefresh = null })
+    return dueRefresh
 }
 
 const toPublicData = (data) => {
@@ -1035,7 +1062,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name !== PROJECTS_ALARM) return
-    refreshAll()
+    refreshDueData()
         .catch((error) => console.error('[background] weekly refresh', error))
 })
 

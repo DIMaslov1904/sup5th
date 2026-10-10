@@ -26,6 +26,7 @@ import Button from '../components/ui/Button.vue'
 import Input from '../components/ui/Input.vue'
 import Card from '../components/ui/Card.vue'
 import Message from '../components/ui/Message.vue'
+import { ensureUnlocked } from '../unlockStore'
 
 const optionsUrl = chrome.runtime.getURL('src/options/index.html')
 
@@ -222,7 +223,9 @@ const loadAll = async () => {
     loading.value = 'all'
     message.value = { type: 'error', text: '' }
     try {
-        data.value = await refreshAll()
+        data.value = settings.value.hasAccessUrl
+            ? await ensureUnlocked(() => refreshAll(), { refreshAfterUnlock: false })
+            : await refreshAll()
         errors.value = await loadErrorLog()
         const snapshot = data.value.lastSuccessfulData
         const counts = []

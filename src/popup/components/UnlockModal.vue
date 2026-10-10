@@ -49,6 +49,10 @@ watch(() => unlockState.error, async (error) => {
             </template>
 
             <template v-else>
+                <div v-if="unlockState.loading" role="status" class="flex items-center gap-3 text-sm text-sky-300">
+                    <span class="h-5 w-5 shrink-0 rounded-full border-2 border-sky-300/25 border-t-sky-300 motion-safe:animate-spin" aria-hidden="true"></span>
+                    <span>Ожидаем Windows Hello…</span>
+                </div>
                 <p class="text-xs text-slate-300">
                     Выполните проверку Windows Hello в открывшемся системном окне (PIN / отпечаток / лицо).
                 </p>
@@ -59,7 +63,7 @@ watch(() => unlockState.error, async (error) => {
             <div class="flex justify-end gap-2">
                 <Button v-if="unlockState.mode === 'hello'" variant="secondary" size="sm"
                     :disabled="unlockState.loading" @click="runHelloUnlock">Повторить</Button>
-                <Button variant="ghost" size="sm" :disabled="unlockState.loading" @click="cancelUnlock">Отмена</Button>
+                <Button variant="ghost" size="sm" @click="cancelUnlock">Отмена</Button>
             </div>
         </div>
     </div>

@@ -71,9 +71,9 @@ export const enablePinProtection = (pin) => callBackground('security:enablePin',
 
 export const enableHelloProtection = (payload) => callBackground('security:enableHello', payload)
 
-export const unlockCredentialVault = (pin) => callBackground('security:unlockPin', { pin })
+export const unlockCredentialVault = (pin, { refreshAfterUnlock = true } = {}) => callBackground('security:unlockPin', { pin, refreshAfterUnlock })
 
-export const unlockCredentialVaultWithHello = (key) => callBackground('security:unlockHelloKey', { key })
+export const unlockCredentialVaultWithHello = (key, { refreshAfterUnlock = true } = {}) => callBackground('security:unlockHelloKey', { key, refreshAfterUnlock })
 
 export const lockCredentialVault = () => callBackground('security:lock')
 

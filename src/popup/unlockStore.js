@@ -6,8 +6,8 @@ import {
     getCredentialSecurityStatus,
     unlockCredentialVault,
     unlockCredentialVaultWithHello
-} from './data/projectData'
-import { unlockWithBiometricFlow } from '../utils/biometricHello'
+} from './data/projectData.js'
+import { unlockWithBiometricFlow } from '../utils/biometricHello.js'
 
 export const unlockState = reactive({
     visible: false,
@@ -18,73 +18,81 @@ export const unlockState = reactive({
 
 let settle = null
 
-const showUnlock = (mode) => new Promise((resolve, reject) => {
-    settle = { resolve, reject }
+const showUnlock = (mode, { refreshAfterUnlock = true } = {}) => new Promise((resolve, reject) => {
+    settle = { resolve, reject, refreshAfterUnlock, controller: new AbortController() }
     unlockState.mode = mode
     unlockState.loading = false
     unlockState.error = ''
     unlockState.visible = true
 })
 
-const finishUnlock = () => {
+const isActive = (request) => settle === request && !request.controller.signal.aborted
+
+const finishUnlock = (request) => {
+    if (!isActive(request)) return
     unlockState.visible = false
     unlockState.loading = false
     unlockState.error = ''
-    const done = settle?.resolve
     settle = null
-    done?.()
+    request.resolve()
 }
 
 export const cancelUnlock = () => {
     if (!settle) return
-    const reject = settle.reject
+    const request = settle
     settle = null
+    request.controller.abort()
     unlockState.visible = false
     unlockState.loading = false
     unlockState.error = ''
-    reject(new Error('Разблокировка отменена'))
+    request.reject(new Error('Разблокировка отменена'))
 }
 
 // Разблокирует хранилище (если нужно) и выполняет действие
-export const ensureUnlocked = async (action) => {
+export const ensureUnlocked = async (action, options) => {
     const status = await getCredentialSecurityStatus(false, false)
     if (!status.enabled || status.unlocked) return action()
-    await showUnlock(status.mode === 'hello' ? 'hello' : 'pin')
+    await showUnlock(status.mode === 'hello' ? 'hello' : 'pin', options)
     return action()
 }
 
 // Ввод PIN: пробуем разблокировать сразу, без кнопки подтверждения
 export const submitPin = async (pin) => {
     if (unlockState.loading || !settle) return
+    const request = settle
     unlockState.loading = true
     unlockState.error = ''
     try {
-        await unlockCredentialVault(pin)
-        finishUnlock()
+        await unlockCredentialVault(pin, { refreshAfterUnlock: request.refreshAfterUnlock })
+        finishUnlock(request)
     } catch (error) {
-        unlockState.error = error.message
+        if (isActive(request)) unlockState.error = error.message
     } finally {
-        unlockState.loading = false
+        if (isActive(request)) unlockState.loading = false
     }
 }
 
 // Разблокировка Windows Hello (WebAuthn + PRF)
 export const runHelloUnlock = async () => {
     if (unlockState.loading || !settle) return
+    const request = settle
     unlockState.loading = true
     unlockState.error = ''
     try {
         const status = await getCredentialSecurityStatus(false, false)
+        if (!isActive(request)) return
         const { key } = await unlockWithBiometricFlow({
             credentialId: status.credentialId,
             prfSalt: status.prfSalt,
-            wrappedKey: status.wrappedKey
+            wrappedKey: status.wrappedKey,
+            signal: request.controller.signal
         })
-        await unlockCredentialVaultWithHello(key)
-        finishUnlock()
+        if (!isActive(request)) return
+        await unlockCredentialVaultWithHello(key, { refreshAfterUnlock: request.refreshAfterUnlock })
+        finishUnlock(request)
     } catch (error) {
-        unlockState.error = error.message
+        if (isActive(request)) unlockState.error = error.message
     } finally {
-        unlockState.loading = false
+        if (isActive(request)) unlockState.loading = false
     }
 }
