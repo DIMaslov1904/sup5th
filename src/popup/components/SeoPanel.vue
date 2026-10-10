@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { sendSeoToTab, fetchSeo, openSeoApp, downloadText } from '../../utils/seoClient.js'
 import { evaluateRobots } from '../../utils/seoRules.js'
 import Button from './ui/Button.vue'
@@ -18,7 +18,6 @@ const scan = async () => {
     catch (e) { if (alive) error.value = e.message }
     finally { if (alive) loading.value = false }
 }
-onMounted(scan)
 onUnmounted(() => { alive = false; cancelled = true })
 const links = computed(() => (report.value?.linkRows || []).filter(item => {
     const info = checked.value[item.url]
@@ -78,9 +77,10 @@ const tools = computed(() => {
     <div class="grid gap-3 text-slate-200">
         <div class="flex flex-wrap items-center justify-between gap-2">
             <h1 class="text-lg font-semibold">SEO</h1>
-            <div class="flex gap-2"><Button size="sm" variant="secondary" :disabled="loading || checking" @click="scan">{{ loading ? 'Сканируем…' : 'Обновить' }}</Button><Button size="sm" variant="secondary" :disabled="!tab?.id" @click="openSeoApp(tab.id)">Аудит ↗</Button></div>
+            <div class="flex gap-2"><Button size="sm" variant="secondary" :disabled="loading || checking || !tab?.id" @click="scan">{{ loading ? 'Сканируем…' : report ? 'Обновить' : 'Анализировать' }}</Button><Button size="sm" variant="secondary" :disabled="!tab?.id" @click="openSeoApp(tab.id)">Аудит ↗</Button></div>
         </div>
-        <div class="flex flex-wrap gap-1" role="tablist" aria-label="Разделы SEO">
+        <p v-if="!report && !loading && !error" class="text-xs text-slate-400">Нажмите «Анализировать», чтобы проверить текущую страницу.</p>
+        <div v-if="report" class="flex flex-wrap gap-1" role="tablist" aria-label="Разделы SEO">
             <button v-for="item in tabs" :key="item[0]" role="tab" :aria-selected="section === item[0]" @click="section = item[0]; visible = 100" class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-white/10" :class="section === item[0] ? 'bg-sky-400/15 text-sky-300' : 'text-slate-400'">{{ item[1] }}</button>
         </div>
         <Message v-if="error" type="error">{{ error }}</Message>
