@@ -193,7 +193,6 @@ const openTab = (url) => chrome.tabs.create({ url })
                             <p class="text-lg font-semibold">{{ score.passed }} из {{ score.total }} проверок пройдено</p>
                             <p v-if="report" class="mt-1 break-all text-xs text-slate-400">
                                 <a :href="report.url" target="_blank" rel="noreferrer" class="text-sky-300 hover:text-sky-200">{{ report.url }}</a>
-                                <span v-if="report.generator" class="ml-2">CMS: {{ report.generator }}</span>
                             </p>
                         </div>
                     </div>

@@ -87,7 +87,6 @@ export const scanSeo = async () => {
         descriptionLength: description.length,
         descriptionHasCyrillic: hasCyrillic(description),
         keywords: getMeta('meta[name="keywords"]'),
-        generator: getMeta('meta[name="generator"]'),
         canonical: document.querySelector('link[rel="canonical"]')?.href || '',
         robots,
         robotsAllowed: !/(noindex|none)/i.test(robots),

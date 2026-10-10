@@ -56,7 +56,7 @@ const exportLinks = () => {
 const overview = computed(() => report.value ? [
     ['URL',report.value.url], ['HTTP',report.value.response.status || 'Не получен'], ['Title',report.value.title || 'Отсутствует'], ['Длина Title',report.value.titleLength],
     ['Description',report.value.description || 'Отсутствует'], ['Длина Description',report.value.descriptionLength], ['Keywords',report.value.keywords || 'Отсутствует'],
-    ['Язык',report.value.lang || 'Не указан'], ['CMS',report.value.generator || 'Не определена'], ['Canonical',report.value.canonical || 'Не указан'], ['Viewport',report.value.viewport ? 'Есть' : 'Нет'],
+    ['Язык',report.value.lang || 'Не указан'], ['Canonical',report.value.canonical || 'Не указан'], ['Viewport',report.value.viewport ? 'Есть' : 'Нет'],
     ['Редирект',report.value.redirected ? report.value.finalUrl : 'Нет'], ['TTFB повторного запроса',report.value.response.ttfb == null ? 'Не измерен' : report.value.response.ttfb + ' мс']
 ] : [])
 const tools = computed(() => {
