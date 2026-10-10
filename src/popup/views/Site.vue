@@ -114,10 +114,10 @@ const copyAccessField = async (accessIndex, field) => {
 </script>
 
 <template>
-    <div class="relative min-h-full w-full pt-4">
+    <div class="relative min-h-full w-full">
         <LeftMenu v-model="menuItem" :menuList="menuList" />
 
-        <section v-if="menuItem === 'project'" class="px-4 pt-5 text-slate-200">
+        <section v-if="menuItem === 'project'" class="pl-8 pr-4 text-slate-200">
             <p v-if="!loaded" class="text-sm text-slate-400">Загрузка...</p>
             <p v-else-if="!project" class="text-sm text-slate-400">Текущий сайт не найден среди проектов</p>
             <div v-else class="grid gap-4">
@@ -211,7 +211,7 @@ const copyAccessField = async (accessIndex, field) => {
             </div>
         </section>
 
-        <section v-else-if="menuItem === 'seo'" class="px-4 pt-5 text-slate-200">
+        <section v-else-if="menuItem === 'seo'" class="pl-8 pr-4 text-slate-200">
             <div class="mb-4 flex items-center justify-between gap-3">
                 <div>
                     <h1 class="text-lg font-semibold">SEO</h1>
