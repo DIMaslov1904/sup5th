@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { getProjectAccessField, getProjectAccessText, loadErrorLog, loadProjectData, loadProjectDetails } from '../data/projectData'
 import { ensureUnlocked } from '../unlockStore'
 import switcher from '../../utils/switcher'
-import { getAdminUrl, getCmsIconPath } from '../../utils/projectUtils'
+import { getAdminUrl, getCmsIconPath, getTicketUrl } from '../../utils/projectUtils'
 import Button from '../components/ui/Button.vue'
 import Input from '../components/ui/Input.vue'
 import Message from '../components/ui/Message.vue'
@@ -175,7 +175,6 @@ onMounted(async () => {
 
             <dl class="grid gap-2 rounded-lg border border-white/10 bg-slate-900/40 p-3 text-xs">
                 <div class="flex justify-between gap-3"><dt class="text-slate-400">Домен</dt><dd class="text-right">{{ selectedProject.url }}</dd></div>
-                <div class="flex justify-between gap-3"><dt class="text-slate-400">Поддомены</dt><dd>{{ selectedProject.subdomain ? 'Разрешены' : 'Не разрешены' }}</dd></div>
                 <div class="flex justify-between gap-3"><dt class="text-slate-400">CMS</dt><dd>
                     <img v-if="getCmsIconPath(selectedProject.cms)" :src="getCmsIconPath(selectedProject.cms)" :alt="selectedProject.cms"
                         :title="selectedProject.cms" class="h-3 w-3 inline-block rounded bg-white object-contain p-px" />
@@ -186,6 +185,9 @@ onMounted(async () => {
                     <dd v-else class="text-right text-slate-500">Нет</dd>
                 </div>
             </dl>
+
+            <a v-if="getTicketUrl(selectedProject)" :href="getTicketUrl(selectedProject)" target="_blank" rel="noreferrer"
+                class="text-sm text-sky-300 underline decoration-sky-300/40 underline-offset-2 hover:text-sky-200">Создать тикет</a>
 
             <section class="grid gap-2">
                 <h2 class="text-sm font-semibold">Доступы ({{ selectedProjectAccesses.length }})</h2>

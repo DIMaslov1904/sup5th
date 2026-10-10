@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import {
     authorizeAccessApi,
+    authorizeProjectsApi,
     clearAllData,
     disableCredentialProtection,
     enableHelloProtection,
@@ -32,7 +33,7 @@ const settings = ref({ hasProjectsUrl: false, hasAccessUrl: false })
 const projectsUrlInput = ref('')
 const accessUrlInput = ref('')
 const savingApi = ref('')
-const authorizing = ref(false)
+const authorizing = ref('')
 const data = ref({ lastSuccessfulData: { projects: [], accesses: [], projectsUpdatedAt: null, accessesUpdatedAt: null } })
 const errors = ref([])
 const loading = ref('')
@@ -204,16 +205,16 @@ const saveAccessUrl = async () => {
     }
 }
 
-const authorizeAccess = async () => {
-    authorizing.value = true
+const authorizeApi = async (type) => {
+    authorizing.value = type
     message.value = { type: 'error', text: '' }
     try {
-        await authorizeAccessApi()
-        message.value = { type: 'info', text: 'Войдите в Google под аккаунтом владельца API. Затем вернитесь в расширение и нажмите «Загрузить всё».' }
+        await (type === 'projects' ? authorizeProjectsApi() : authorizeAccessApi())
+        message.value = { type: 'info', text: 'Войдите в Google и подтвердите разрешения API. Затем вернитесь в расширение и нажмите «Загрузить всё».' }
     } catch (error) {
         message.value = { type: 'error', text: error.message }
     } finally {
-        authorizing.value = false
+        authorizing.value = ''
     }
 }
 
@@ -271,6 +272,22 @@ const resetData = async () => {
                     {{ savingApi === 'projects' ? 'Сохранение...' : 'Сохранить' }}
                 </Button>
             </div>
+            <Message v-if="data.projectApiStatus === 'login_required'" type="error">
+                Войдите в Google под аккаунтом с доступом к документу проектов и повторите загрузку.
+            </Message>
+            <Message v-else-if="data.projectApiStatus === 'access_denied'" type="error">
+                Доступ к документу ограничен, запросите доступ у владельца документа и повторите загрузку.
+            </Message>
+            <Message v-else-if="data.projectApiStatus === 'authorization_needed'" type="error">
+                Подтвердите разрешения Apps Script на странице API и повторите загрузку.
+            </Message>
+            <Button v-if="settings.hasProjectsUrl" variant="secondary" size="sm" class="mt-2"
+                :disabled="Boolean(authorizing) || Boolean(loading) || savingApi === 'projects'" @click="authorizeApi('projects')">
+                {{ authorizing === 'projects' ? 'Открываю...' : data.projectApiStatus === 'authorization_needed' ? 'Подтвердить разрешения' : 'Авторизоваться в Google' }}
+            </Button>
+            <p v-if="settings.hasProjectsUrl" class="mt-2 text-xs text-slate-400">
+                После входа и подтверждения разрешений вернитесь и нажмите «Загрузить всё».
+            </p>
             <p class="flex items-start mt-2 text-xs text-slate-400">
                 Общий url. Указан в таблице База знаний 5th
             </p>
@@ -284,12 +301,18 @@ const resetData = async () => {
                     {{ savingApi === 'access' ? 'Сохранение...' : 'Сохранить' }}
                 </Button>
             </div>
-            <Message v-if="data.accessAuthRequired" type="error">
+            <Message v-if="data.accessApiStatus === 'access_denied'" type="error">
+                Доступ к документу ограничен, запросите доступ у владельца документа и повторите загрузку.
+            </Message>
+            <Message v-else-if="data.accessApiStatus === 'authorization_needed'" type="error">
+                Подтвердите разрешения Apps Script на странице API и повторите загрузку.
+            </Message>
+            <Message v-else-if="data.accessAuthRequired" type="error">
                 Требуется вход в Google под аккаунтом владельца API доступов. После входа повторите загрузку.
             </Message>
             <Button v-if="settings.hasAccessUrl" variant="secondary" size="sm" class="mt-2"
-                :disabled="authorizing || Boolean(loading) || savingApi === 'access'" @click="authorizeAccess">
-                {{ authorizing ? 'Открываю...' : 'Авторизоваться в Google' }}
+                :disabled="Boolean(authorizing) || Boolean(loading) || savingApi === 'access'" @click="authorizeApi('accesses')">
+                {{ authorizing === 'accesses' ? 'Открываю...' : data.accessApiStatus === 'authorization_needed' ? 'Подтвердить разрешения' : 'Авторизоваться в Google' }}
             </Button>
             <p v-if="settings.hasAccessUrl" class="mt-2 text-xs text-slate-400">
                 Войдите в открывшейся вкладке, затем вернитесь и нажмите «Загрузить всё».

@@ -15,28 +15,46 @@ export const CMS_PATHS = {
 
 export const CMS_ICONS = ['abo', 'adminlte', 'bitrix', 'cms', 'ezpro', 'joomla', 'modx', 'tilda', 'umi', 'wordpress', 'drupal', 'opencart']
 
-/** Приводит значение к нормализованному имени хоста (без www, в нижнем регистре) */
+/** Приводит значение к имени хоста в нижнем регистре. */
 export const normalizeHost = (value) => {
     try {
-        return new URL(value).hostname.toLowerCase()
+        const candidate = String(value || '').trim()
+        return new URL(candidate.includes('://') ? candidate : `https://${candidate}`).hostname.toLowerCase()
     } catch {
-        return String(value || '').replace(/^https?:\/\//, '').split('/')[0].toLowerCase()
+        return String(value || '').trim().replace(/^https?:\/\//i, '').split('/')[0].toLowerCase()
     }
 }
 
 /**
- * Находит проект по URL вкладки.
- * Если у проекта разрешены поддомены — учитываются и поддомены.
+ * Сначала точный домен, затем ближайший родительский домен.
+ * Порядок строк API не влияет на выбор отдельного проекта поддомена.
  */
 export const findProjectByUrl = (projects, url) => {
     if (!url) return null
     const host = normalizeHost(url)
-    return (projects || []).find((item) => {
-        if (!item?.url) return false
-        const projectHost = normalizeHost(item.url)
-        return item.subdomain ? (host === projectHost || host.endsWith(`.${projectHost}`)) : host === projectHost
-    }) || null
+    let match = null
+    let matchLength = -1
+    for (const item of projects || []) {
+        const projectHost = normalizeHost(item?.url)
+        if (!projectHost) continue
+        if (host === projectHost) return item
+        if (host.endsWith(`.${projectHost}`) && projectHost.length > matchLength) {
+            match = item
+            matchLength = projectHost.length
+        }
+    }
+    return match
 }
+
+/** Все записи точного домена либо ближайшего родителя, без смешивания доступов. */
+export const findAccessesByUrl = (accesses, url) => {
+    const match = findProjectByUrl(accesses, url)
+    return match ? (accesses || []).filter((access) => normalizeHost(access.url) === normalizeHost(match.url)) : []
+}
+
+export const getTicketUrl = (project) => project?.ticketKey
+    ? `https://support.5th.ru/published/personal.php?key=${encodeURIComponent(project.ticketKey)}&t=requests`
+    : ''
 
 /** Возвращает ссылку на панель администрирования проекта (без авторизации) */
 export const getAdminUrl = (project) => {

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { getProjectAccessField, loadProjectData, loadProjectDetails, startAdminAuth } from '../data/projectData'
-import { findProjectByUrl, getAdminUrl, getCmsIconPath } from '../../utils/projectUtils'
+import { findProjectByUrl, getAdminUrl, getCmsIconPath, getTicketUrl } from '../../utils/projectUtils'
 import { ensureUnlocked } from '../unlockStore'
 import Button from '../components/ui/Button.vue'
 import Message from '../components/ui/Message.vue'
@@ -158,6 +158,9 @@ const copyAccessField = async (accessIndex, field) => {
                         <span>Репозиторий</span>
                     </a>
                 </div>
+                <a v-if="getTicketUrl(project)" :href="getTicketUrl(project)" target="_blank" rel="noreferrer"
+                    class="text-sm text-sky-300 underline decoration-sky-300/40 underline-offset-2 hover:text-sky-200">Создать тикет</a>
+
                 <section v-if="accesses.length" class="grid gap-2">
                     <h2 class="text-sm font-semibold">Доступы ({{ accesses.length }})</h2>
                     <article v-for="(access, index) in accesses" :key="`${access.login}-${index}`"

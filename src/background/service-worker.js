@@ -1,4 +1,5 @@
-import { findProjectByUrl, getAdminUrl } from '../utils/projectUtils.js'
+import { findAccessesByUrl, findProjectByUrl, getAdminUrl } from '../utils/projectUtils.js'
+import { apiAuthorizationError, classifyApiAuthorization } from './apiAuthorization.js'
 import { registerPopupSession } from './popupSession.js'
 import {
     base64ToBytes,
@@ -34,6 +35,8 @@ const REQUEST_TIMEOUT = 30000
 const MAX_ERROR_ENTRIES = 50
 
 const emptyData = () => ({
+    projectApiStatus: '',
+    accessApiStatus: '',
     accessAuthRequired: false,
     refreshErrors: [],
     lastSuccessfulData: {
@@ -550,15 +553,15 @@ const asText = (value) => (value == null ? '' : String(value).trim())
 
 const normalizeProject = (item) => {
     const value = Array.isArray(item)
-        ? { name: item[0], url: item[1], subdomain: item[2], manual: item[3], urlAdmin: item[4], cms: item[5], git: item[6], figma: item[7], addDocument: item[8] }
+        ? { name: item[0], url: item[1], manual: item[2], cms: item[3], ticketKey: item[4], git: item[5] }
         : item || {}
     return {
         name: asText(value.name || value.title || value.project),
         url: getUrlKey(value.url || value.site || value.domain),
-        subdomain: Boolean(value.subdomain),
         urlAdmin: asText(value.urlAdmin || value.adminUrl),
         cms: asText(value.cms) || 'Нет',
         manual: asText(value.manual),
+        ticketKey: asText(value.ticketKey),
         git: asText(value.git),
         figma: asText(value.figma),
         addDocument: asText(value.addDocument)
@@ -596,13 +599,7 @@ const extractRows = (payload) => {
     return rows
 }
 
-const accessAuthorizationError = () => {
-    const error = new Error('Авторизуйтесь в Google под аккаунтом владельца API доступов и повторите загрузку')
-    error.code = 'ACCESS_AUTH_REQUIRED'
-    return error
-}
-
-const requestRows = async (url, kind, { authenticated = false } = {}) => {
+const requestRows = async (url, kind) => {
     if (!url?.trim()) throw new Error(`Не указан адрес API ${kind}`)
     let parsedUrl
     try {
@@ -618,17 +615,14 @@ const requestRows = async (url, kind, { authenticated = false } = {}) => {
     try {
         const response = await fetch(parsedUrl.href, {
             headers: { Accept: 'application/json' },
-            credentials: authenticated ? 'include' : 'omit',
+            credentials: 'include',
+            redirect: 'follow',
             signal: controller.signal
         })
-        const googleLogin = response.url && new URL(response.url).hostname === 'accounts.google.com'
-        if (authenticated && ([401, 403].includes(response.status) || googleLogin)) throw accessAuthorizationError()
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
         const text = await response.text()
-        if (authenticated && response.headers.get('content-type')?.includes('text/html') &&
-            /accounts\.google\.com|ServiceLogin|Sign in|Войдите|You need access|Authorization required/i.test(text)) {
-            throw accessAuthorizationError()
-        }
+        const authStatus = classifyApiAuthorization(response, text)
+        if (authStatus) throw apiAuthorizationError(authStatus, kind)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
         let payload
         try {
             payload = JSON.parse(text)
@@ -663,7 +657,7 @@ const saveSuccessfulData = async (data, type, rows, url) => {
     const nextData = {
         ...data,
         lastSuccessfulData: nextSnapshot,
-        ...(type === 'accesses' ? { accessAuthRequired: false } : {})
+        ...(type === 'projects' ? { projectApiStatus: '' } : { accessApiStatus: '', accessAuthRequired: false })
     }
     await storageSetMany({
         [DATA_KEY]: nextData,
@@ -678,54 +672,75 @@ const logError = async (type, error) => {
     await storageSet(ERRORS_KEY, [entry, ...current].slice(0, MAX_ERROR_ENTRIES))
 }
 
-const refreshProjects = async (url) => {
+const recordApiFailure = async (type, error) => {
+    const data = await getStoredData()
+    const status = error.apiStatus || ''
+    const change = type === 'projects' ? { projectApiStatus: status }
+        : { accessApiStatus: status, accessAuthRequired: ['login_required', 'authorization_needed'].includes(status) }
+    await storageSet(DATA_KEY, { ...data, ...change })
+}
+
+const refreshProjects = async (url, { interactive = false } = {}) => {
     try {
         const data = await getStoredData()
         return saveSuccessfulData(data, 'projects', (await requestRows(url, 'проектов')).map(normalizeProject), url)
     } catch (error) {
+        await recordApiFailure('projects', error)
+        await openConsentIfNeeded(error, url, 'проектов', interactive)
         await logError('projects', error)
         throw error
     }
 }
 
-const refreshAccesses = async (url) => {
+const refreshAccesses = async (url, { interactive = false } = {}) => {
     try {
         const data = await getStoredData()
-        return await saveSuccessfulData(data, 'accesses', (await requestRows(url, 'доступов', { authenticated: true })).flatMap(normalizeAccess), url)
+        return await saveSuccessfulData(data, 'accesses', (await requestRows(url, 'доступов')).flatMap(normalizeAccess), url)
     } catch (error) {
-        if (error.code === 'ACCESS_AUTH_REQUIRED') {
-            const data = await getStoredData()
-            await storageSet(DATA_KEY, { ...data, accessAuthRequired: true })
-        }
+        await recordApiFailure('accesses', error)
+        await openConsentIfNeeded(error, url, 'доступов', interactive)
         await logError('accesses', error)
         throw error
     }
 }
 
-const openAccessAuthorization = async () => {
-    const { accessUrl } = await readApiSettingsRaw()
-    if (!accessUrl) throw new Error('Сначала сохраните адрес API доступов')
+const openApiAuthorizationUrl = async (url, kind) => {
+    if (!url) throw new Error(`Сначала сохраните адрес API ${kind}`)
     let parsedUrl
     try {
-        parsedUrl = new URL(accessUrl)
+        parsedUrl = new URL(url)
     } catch {
-        throw new Error('Некорректный адрес API доступов')
+        throw new Error(`Некорректный адрес API ${kind}`)
     }
     if (!['http:', 'https:'].includes(parsedUrl.protocol) ||
         parsedUrl.username || parsedUrl.password) {
-        throw new Error('Адрес API доступов должен использовать HTTP или HTTPS и не содержать логин и пароль в URL')
+        throw new Error(`Адрес API ${kind} должен использовать HTTP или HTTPS и не содержать логин и пароль в URL`)
     }
     await chrome.tabs.create({ url: parsedUrl.href })
     return { opened: true }
 }
 
+const openApiAuthorization = async (type) => {
+    const settings = await readApiSettingsRaw()
+    return openApiAuthorizationUrl(type === 'projects' ? settings.projectsUrl : settings.accessUrl, type === 'projects' ? 'проектов' : 'доступов')
+}
+
+const openConsentIfNeeded = async (error, url, kind, interactive) => {
+    if (!interactive || error.apiStatus !== 'authorization_needed') return
+    try {
+        await openApiAuthorizationUrl(url, kind)
+    } catch (openError) {
+        await logError(kind === 'проектов' ? 'projects' : 'accesses', openError)
+    }
+}
+
 const getProjectAccessRecords = async (data, url, requireUnlocked = true) => {
-    const publicRecords = data.lastSuccessfulData.accesses.filter((access) => access.url === url)
+    const publicRecords = findAccessesByUrl(data.lastSuccessfulData.accesses, url)
     if (!(await getSecurityConfig())?.enabled) return publicRecords
     const key = await getUnlockedKey({ required: requireUnlocked })
     if (!key) return publicRecords
     const vault = await readCredentialVault(key)
-    const vaultRecords = vault.accesses.filter((access) => access.url === url)
+    const vaultRecords = vault.accesses.filter((access) => access.url === publicRecords[0]?.url)
     // Слияние: логин из открытых данных, пароль и FTP из vault (с запасом на старые записи)
     return publicRecords.map((record, index) => ({
         ...record,
@@ -888,19 +903,21 @@ const saveServices = async (payload) => {
     return normalized
 }
 
-const refreshAll = async () => {
+const refreshAll = async ({ interactive = false } = {}) => {
     const { projectsUrl, accessUrl } = await readApiSettingsRaw()
     if (!projectsUrl && !accessUrl) throw new Error('Сначала сохраните адрес API проектов или доступов')
     const protectedMode = Boolean((await getSecurityConfig())?.enabled)
     const locked = protectedMode && !(await getUnlockedKey({ required: false }))
     const [projectsResult, accessesResult] = await Promise.allSettled([
         projectsUrl ? requestRows(projectsUrl, 'проектов') : Promise.resolve(null),
-        accessUrl && !locked ? requestRows(accessUrl, 'доступов', { authenticated: true }) : Promise.resolve(null)
+        accessUrl && !locked ? requestRows(accessUrl, 'доступов') : Promise.resolve(null)
     ])
     let data = await getStoredData()
     const errors = []
     const refreshed = { projects: false, accesses: false }
     let accessAuthRequired = Boolean(data.accessAuthRequired) && Boolean(accessUrl)
+    let projectApiStatus = projectsUrl ? data.projectApiStatus || '' : ''
+    let accessApiStatus = accessUrl ? data.accessApiStatus || '' : ''
     for (const [type, result, url] of [['projects', projectsResult, projectsUrl], ['accesses', accessesResult, accessUrl]]) {
         try {
             if (result.status === 'rejected') throw result.reason
@@ -908,15 +925,21 @@ const refreshAll = async () => {
             const rows = type === 'projects' ? result.value.map(normalizeProject) : result.value.flatMap(normalizeAccess)
             data = await saveSuccessfulData(data, type, rows, url)
             refreshed[type] = true
-            if (type === 'accesses') accessAuthRequired = false
+            if (type === 'projects') projectApiStatus = ''
+            else { accessApiStatus = ''; accessAuthRequired = false }
         } catch (error) {
-            if (type === 'accesses' && error.code === 'ACCESS_AUTH_REQUIRED') accessAuthRequired = true
+            if (type === 'projects') projectApiStatus = error.apiStatus || ''
+            else {
+                accessApiStatus = error.apiStatus || ''
+                accessAuthRequired = ['login_required', 'authorization_needed'].includes(accessApiStatus)
+            }
+            await openConsentIfNeeded(error, url, type === 'projects' ? 'проектов' : 'доступов', interactive)
             errors.push(`${type === 'projects' ? 'Проекты' : 'Доступы'}: ${error.message}`)
             await logError(type, error)
         }
     }
     if (accessUrl && locked) errors.push('Доступы: обновление пропущено, хранилище заблокировано')
-    const nextData = { ...data, accessAuthRequired, refreshErrors: errors }
+    const nextData = { ...data, projectApiStatus, accessApiStatus, accessAuthRequired, refreshErrors: errors }
     await storageSet(DATA_KEY, nextData)
     return { ...nextData, refreshed }
 }
@@ -924,11 +947,9 @@ const refreshAll = async () => {
 const toPublicData = (data) => {
     const snapshot = data.lastSuccessfulData
     const projectsByUrl = new Map(snapshot.projects.filter((project) => project.url).map((project) => [project.url, project]))
-    const accessCounts = new Map()
 
     for (const access of snapshot.accesses) {
         if (!access.url) continue
-        accessCounts.set(access.url, (accessCounts.get(access.url) || 0) + 1)
         if (!projectsByUrl.has(access.url)) {
             projectsByUrl.set(access.url, { name: access.name, url: access.url, cms: 'Нет' })
         }
@@ -938,11 +959,10 @@ const toPublicData = (data) => {
         ...data,
         lastSuccessfulData: {
             ...snapshot,
-            projects: [...projectsByUrl.values()].map((project) => ({
-                ...project,
-                hasAccess: accessCounts.has(project.url),
-                accessCount: accessCounts.get(project.url) || 0
-            })),
+            projects: [...projectsByUrl.values()].map((project) => {
+                const count = findAccessesByUrl(snapshot.accesses, project.url).length
+                return { ...project, hasAccess: count > 0, accessCount: count }
+            }),
             accesses: snapshot.accesses.map(publicAccess)
         }
     }
@@ -954,10 +974,11 @@ const handlers = {
     'data:settings:get': () => readApiSettingsRaw().then(toPublicApiSettings),
     'data:settings:set': (payload) => saveApiSettings(payload).then(toPublicApiSettings),
     'data:projects:get': () => getStoredData().then(toPublicData),
-    'data:projects:refresh': ({ url }) => refreshProjects(url).then(toPublicData),
-    'data:accesses:refresh': ({ url }) => refreshAccesses(url).then(toPublicData),
-    'data:accesses:authorize': openAccessAuthorization,
-    'data:all:refresh': () => refreshAll().then(toPublicData),
+    'data:projects:refresh': ({ url }) => refreshProjects(url, { interactive: true }).then(toPublicData),
+    'data:accesses:refresh': ({ url }) => refreshAccesses(url, { interactive: true }).then(toPublicData),
+    'data:projects:authorize': () => openApiAuthorization('projects'),
+    'data:accesses:authorize': () => openApiAuthorization('accesses'),
+    'data:all:refresh': () => refreshAll({ interactive: true }).then(toPublicData),
     'data:errors:get': () => storageGet(ERRORS_KEY, []),
     'data:clear': () => clearAllData().then(() => ({ cleared: true })),
     'auth:start': startAdminAuth,
