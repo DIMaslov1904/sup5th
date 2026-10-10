@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { getProjectAccessField, getProjectAccessText, getServiceField, loadServices, loadProjectData, loadProjectDetails } from '../data/projectData'
 import { ensureUnlocked } from '../unlockStore'
 import { searchCatalogue } from '../../utils/catalogue.js'
+import { displayUrl } from '../../utils/displayUrl.js'
 import FtpAccessCard from '../components/FtpAccessCard.vue'
 import SiteIcon from '../components/SiteIcon.vue'
 import { getAdminUrl, getCmsIconPath, getTicketUrl } from '../../utils/projectUtils'
@@ -121,7 +122,7 @@ onMounted(async () => {
 </script>
 
 <template>
-    <section class="w-full px-4 text-slate-200">
+    <section class="w-full pl-3 pr-0.5 text-slate-200">
         <div v-if="selectedItem" class="flex items-center justify-between gap-3 mb-4">
             <div class="flex items-center gap-2">
                 <Button variant="ghost" size="sm" aria-label="Назад к списку" title="Назад к списку"
@@ -134,26 +135,23 @@ onMounted(async () => {
         <p v-if="!projects.length && !services.length && !selectedItem" class="text-sm text-slate-400">Проекты и сервисы ещё не загружены</p>
         <p v-else-if="!selectedItem && !filteredProjects.length" class="text-sm text-slate-400">Ничего не найдено</p>
         <div v-else-if="!selectedItem" class="grid gap-2">
-            <article v-for="project in filteredProjects" :key="project.key"
-                class="relative rounded-lg border border-white/10 bg-slate-900/40 py-3 pl-5 pr-3 overflow-hidden">
+            <article v-for="project in filteredProjects" :key="project.key"  @click="openItem(project)" :aria-label="`Открыть детали ${project.kind === 'service' ? 'сервиса' : 'проекта'} ${project.name || project.url}`"
+                class="relative rounded-lg border border-white/10 bg-slate-900/40 py-3 pl-14 pr-12 overflow-hidden cursor-pointer">
                 <SiteIcon :url="project.url" :name="project.name" class="absolute left-3 top-3" />
-                <div class="pl-9">
+
                 <span v-if="project.hasAccess || project.hasLogin || project.hasPassword" class="absolute -left-1 -top-1 h-3 w-3 rounded-full bg-blue-400" role="img" aria-label="Доступ есть"></span>
-                <button type="button" :aria-label="`Открыть детали ${project.kind === 'service' ? 'сервиса' : 'проекта'} ${project.name || project.url}`"
-                    class="flex w-full items-start gap-1.5 text-left cursor-pointer" @click="openItem(project)">
-                    <span class="text-sm font-medium leading-snug text-slate-100">{{ project.name || project.url }}</span>
-                </button>
-                <a :href="linkHref(project.url)" target="_blank" rel="noreferrer" title="Перейти на сайт"
-                    :aria-label="`Перейти на сайт ${project.url}`"
-                    class="mt-1 text-sm text-sky-300 hover:text-sky-200 line-clamp-1">
-                   {{ project.url }}
-                </a>
-                </div>
+                <span class="text-sm font-medium leading-snug text-slate-100">
+                    {{ project.name || displayUrl(project.url) }}
+                </span>
+                <span class="mt-1 text-sm text-sky-300 line-clamp-1">
+                    {{ displayUrl(project.url) }}
+                </span>
+
+                <a :href="linkHref(project.url)" target="_black" rel="noreferrer" title="Перейти на сайт" class="absolute top-3 right-3 inline-flex items-center justify-center gap-1.5 rounded font-medium transition cursor-pointer disabled:pointer-events-none disabled:opacity-50 select-none px-2.5 py-1.5 text-xs border border-white/10 text-slate-200 hover:bg-white/10 hover:text-sky-200">↗</a>
             </article>
         </div>
-        <div v-else-if="selectedService" class="grid gap-4">
-            <p class="text-xs text-slate-500">Сервис</p>
-            <a :href="linkHref(selectedService.url)" target="_blank" rel="noreferrer" class="break-all text-sm text-sky-300">{{ selectedService.url }} ↗</a>
+        <div v-else-if="selectedService" class="grid gap-4 pr-3">
+            <a :href="linkHref(selectedService.url)" target="_blank" rel="noreferrer" class="break-all text-sm text-sky-300">{{ displayUrl(selectedService.url) }} ↗</a>
             <article class="grid gap-3 rounded-lg border border-white/10 bg-slate-900/40 p-3">
                 <h2 class="text-sm font-semibold">Доступ</h2>
                 <p class="break-all text-xs text-slate-300">Логин: {{ selectedService.login || (selectedService.hasLogin ? 'Доступен после первой разблокировки' : 'Не указан') }}</p>
@@ -163,18 +161,11 @@ onMounted(async () => {
                 </div>
             </article>
         </div>
-        <div v-else-if="selectedProject" class="grid gap-4">
-            <div class="flex items-center justify-between gap-3">
-                <div class="min-w-0">
-                    <p class="break-all text-sm text-slate-300">{{ selectedProject.url }}</p>
-                    <p class="mt-1 text-xs text-slate-500">CMS: {{ selectedProject.cms || 'Нет' }}</p>
-                </div>
-                <a :href="`https://${selectedProject.url}`" target="_blank" rel="noreferrer" title="Перейти на сайт"
-                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-white/10 text-lg text-slate-200 hover:bg-white/10">↗</a>
-            </div>
+        <div v-else-if="selectedProject" class="grid gap-4 pr-3">
+            <a :href="`https://${selectedProject.url}`" target="_blank" rel="noreferrer" class="break-all text-sm text-sky-300">{{ displayUrl(selectedProject.url) }} ↗</a>
 
             <dl class="grid gap-2 rounded-lg border border-white/10 bg-slate-900/40 p-3 text-xs">
-                <div class="flex justify-between gap-3"><dt class="text-slate-400">Домен</dt><dd class="text-right">{{ selectedProject.url }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-slate-400">Домен</dt><dd class="text-right">{{ displayUrl(selectedProject.url) }}</dd></div>
                 <div class="flex justify-between gap-3"><dt class="text-slate-400">CMS</dt><dd>
                     <img v-if="getCmsIconPath(selectedProject.cms)" :src="getCmsIconPath(selectedProject.cms)" :alt="selectedProject.cms"
                         :title="selectedProject.cms" class="h-3 w-3 inline-block rounded bg-white object-contain p-px" />
