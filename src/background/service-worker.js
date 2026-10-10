@@ -19,6 +19,7 @@ const textDecoder = new TextDecoder()
 registerPopupSession()
 
 const DATA_KEY = 'projectData'
+// Preserve the cache key for existing vaults; new API responses replace the whole list.
 const SERVICES_KEY = 'manualServices'
 const SETTINGS_KEY = 'apiSettings'
 const API_SETTINGS_KEY_STORAGE = 'apiSettingsKey'
@@ -42,6 +43,7 @@ const emptyData = () => ({
     lastSuccessfulData: {
         projects: [],
         accesses: [],
+        servicesCount: 0,
         projectsUpdatedAt: null,
         accessesUpdatedAt: null,
         projectsUrl: '',
@@ -570,7 +572,7 @@ const normalizeProject = (item) => {
 
 const normalizeAccess = (item) => {
     const value = Array.isArray(item)
-        ? { name: item[0], url: item[1], login: item[2], password: item[3] }
+        ? { name: item[0], url: item[1], login: item[2], password: item[3], ftpUrl: item[4], ftpLogin: item[5], ftpPassword: item[6] }
         : item || {}
     const logins = asText(value.login || value.username).split(/\r?\n/).map((entry) => entry.trim())
     const passwords = asText(value.password).split(/\r?\n/).map((entry) => entry.trim())
@@ -590,10 +592,44 @@ const normalizeAccess = (item) => {
         login: logins[index] || '',
         password: passwords[index] || '',
         ...(ftp.url || ftp.login || ftp.password ? { ftp } : {})
-    })).filter((access) => access.login || access.password)
+    })).filter((access) => access.login || access.password || access.ftp)
 }
 
-const extractRows = (payload) => {
+const normalizeService = (item, index) => {
+    const value = Array.isArray(item) ? { name: item[0], url: item[1], login: item[2], password: item[3] } : item || {}
+    if (![value.name, value.url, value.login, value.password].some((field) => asText(field))) return null
+    const name = asText(value.name)
+    const rawUrl = asText(value.url)
+    if (!name || !rawUrl) throw new Error('В сервисе API должны быть указаны название и ссылка')
+    let parsedUrl
+    try {
+        parsedUrl = new URL(rawUrl.includes(':') ? rawUrl : `https://${rawUrl}`)
+    } catch {
+        throw new Error(`Некорректная ссылка сервиса «${name}»`)
+    }
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error(`Ссылка сервиса «${name}» должна использовать HTTP или HTTPS`)
+    return {
+        id: JSON.stringify([name, parsedUrl.href, index]),
+        name,
+        url: parsedUrl.href,
+        login: asText(value.login),
+        password: asText(value.password)
+    }
+}
+
+const normalizeAccessData = (result) => ({
+    accesses: result.access.flatMap(normalizeAccess),
+    services: result.services.map(normalizeService).filter(Boolean)
+})
+
+const extractRows = (payload, kind) => {
+    if (kind === 'доступов') {
+        const result = payload?.result
+        if (!Array.isArray(result?.access) || !Array.isArray(result?.services)) {
+            throw new Error('Ответ API доступов должен содержать массивы result.access и result.services')
+        }
+        return result
+    }
     const rows = Array.isArray(payload) ? payload : payload?.result ?? payload?.data
     if (!Array.isArray(rows)) throw new Error('Ответ API не содержит массив result')
     return rows
@@ -629,7 +665,7 @@ const requestRows = async (url, kind) => {
         } catch {
             throw new Error(`Ответ API ${kind} не является JSON`)
         }
-        return extractRows(payload)
+        return extractRows(payload, kind)
     } catch (error) {
         if (error.name === 'AbortError') throw new Error('Превышено время ожидания API')
         throw error
@@ -640,20 +676,30 @@ const requestRows = async (url, kind) => {
 
 const saveSuccessfulData = async (data, type, rows, url) => {
     const snapshot = data.lastSuccessfulData
-    let values = rows
+    let values = type === 'accesses' ? rows.accesses : rows
+    let services = type === 'accesses' ? rows.services : null
     let encryptedVault = null
     if (type === 'accesses' && (await getSecurityConfig())?.enabled) {
         const key = await getUnlockedKey()
         const vault = await readCredentialVault(key)
-        vault.accesses = rows.map((access) => ({
+        vault.accesses = values.map((access) => ({
             url: access.url,
             password: access.password || '',
             ftp: access.ftp || null
         }))
+        vault.services = services.map(({ id, login, password }) => ({ id, login, password }))
         encryptedVault = await encryptCredentialVault(vault, key)
-        values = rows.map(publicAccess)
+        values = values.map(publicAccess)
+        services = services.map(({ login, password, ...service }) => ({
+            ...service,
+            hasLogin: Boolean(login),
+            hasPassword: Boolean(password)
+        }))
     }
-    const nextSnapshot = { ...snapshot, [type]: values, [`${type}UpdatedAt`]: Date.now(), [`${type}Url`]: url }
+    const nextSnapshot = {
+        ...snapshot, [type]: values, [`${type}UpdatedAt`]: Date.now(), [`${type}Url`]: url,
+        ...(services !== null ? { servicesCount: services.length } : {})
+    }
     const nextData = {
         ...data,
         lastSuccessfulData: nextSnapshot,
@@ -661,6 +707,7 @@ const saveSuccessfulData = async (data, type, rows, url) => {
     }
     await storageSetMany({
         [DATA_KEY]: nextData,
+        ...(services !== null ? { [SERVICES_KEY]: services } : {}),
         ...(encryptedVault ? { [VAULT_KEY]: encryptedVault } : {})
     })
     return nextData
@@ -695,7 +742,7 @@ const refreshProjects = async (url, { interactive = false } = {}) => {
 const refreshAccesses = async (url, { interactive = false } = {}) => {
     try {
         const data = await getStoredData()
-        return await saveSuccessfulData(data, 'accesses', (await requestRows(url, 'доступов')).flatMap(normalizeAccess), url)
+        return await saveSuccessfulData(data, 'accesses', normalizeAccessData(await requestRows(url, 'доступов')), url)
     } catch (error) {
         await recordApiFailure('accesses', error)
         await openConsentIfNeeded(error, url, 'доступов', interactive)
@@ -867,40 +914,13 @@ const getServices = async () => {
     return services.map((service) => ({ ...service, ...secretsById.get(service.id) }))
 }
 
-const saveServices = async (payload) => {
-    // Роутер передаёт message.payload ({ services: [...] }), но допускаем и прямой массив
-    const services = Array.isArray(payload) ? payload : payload?.services
-    if (!Array.isArray(services)) throw new Error('Некорректный список сервисов')
-    const normalized = services.map((service) => {
-        const name = String(service.name || '').trim()
-        const rawUrl = String(service.url || '').trim()
-        if (!name || !rawUrl) throw new Error('Название и ссылка обязательны')
-        const parsedUrl = new URL(rawUrl.includes('://') ? rawUrl : `https://${rawUrl}`)
-        if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Ссылка должна использовать HTTP или HTTPS')
-        return {
-            id: String(service.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`),
-            name,
-            url: parsedUrl.href,
-            login: String(service.login || ''),
-            password: String(service.password || '')
-        }
-    })
-    const security = await getSecurityConfig()
-    if (!security?.enabled) {
-        await storageSet(SERVICES_KEY, normalized)
-        return normalized
-    }
-    const key = await getUnlockedKey()
-    const vault = await readCredentialVault(key)
-    vault.services = normalized.map(({ id, login, password }) => ({ id, login, password }))
-    const safeServices = normalized.map(({ login, password, ...service }) => ({
-        ...service,
-        hasLogin: Boolean(login),
-        hasPassword: Boolean(password)
-    }))
-    const encryptedVault = await encryptCredentialVault(vault, key)
-    await storageSetMany({ [VAULT_KEY]: encryptedVault, [SERVICES_KEY]: safeServices })
-    return normalized
+const getServiceField = async ({ id, field }) => {
+    if (!['login', 'password'].includes(field)) throw new Error('Неизвестное поле сервиса')
+    if ((await getSecurityConfig())?.enabled) await getUnlockedKey()
+    const service = (await getServices()).find((item) => item.id === id)
+    if (!service) throw new Error('Сервис не найден. Обновите список сервисов.')
+    if (!service[field]) throw new Error(`${field === 'login' ? 'Логин' : 'Пароль'} сервиса не указан`)
+    return service[field]
 }
 
 const refreshAll = async ({ interactive = false } = {}) => {
@@ -922,7 +942,7 @@ const refreshAll = async ({ interactive = false } = {}) => {
         try {
             if (result.status === 'rejected') throw result.reason
             if (result.value === null) continue
-            const rows = type === 'projects' ? result.value.map(normalizeProject) : result.value.flatMap(normalizeAccess)
+            const rows = type === 'projects' ? result.value.map(normalizeProject) : normalizeAccessData(result.value)
             data = await saveSuccessfulData(data, type, rows, url)
             refreshed[type] = true
             if (type === 'projects') projectApiStatus = ''
@@ -970,7 +990,7 @@ const toPublicData = (data) => {
 
 const handlers = {
     'services:get': getServices,
-    'services:save': saveServices,
+    'services:field': getServiceField,
     'data:settings:get': () => readApiSettingsRaw().then(toPublicApiSettings),
     'data:settings:set': (payload) => saveApiSettings(payload).then(toPublicApiSettings),
     'data:projects:get': () => getStoredData().then(toPublicData),

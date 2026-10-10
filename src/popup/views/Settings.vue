@@ -227,7 +227,9 @@ const loadAll = async () => {
         const snapshot = data.value.lastSuccessfulData
         const counts = []
         if (data.value.refreshed?.projects) counts.push(`проектов: ${snapshot.projects.length}`)
-        if (data.value.refreshed?.accesses) counts.push(`доступов: ${snapshot.accesses.length}`)
+        if (data.value.refreshed?.accesses) {
+            counts.push(`доступов: ${snapshot.accesses.length}`, `сервисов: ${snapshot.servicesCount || 0}`)
+        }
         const refreshErrors = data.value.refreshErrors || []
         const summary = counts.length ? `Загружено: ${counts.join(', ')}` : ''
         message.value = {
@@ -329,7 +331,7 @@ const resetData = async () => {
                 {{ loading === 'all' ? 'Загрузка...' : 'Загрузить всё' }}
             </Button>
             <p class="flex items-start mt-2 text-xs text-slate-400">
-                Загружает проекты и доступы по сохранённым адресам API.
+                Загружает проекты, доступы и сервисы по сохранённым адресам API.
             </p>
         </Card>
 

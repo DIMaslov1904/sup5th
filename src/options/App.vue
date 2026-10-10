@@ -13,15 +13,15 @@
             <li>[B] Адрес</li>
             <li>[C] Логин</li>
             <li>[D] Пароль</li>
+            <li>[E] Домен</li>
+            <li>[F] Логин</li>
+            <li>[G] Пароль</li>
           </ul>
         </li>
         <li>
-          Для выгрузки с ftp доступами, проверьте еще
-          <ul class="grid grid-cols-4 mb-3">
-            <li>[F] Домен</li>
-            <li>[G] Логин</li>
-            <li>[H] Пароль</li>
-          </ul>
+          Создайте лист <b class="bg-gray-500 px-2 rounded">Сервисы</b> со столбцами
+          [A] Название, [B] Ссылка, [C] Логин, [D] Пароль. Первая строка — заголовки.
+          Логин и пароль можно оставить пустыми.
         </li>
         <li>В верхнем меню выбираем &#128073;Расширения &#128073;Apps script</li>
         <li>
@@ -63,38 +63,51 @@ const copyCode = () => {
   navigator.clipboard
     .writeText(
       `
-const SHEET_NAME = 'Доступы к сайтам';
+const ACCESS_SHEET_NAME = 'Доступы к сайтам'
+const SERVICES_SHEET_NAME = 'Корпоративные доступы'
+
 
 const getData = () => {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const s = ss.getSheetByName(SHEET_NAME);
-  if (!s) throw new Error(\`Лист '${SHEET_NAME}' не найден\`);
+  const ss = SpreadsheetApp.getActiveSpreadsheet()
 
-  const lastRow = s.getLastRow() - 1;
-  if (lastRow < 1) return []; // только шапка или пусто
+  const sheetAccess = ss.getSheetByName(ACCESS_SHEET_NAME)
+  if (!sheetAccess) throw new Error(\`Лист '${ACCESS_SHEET_NAME}' не найден\`)
 
-  return s.getRange(2, 1, lastRow, 8).getValues();
-};
+  const sheetServices = ss.getSheetByName(SERVICES_SHEET_NAME)
+  if (!sheetServices) throw new Error(\`Лист '${SERVICES_SHEET_NAME}' не найден\`)
+
+  const res = {
+    access: [],
+    services: []
+  }
+
+  const lastRowAccess = sheetAccess.getLastRow() - 1
+  if (lastRowAccess > 0) res.access = sheetAccess.getRange(2, 1, lastRowAccess, 7).getValues()
+
+  const lastRowServices = sheetServices.getLastRow() - 1
+  if (lastRowServices > 0) res.services = sheetServices.getRange(2, 1, lastRowServices, 4).getValues()
+
+  return res
+}
+
 
 const doGet = () => {
   try {
-    const cache = CacheService.getScriptCache();
-    const cached = cache.get('sheet_data');
-    const result = cached ? JSON.parse(cached) : getData();
+    const cache = CacheService.getScriptCache()
+    const cached = cache.get('sheet_data')
+    const result = cached ? JSON.parse(cached) : getData()
 
-    if (!cached) {
-      cache.put('sheet_data', JSON.stringify(result), 60); // 60 сек
-    }
+    if (!cached) cache.put('sheet_data', JSON.stringify(result), 120)
 
     return ContentService
       .createTextOutput(JSON.stringify({ result }))
-      .setMimeType(ContentService.MimeType.JSON);
+      .setMimeType(ContentService.MimeType.JSON)
   } catch (err) {
     return ContentService
       .createTextOutput(JSON.stringify({ error: err.message }))
-      .setMimeType(ContentService.MimeType.JSON);
+      .setMimeType(ContentService.MimeType.JSON)
   }
-};
+}
 `,
     )
     .then(() => {

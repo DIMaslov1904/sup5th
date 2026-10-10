@@ -53,7 +53,7 @@ export const startAdminAuth = (url, index = 0) => callBackground('auth:start', {
 
 export const loadServices = () => callBackground('services:get')
 
-export const saveServices = (services) => callBackground('services:save', { services })
+export const getServiceField = (id, field) => callBackground('services:field', { id, field })
 
 export const getProjectAccessText = (url, index) =>
     callBackground('project:copyAccess', { url, index })
