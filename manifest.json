@@ -68,6 +68,7 @@
   "options_page": "src/options/index.html",
   "permissions": [
     "storage",
+    "offscreen",
     "alarms",
     "tabs",
     "scripting"

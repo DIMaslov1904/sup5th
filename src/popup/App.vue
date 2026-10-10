@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { POPUP_PORT_NAME } from '../utils/popupState.js'
 import Layout from './components/Layout.vue'
 import UnlockModal from './components/UnlockModal.vue'
+import TicketModal from './components/TicketModal.vue'
 import Site from './views/Site.vue'
 import Projects from './views/Projects.vue'
 import Settings from './views/Settings.vue'
@@ -11,23 +12,17 @@ const view = ref('site')
 const stateReady = ref(false)
 const selectedProjectUrl = ref('')
 const selectedServiceId = ref('')
+const search = ref('')
+const ticketOpen = ref(false)
 let statePort = null
 let heartbeat
 
-const viewList = [
-  {
-    label: 'Сайт',
-    name: 'site'
-  },
-  {
-    label: 'Проекты',
-    name: 'projects'
-  },
-  {
-    label: 'Настройки',
-    name: 'settings'
-  }
-]
+const openCatalogue = () => {
+  selectedProjectUrl.value = ''
+  selectedServiceId.value = ''
+  view.value = 'projects'
+}
+watch(search, openCatalogue)
 
 const saveUiState = () => {
   if (!stateReady.value || !statePort) return
@@ -66,10 +61,11 @@ onUnmounted(() => {
 })
 </script>
 <template>
-  <Layout v-if="stateReady" v-model="view" :menuList="viewList">
+  <Layout v-if="stateReady" v-model="view" v-model:search="search" @search="openCatalogue" @ticket="ticketOpen = true">
     <Site v-if="view === 'site'" />
-    <Projects v-if="view === 'projects'" v-model:selected-project-url="selectedProjectUrl" v-model:selected-service-id="selectedServiceId" />
+    <Projects v-if="view === 'projects'" v-model:search="search" v-model:selected-project-url="selectedProjectUrl" v-model:selected-service-id="selectedServiceId" />
     <Settings v-if="view === 'settings'" />
   </Layout>
   <UnlockModal />
+  <TicketModal v-model:open="ticketOpen" />
 </template>

@@ -4,16 +4,16 @@ import { getProjectAccessField, getProjectAccessText, getServiceField, loadServi
 import { ensureUnlocked } from '../unlockStore'
 import { searchCatalogue } from '../../utils/catalogue.js'
 import FtpAccessCard from '../components/FtpAccessCard.vue'
+import SiteIcon from '../components/SiteIcon.vue'
 import { getAdminUrl, getCmsIconPath, getTicketUrl } from '../../utils/projectUtils'
 import Button from '../components/ui/Button.vue'
-import Input from '../components/ui/Input.vue'
 import Message from '../components/ui/Message.vue'
 
 const projects = ref([])
 const services = ref([])
 const detailAccesses = ref([])
 const updatedAt = ref(null)
-const search = ref('')
+const search = defineModel('search', { type: String, default: '' })
 const detailLoading = ref(false)
 const message = ref({ type: 'error', text: '' })
 const selectedProjectUrl = defineModel('selectedProjectUrl', { type: String, default: '' })
@@ -126,12 +126,9 @@ onMounted(async () => {
             <div class="flex items-center gap-2">
                 <Button variant="ghost" size="sm" aria-label="Назад к списку" title="Назад к списку"
                     @click="selectedProjectUrl = ''; selectedServiceId = ''">←</Button>
+                <SiteIcon :url="selectedItem.url" :name="selectedItem.name" />
                 <h1 class="text-lg font-semibold">{{ selectedItem?.name }}</h1>
             </div>
-        </div>
-
-        <div v-if="(projects.length || services.length) && !selectedItem" class="mb-4">
-            <Input v-model="search" type="search" placeholder="Поиск сервисов и проектов" />
         </div>
 
         <p v-if="!projects.length && !services.length && !selectedItem" class="text-sm text-slate-400">Проекты и сервисы ещё не загружены</p>
@@ -139,6 +136,8 @@ onMounted(async () => {
         <div v-else-if="!selectedItem" class="grid gap-2">
             <article v-for="project in filteredProjects" :key="project.key"
                 class="relative rounded-lg border border-white/10 bg-slate-900/40 py-3 pl-5 pr-3 overflow-hidden">
+                <SiteIcon :url="project.url" :name="project.name" class="absolute left-3 top-3" />
+                <div class="pl-9">
                 <span v-if="project.hasAccess || project.hasLogin || project.hasPassword" class="absolute -left-1 -top-1 h-3 w-3 rounded-full bg-blue-400" role="img" aria-label="Доступ есть"></span>
                 <button type="button" :aria-label="`Открыть детали ${project.kind === 'service' ? 'сервиса' : 'проекта'} ${project.name || project.url}`"
                     class="flex w-full items-start gap-1.5 text-left cursor-pointer" @click="openItem(project)">
@@ -146,9 +145,10 @@ onMounted(async () => {
                 </button>
                 <a :href="linkHref(project.url)" target="_blank" rel="noreferrer" title="Перейти на сайт"
                     :aria-label="`Перейти на сайт ${project.url}`"
-                    class="mt-1 inline-flex items-center gap-1 break-all text-sm text-sky-300 hover:text-sky-200">
-                    <span>{{ project.url }}</span><span aria-hidden="true">↗</span>
+                    class="mt-1 text-sm text-sky-300 hover:text-sky-200 line-clamp-1">
+                   {{ project.url }}
                 </a>
+                </div>
             </article>
         </div>
         <div v-else-if="selectedService" class="grid gap-4">
@@ -227,7 +227,6 @@ onMounted(async () => {
                 <FtpAccessCard v-for="access in ftpAccesses" :key="access.sourceIndex" :access="access" :project-url="selectedProject.url" :index="access.sourceIndex" />
             </section>
         </div>
-        <p v-if="updatedAt" class="mt-4 text-xs text-slate-500">Последнее обновление: {{ formatDate(updatedAt) }}</p>
         <Message v-if="message.text" :type="message.type">{{ message.text }}</Message>
     </section>
 </template>

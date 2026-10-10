@@ -1,4 +1,5 @@
 import { fetchSeoResource } from './seoFetch.js'
+import { syncSiteIcons, getSiteIconStatus, cancelSiteIcons, clearSiteIcons } from '../icons/iconService.js'
 import { findAccessesByUrl, findProjectByUrl, getAdminUrl } from '../utils/projectUtils.js'
 import { apiAuthorizationError, classifyApiAuthorization } from './apiAuthorization.js'
 import { registerPopupSession } from './popupSession.js'
@@ -420,6 +421,7 @@ const restoreProjectsSchedule = async () => {
 }
 
 const clearAllData = async () => {
+    await clearSiteIcons()
     await new Promise((resolve, reject) => chrome.storage.local.clear(() => {
         const error = chrome.runtime.lastError
         if (error) reject(new Error(error.message))
@@ -689,6 +691,7 @@ const saveSuccessfulData = async (data, type, rows, url) => {
         ...(services !== null ? { [SERVICES_KEY]: services } : {}),
         ...(encryptedVault ? { [VAULT_KEY]: encryptedVault } : {})
     })
+    syncCatalogueIcons().catch(error => console.error('[icons] catalogue update', error))
     return nextData
 }
 
@@ -998,12 +1001,24 @@ const toPublicData = (data) => {
     }
 }
 
+const syncCatalogueIcons = async options => {
+    const [data, services] = await Promise.all([getStoredData(), storageGet(SERVICES_KEY, [])])
+    return syncSiteIcons([...toPublicData(data).lastSuccessfulData.projects, ...services], options)
+}
+
 const handlers = {
+    'icons:status': getSiteIconStatus,
+    'icons:refresh': () => syncCatalogueIcons({ force: true }),
+    'icons:cancel': cancelSiteIcons,
     'services:get': getServices,
     'services:field': getServiceField,
     'data:settings:get': () => readApiSettingsRaw().then(toPublicApiSettings),
     'data:settings:set': (payload) => saveApiSettings(payload).then(toPublicApiSettings),
-    'data:projects:get': () => getStoredData().then(toPublicData),
+    'data:projects:get': async () => {
+        const data = toPublicData(await getStoredData())
+        syncCatalogueIcons().catch(error => console.error('[icons] catalogue cache', error))
+        return data
+    },
     'data:projects:refresh': ({ url }) => refreshProjects(url, { interactive: true }).then(toPublicData),
     'data:accesses:refresh': ({ url }) => refreshAccesses(url, { interactive: true }).then(toPublicData),
     'data:projects:authorize': () => openApiAuthorization('projects'),

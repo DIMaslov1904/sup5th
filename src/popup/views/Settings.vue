@@ -28,6 +28,7 @@ import Input from '../components/ui/Input.vue'
 import Card from '../components/ui/Card.vue'
 import Message from '../components/ui/Message.vue'
 import { ensureUnlocked } from '../unlockStore'
+import IconCacheControls from '../components/IconCacheControls.vue'
 
 const optionsUrl = chrome.runtime.getURL('src/options/index.html')
 
@@ -433,6 +434,7 @@ const resetData = async () => {
             </ul>
         </details>
 
+        <div class="rounded-lg border border-white/10 p-3"><IconCacheControls /></div>
         <div class="flex flex-wrap gap-2">
         <Button variant="secondary" size="sm" :disabled="Boolean(loading) || !errors.length" @click="clearErrors">Очистить журнал ошибок</Button>
         <Button variant="danger" size="sm" :disabled="Boolean(loading)" @click="resetData">

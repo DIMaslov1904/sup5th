@@ -26,6 +26,9 @@ export default defineConfig({
     }
   },
   build: {
+    rolldownOptions: {
+      input: { 'src/offscreen/index': resolve(rootDir, 'src/offscreen/index.html') }
+    },
     modulePreload: false
   },
   server: {

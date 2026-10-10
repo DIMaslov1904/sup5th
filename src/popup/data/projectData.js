@@ -49,6 +49,9 @@ export const loadErrorLog = () => callBackground('data:errors:get')
 export const clearErrorLog = () => callBackground('data:errors:clear')
 
 export const clearAllData = () => callBackground('data:clear')
+export const loadIconStatus = () => callBackground('icons:status')
+export const refreshSiteIcons = () => callBackground('icons:refresh')
+export const cancelSiteIcons = () => callBackground('icons:cancel')
 
 export const startAdminAuth = (url, index = 0) => callBackground('auth:start', { url, index })
 
