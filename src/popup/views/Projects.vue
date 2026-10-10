@@ -176,8 +176,10 @@ onMounted(async () => {
                 </div>
             </dl>
 
-            <a v-if="getTicketUrl(selectedProject)" :href="getTicketUrl(selectedProject)" target="_blank" rel="noreferrer"
-                class="text-sm text-sky-300 underline decoration-sky-300/40 underline-offset-2 hover:text-sky-200">Создать тикет</a>
+             <a v-if="getTicketUrl(selectedProject)" :href="getTicketUrl(selectedProject)" target="_blank" rel="noreferrer"
+                class="inline-block rounded font-medium transition cursor-pointer select-none px-2.5 py-1.5 text-xs border border-white/10 text-slate-200 hover:bg-white/10 hover:text-sky-200 justify-self-start">
+                Создать тикет
+            </a>
 
             <section class="grid gap-2">
                 <h2 class="text-sm font-semibold">Доступы ({{ selectedProjectAccesses.length }})</h2>

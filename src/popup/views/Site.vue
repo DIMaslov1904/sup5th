@@ -99,8 +99,6 @@ const copyAccessField = async (accessIndex, field) => {
                         class="h-12 w-12 rounded-lg bg-white object-contain p-1" />
                     <div class="min-w-0">
                         <div class="flex items-center gap-2">
-                            <img :src="getCmsIcon(project)" :alt="cmsLabel" :title="cmsLabel"
-                                class="h-5 w-5 shrink-0 rounded bg-white p-0.5 object-contain" />
                             <h1 class="text-lg font-semibold">{{ project.name || displayUrl(project.url) }}</h1>
                         </div>
                         <a :href="siteUrl" target="_blank" rel="noreferrer"
@@ -132,7 +130,9 @@ const copyAccessField = async (accessIndex, field) => {
                     </a>
                 </div>
                 <a v-if="getTicketUrl(project)" :href="getTicketUrl(project)" target="_blank" rel="noreferrer"
-                    class="text-sm text-sky-300 underline decoration-sky-300/40 underline-offset-2 hover:text-sky-200">Создать тикет</a>
+                    class="inline-block rounded font-medium transition cursor-pointer select-none px-2.5 py-1.5 text-xs border border-white/10 text-slate-200 hover:bg-white/10 hover:text-sky-200 justify-self-start">
+                    Создать тикет
+                </a>
 
                 <section v-if="accesses.length" class="grid gap-2">
                     <h2 class="text-sm font-semibold">Доступы ({{ accesses.length }})</h2>
