@@ -16,7 +16,7 @@ const go = async () => {
     if (!/^\d+$/.test(number)) { error.value = 'Введите положительный целый номер тикета'; input.value.focus(); return }
     loading.value = true; error.value = ''
     try {
-        await chrome.tabs.create({ url: `https://support.5th.ru/published/index.php?app=ST#requests/all/id/${number}` })
+        await chrome.tabs.create({ url: `https://support.5th.ru/published/index.php?app=ST#/requests/search/${number}/` })
         open.value = false
     } catch (reason) { error.value = reason.message || 'Не удалось открыть тикет' }
     finally { loading.value = false }
