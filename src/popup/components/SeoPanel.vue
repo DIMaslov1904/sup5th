@@ -57,7 +57,7 @@ const overview = computed(() => report.value ? [
     ['URL',report.value.url], ['HTTP',report.value.response.status || 'Не получен'], ['Title',report.value.title || 'Отсутствует'], ['Длина Title',report.value.titleLength],
     ['Description',report.value.description || 'Отсутствует'], ['Длина Description',report.value.descriptionLength], ['Keywords',report.value.keywords || 'Отсутствует'],
     ['Язык',report.value.lang || 'Не указан'], ['Canonical',report.value.canonical || 'Не указан'], ['Viewport',report.value.viewport ? 'Есть' : 'Нет'],
-    ['Редирект',report.value.redirected ? report.value.finalUrl : 'Нет'], ['TTFB повторного запроса',report.value.response.ttfb == null ? 'Не измерен' : report.value.response.ttfb + ' мс']
+    ['Редирект',report.value.redirected ? report.value.finalUrl : 'Нет'], ['TTFB повторного запроса',report.value.response.ttfb == null ? 'Не измерен' : report.value.response.ttfb + ' мс'], ['Яндекс ИКС', `<img class="rounded-lg" src="https://webmaster.yandex.ru/sqicounter?theme=dark&host=${report.value.url}">`]
 ] : [])
 const tools = computed(() => {
     if (!report.value) return []
@@ -87,7 +87,14 @@ const tools = computed(() => {
         <p v-if="loading" role="status" class="text-xs text-slate-400">Получаем данные страницы…</p>
         <template v-if="report">
             <template v-if="section === 'overview'">
-                <Card title="Метаданные страницы"><dl class="grid gap-3 text-xs"><div v-for="[label,value] in overview" :key="label" class="grid gap-1"><dt class="text-slate-500">{{ label }}</dt><dd class="break-all text-slate-200">{{ value }}</dd></div></dl></Card>
+                <Card title="Метаданные страницы">
+                    <dl class="grid gap-3 text-xs">
+                        <div v-for="[label,value] in overview" :key="label" class="grid gap-1">
+                            <dt class="text-slate-500">{{ label }}</dt>
+                            <dd class="break-all text-slate-200" v-html="value"></dd>
+                        </div>
+                    </dl>
+                </Card>
                 <Message v-if="report.titles.length !== 1 || report.canonicals.length > 1 || report.metaTags.some(item => !item.inHead)" type="error">Проверьте количество Title/Canonical и расположение метатегов: есть дубли или теги вне head.</Message>
                 <details class="rounded-lg border border-white/10 p-3 text-xs"><summary class="cursor-pointer">Все метатеги ({{ report.metaTags.length }})</summary><div v-for="(item,index) in report.metaTags" :key="index" class="mt-2 break-all"><b>{{ item.name }}</b>: {{ item.content || '(пусто)' }} <span v-if="!item.inHead" class="text-amber-300">вне head</span></div></details>
             </template>

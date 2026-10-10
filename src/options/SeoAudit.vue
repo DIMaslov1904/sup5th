@@ -183,7 +183,7 @@ const openTab = (url) => chrome.tabs.create({ url })
             </div>
 
             <template v-if="state === 'done'">
-                <Card class="!p-5">
+                <Card class="p-5!">
                     <div class="flex items-center gap-6">
                         <div class="relative grid h-24 w-24 place-items-center rounded-full border-4"
                             :class="score.percent >= 80 ? 'border-emerald-500' : score.percent >= 50 ? 'border-amber-400' : 'border-red-400'">
