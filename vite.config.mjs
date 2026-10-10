@@ -26,12 +26,7 @@ export default defineConfig({
     }
   },
   build: {
-    modulePreload: false,
-    rollupOptions: {
-      input: {
-        "src/seo/index": resolve(rootDir, "src/seo/index.html")
-      }
-    }
+    modulePreload: false
   },
   server: {
     watch: {

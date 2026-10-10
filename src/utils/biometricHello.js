@@ -53,7 +53,7 @@ export const isBiometricAvailable = async () => {
 
 // Возможности браузера (Chrome 131+): { prf: bool, userVerifyingPlatformAuthenticator: bool, ... }
 const getClientCapabilities = async () => {
-    if (typeof PublicKeyCredential?.getClientCapabilities === 'function') {
+    if (typeof globalThis.PublicKeyCredential?.getClientCapabilities === 'function') {
         try {
             return await PublicKeyCredential.getClientCapabilities()
         } catch {

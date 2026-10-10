@@ -4,6 +4,7 @@ import {
     authorizeAccessApi,
     authorizeProjectsApi,
     clearAllData,
+    clearErrorLog,
     disableCredentialProtection,
     enableHelloProtection,
     enablePinProtection,
@@ -48,6 +49,14 @@ const helloAvailable = ref(false)
 const prfSupported = ref(false)
 
 const successfulData = computed(() => data.value.lastSuccessfulData)
+const projectsNeedAuth = computed(() => settings.value.hasProjectsUrl && ['login_required', 'authorization_needed'].includes(data.value.projectApiStatus))
+const accessesNeedAuth = computed(() => settings.value.hasAccessUrl && (['login_required', 'authorization_needed'].includes(data.value.accessApiStatus) || data.value.accessAuthRequired))
+const clearErrors = async () => {
+    loading.value = 'errors'
+    try { await clearErrorLog(); errors.value = []; message.value = { type: 'success', text: 'Журнал ошибок очищен' } }
+    catch (error) { message.value = { type: 'error', text: error.message } }
+    finally { loading.value = '' }
+}
 
 const formatDate = (value) => value ? new Date(value).toLocaleString() : ''
 
@@ -286,11 +295,11 @@ const resetData = async () => {
             <Message v-else-if="data.projectApiStatus === 'authorization_needed'" type="error">
                 Подтвердите разрешения Apps Script на странице API и повторите загрузку.
             </Message>
-            <Button v-if="settings.hasProjectsUrl" variant="secondary" size="sm" class="mt-2"
+            <Button v-if="projectsNeedAuth" variant="secondary" size="sm" class="mt-2"
                 :disabled="Boolean(authorizing) || Boolean(loading) || savingApi === 'projects'" @click="authorizeApi('projects')">
                 {{ authorizing === 'projects' ? 'Открываю...' : data.projectApiStatus === 'authorization_needed' ? 'Подтвердить разрешения' : 'Авторизоваться в Google' }}
             </Button>
-            <p v-if="settings.hasProjectsUrl" class="mt-2 text-xs text-slate-400">
+            <p v-if="projectsNeedAuth" class="mt-2 text-xs text-slate-400">
                 После входа и подтверждения разрешений вернитесь и нажмите «Загрузить всё».
             </p>
             <p class="flex items-start mt-2 text-xs text-slate-400">
@@ -315,11 +324,11 @@ const resetData = async () => {
             <Message v-else-if="data.accessAuthRequired" type="error">
                 Требуется вход в Google под аккаунтом владельца API доступов. После входа повторите загрузку.
             </Message>
-            <Button v-if="settings.hasAccessUrl" variant="secondary" size="sm" class="mt-2"
+            <Button v-if="accessesNeedAuth" variant="secondary" size="sm" class="mt-2"
                 :disabled="Boolean(authorizing) || Boolean(loading) || savingApi === 'access'" @click="authorizeApi('accesses')">
                 {{ authorizing === 'accesses' ? 'Открываю...' : data.accessApiStatus === 'authorization_needed' ? 'Подтвердить разрешения' : 'Авторизоваться в Google' }}
             </Button>
-            <p v-if="settings.hasAccessUrl" class="mt-2 text-xs text-slate-400">
+            <p v-if="accessesNeedAuth" class="mt-2 text-xs text-slate-400">
                 Войдите в открывшейся вкладке, затем вернитесь и нажмите «Загрузить всё».
             </p>
             <p class="flex items-start mt-2 text-xs text-slate-400">
@@ -424,8 +433,11 @@ const resetData = async () => {
             </ul>
         </details>
 
-        <Button variant="danger" size="sm" class="justify-self-start" :disabled="loading.length" @click="resetData">
+        <div class="flex flex-wrap gap-2">
+        <Button variant="secondary" size="sm" :disabled="Boolean(loading) || !errors.length" @click="clearErrors">Очистить журнал ошибок</Button>
+        <Button variant="danger" size="sm" :disabled="Boolean(loading)" @click="resetData">
             Сбросить все данные
         </Button>
+        </div>
     </div>
 </template>

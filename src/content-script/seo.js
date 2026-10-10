@@ -1,3 +1,6 @@
+import { collectSeoDom } from '../utils/seoDom.js'
+import { evaluateRobots } from '../utils/seoRules.js'
+import { getSeoActions, setSeoAction } from './seoActions.js'
 /**
  * SEO-анализ текущей страницы.
  * Выполняется в контексте content script (доступ к DOM).
@@ -42,10 +45,11 @@ const hasCyrillic = (value) => /[а-яё]/i.test(value)
 
 export const scanSeo = async () => {
     const headings = Object.fromEntries([1, 2, 3, 4, 5, 6].map((level) => [`h${level}`, getHeadings(level)]))
-    let pageInfo = await fetchPageInfo(location.href, { method: 'HEAD' })
-    if (!pageInfo.ok) pageInfo = await fetchPageInfo(location.href)
     const robotsUrl = new URL('/robots.txt', location.href).href
-    const robotsInfo = await fetchPageInfo(robotsUrl)
+    const [pageInfo, robotsInfo] = await Promise.all([
+        fetchPageInfo(location.href, { method: 'HEAD' }).then(info => info.ok ? info : fetchPageInfo(location.href)),
+        fetchPageInfo(robotsUrl)
+    ])
     const sitemapFromRobots = robotsInfo.text.match(/^\s*Sitemap:\s*(\S+)/im)?.[1]
     const sitemapUrl = sitemapFromRobots || new URL('/sitemap.xml', location.href).href
     let sitemapInfo = await fetchPageInfo(sitemapUrl, { method: 'HEAD' })
@@ -70,6 +74,8 @@ export const scanSeo = async () => {
     }))].slice(0, 50)
 
     return {
+        ...collectSeoDom(document, location.href),
+        actions: getSeoActions(),
         url: location.href,
         urlLength: location.href.length,
         finalUrl: pageInfo.url || location.href,
@@ -99,7 +105,6 @@ export const scanSeo = async () => {
             type: getMeta('meta[property="og:type"]'),
             url: getMeta('meta[property="og:url"]')
         },
-        twitterCard: getMeta('meta[name="twitter:card"]'),
         jsonLdBlocks: document.querySelectorAll('script[type="application/ld+json"]').length,
         hreflang: [...document.querySelectorAll('link[rel="alternate"][hreflang]')].map((link) => ({
             hreflang: link.hreflang,
@@ -115,8 +120,8 @@ export const scanSeo = async () => {
             url: robotsUrl,
             exists: robotsInfo.ok,
             status: robotsInfo.status,
-            content: robotsInfo.text.slice(0, 4000),
-            allowed: !/(Disallow:\s*\/\s*$)/im.test(robotsInfo.text)
+            content: robotsInfo.text,
+            allowed: evaluateRobots(robotsInfo.text, location.href).allowed
         },
         sitemap: {
             url: sitemapUrl,
@@ -143,6 +148,11 @@ export const scanSeo = async () => {
 /** Регистрирует обработчик сообщений 'seo:scan' */
 const registerSeoHandler = () => {
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+        if (message?.type === 'seo:action') {
+            try { sendResponse({ ok: true, data: setSeoAction(message.payload) }) }
+            catch (error) { sendResponse({ ok: false, error: error.message }) }
+            return false
+        }
         if (message?.type !== 'seo:scan') return false
         scanSeo()
             .then((data) => sendResponse({ ok: true, data }))

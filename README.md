@@ -26,21 +26,19 @@ src/
 │   ├── service-worker.js  # Основной background script
 │   └── credentialCrypto.js # AES-GCM утилиты
 ├── content-script/
-│   ├── index.js           # Admin auth
-│   ├── seo.js             # SEO scan
-│   └── support.js         # Support 5th.ru integration
+│   ├── index.js           # Авторизация в админках
+│   ├── seo.js             # SEO скан
+│   └── support.js         # Модификации для support
 ├── popup/
 │   ├── App.vue            # Root с навигацией
 │   ├── components/        # Layout, LeftMenu, UnlockModal, UI primitives
-│   ├── views/             # Site, Projects, Services, Settings
+│   ├── views/             # Страницы
 │   ├── data/              # projectData.js (background communication)
 │   └── unlockStore.js     # PIN/Hello unlock flow
-├── seo/
-│   └── App.vue            # SEO audit page
 ├── options/
-│   └── App.vue            # Google Sheets API setup guide
+│   └── App.vue            # Общее приложение: инструкция, SEO-аудит, sitemap
 ├── styles/
-│   └── main.css           # @import "tailwindcss"
+│   └── main.css           # Глобальные стили
 └── utils/
     ├── projectUtils.js    # CMS paths, findProjectByUrl, getAdminUrl
     ├── switcher.js        # EN↔RU switch + translit

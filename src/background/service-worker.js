@@ -1,3 +1,4 @@
+import { fetchSeoResource } from './seoFetch.js'
 import { findAccessesByUrl, findProjectByUrl, getAdminUrl } from '../utils/projectUtils.js'
 import { apiAuthorizationError, classifyApiAuthorization } from './apiAuthorization.js'
 import { registerPopupSession } from './popupSession.js'
@@ -203,6 +204,13 @@ const publicAccess = (access) => ({
     ftpHasPassword: Boolean(access.ftp?.password || access.ftpHasPassword)
 })
 
+const publicService = ({ password, ...service }) => ({
+    ...service,
+    login: service.login || '',
+    hasLogin: Boolean(service.login),
+    hasPassword: Boolean(password)
+})
+
 const enableProtectedVault = async (mode, wrappingKey, options = {}) => {
     if (await getSecurityConfig()) throw new Error('Защита уже включена')
 
@@ -230,11 +238,7 @@ const enableProtectedVault = async (mode, wrappingKey, options = {}) => {
             accesses: data.lastSuccessfulData.accesses.map(publicAccess)
         }
     }
-    const safeServices = services.map(({ login, password, ...service }) => ({
-        ...service,
-        hasLogin: Boolean(login),
-        hasPassword: Boolean(password)
-    }))
+    const safeServices = services.map(publicService)
     const config = { enabled: true, mode, ...(wrappedKey ? { wrappedKey } : {}), ...configOptions, createdAt: Date.now() }
 
     await new Promise((resolve, reject) => chrome.storage.local.remove(AUTH_KEY, () => {
@@ -265,7 +269,16 @@ const unlockWithWrappingKey = async (config, wrappingKey, options) => {
 const unlockWithVaultKey = async (config, rawKey, { refreshAfterUnlock = true } = {}) => {
     if (rawKey.length !== 32) throw new Error('Получен некорректный ключ хранилища')
     const vaultKey = await importAesKey(rawKey)
-    await readCredentialVault(vaultKey)
+    const vault = await readCredentialVault(vaultKey)
+    // Older vaults kept service usernames only in the encrypted payload.
+    const services = await storageGet(SERVICES_KEY, [])
+    if (services.some(service => !Object.hasOwn(service, 'login'))) {
+        const logins = new Map(vault.services.map(service => [service.id, service.login || '']))
+        await storageSet(SERVICES_KEY, services.map(service => ({
+            ...service,
+            login: service.login ?? logins.get(service.id) ?? ''
+        })))
+    }
     await storeUnlockedKey(rawKey)
     if (refreshAfterUnlock) refreshDueData().catch(error => console.error('[background] refresh after unlock', error))
     return { enabled: true, mode: config.mode, unlocked: true }
@@ -420,41 +433,7 @@ const clearAllData = async () => {
 const getStoredData = () => storageGet(DATA_KEY, emptyData())
 
 // --- Универсальный fetch для SEO и внешних проверок (обходит CSP страницы) ---
-const fetchExternal = async ({ url, method = 'GET', timeout = 20000 }) => {
-    let parsedUrl
-    try {
-        parsedUrl = new URL(url)
-    } catch {
-        return { ok: false, status: 0, url: '', headers: {}, text: '' }
-    }
-    if (!['http:', 'https:'].includes(parsedUrl.protocol)) return { ok: false, status: 0, url: '', headers: {}, text: '' }
-
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeout)
-    const startedAt = performance.now()
-    try {
-        const response = await fetch(parsedUrl.href, {
-            method,
-            credentials: 'omit',
-            redirect: 'follow',
-            signal: controller.signal
-        })
-        const text = await response.text()
-        return {
-            ok: response.ok,
-            status: response.status,
-            url: response.url,
-            headers: Object.fromEntries(response.headers.entries()),
-            text: text.slice(0, 200000),
-            ttfb: Math.round(performance.now() - startedAt)
-        }
-    } catch (error) {
-        if (error.name === 'AbortError') return { ok: false, status: 0, url: '', headers: {}, text: '', ttfb: null }
-        return { ok: false, status: 0, url: '', headers: {}, text: '', ttfb: null }
-    } finally {
-        clearTimeout(timeoutId)
-    }
-}
+const fetchExternal = fetchSeoResource
 
 // --- Индикатор "проект" на иконке расширения ---
 const ICON_SIZES = [16, 32]
@@ -694,11 +673,7 @@ const saveSuccessfulData = async (data, type, rows, url) => {
         vault.services = services.map(({ id, login, password }) => ({ id, login, password }))
         encryptedVault = await encryptCredentialVault(vault, key)
         values = values.map(publicAccess)
-        services = services.map(({ login, password, ...service }) => ({
-            ...service,
-            hasLogin: Boolean(login),
-            hasPassword: Boolean(password)
-        }))
+        services = services.map(publicService)
     }
     const nextSnapshot = {
         ...snapshot, [type]: values, [`${type}UpdatedAt`]: Date.now(), [`${type}Url`]: url,
@@ -897,20 +872,20 @@ const getProjectDetails = async ({ url }) => {
 }
 
 const getProjectAccessField = async ({ url, index, field }) => {
-    if (!['login', 'password', 'ftpLogin', 'ftpPassword'].includes(field)) throw new Error('Неизвестное поле доступа')
+    if (!['login', 'password', 'ftpUrl', 'ftpLogin', 'ftpPassword'].includes(field)) throw new Error('Неизвестное поле доступа')
     const data = await getStoredData()
     const access = (await getProjectAccessRecords(data, url))[index]
     if (!access) throw new Error('Доступ не найден')
-    if (field === 'ftpLogin' || field === 'ftpPassword') {
-        const ftpValue = field === 'ftpLogin' ? access.ftp?.login : access.ftp?.password
-        if (!ftpValue) throw new Error(`${field === 'ftpLogin' ? 'FTP логин' : 'FTP пароль'} отсутствует`)
+    if (field.startsWith('ftp')) {
+        const ftpValue = access.ftp?.[{ ftpUrl: 'url', ftpLogin: 'login', ftpPassword: 'password' }[field]]
+        if (!ftpValue) throw new Error(`${{ ftpUrl: 'FTP host', ftpLogin: 'FTP логин', ftpPassword: 'FTP пароль' }[field]} отсутствует`)
         return ftpValue
     }
     if (!access[field]) throw new Error(`${field === 'login' ? 'Логин' : 'Пароль'} отсутствует`)
     return access[field]
 }
 
-const getServices = async () => {
+const getServiceRecords = async () => {
     const services = await storageGet(SERVICES_KEY, [])
     if (!(await getSecurityConfig())?.enabled) return services
     const vault = await getCredentialVaultIfUnlocked()
@@ -919,10 +894,19 @@ const getServices = async () => {
     return services.map((service) => ({ ...service, ...secretsById.get(service.id) }))
 }
 
+const getServices = async () => (await getServiceRecords()).map(service => ({
+    id: service.id,
+    name: service.name,
+    url: service.url,
+    login: service.login || '',
+    hasLogin: Boolean(service.login || service.hasLogin),
+    hasPassword: Boolean(service.password || service.hasPassword)
+}))
+
 const getServiceField = async ({ id, field }) => {
     if (!['login', 'password'].includes(field)) throw new Error('Неизвестное поле сервиса')
     if ((await getSecurityConfig())?.enabled) await getUnlockedKey()
-    const service = (await getServices()).find((item) => item.id === id)
+    const service = (await getServiceRecords()).find((item) => item.id === id)
     if (!service) throw new Error('Сервис не найден. Обновите список сервисов.')
     if (!service[field]) throw new Error(`${field === 'login' ? 'Логин' : 'Пароль'} сервиса не указан`)
     return service[field]
@@ -1026,6 +1010,7 @@ const handlers = {
     'data:accesses:authorize': () => openApiAuthorization('accesses'),
     'data:all:refresh': () => refreshAll({ interactive: true }).then(toPublicData),
     'data:errors:get': () => storageGet(ERRORS_KEY, []),
+    'data:errors:clear': () => storageSet(ERRORS_KEY, []).then(() => ({ cleared: true })),
     'data:clear': () => clearAllData().then(() => ({ cleared: true })),
     'auth:start': startAdminAuth,
     'project:copyAccess': copyProjectAccessText,

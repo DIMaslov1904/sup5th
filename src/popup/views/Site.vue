@@ -1,11 +1,13 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { getProjectAccessField, loadProjectData, loadProjectDetails, startAdminAuth } from '../data/projectData'
 import { findProjectByUrl, getAdminUrl, getCmsIconPath, getTicketUrl } from '../../utils/projectUtils'
 import { ensureUnlocked } from '../unlockStore'
 import Button from '../components/ui/Button.vue'
 import Message from '../components/ui/Message.vue'
 import LeftMenu from '../components/LeftMenu.vue'
+const SeoPanel = defineAsyncComponent(() => import('../components/SeoPanel.vue'))
+import FtpAccessCard from '../components/FtpAccessCard.vue'
 
 const menuItem = ref('project')
 
@@ -20,10 +22,6 @@ const copyingAccess = ref('')
 const ftpAccesses = computed(() => accesses.value
     .map((access, sourceIndex) => ({ ...access, sourceIndex }))
     .filter((access) => access.hasFtp))
-const seo = ref(null)
-const seoLoading = ref(false)
-const seoMessage = ref('')
-
 const getInstructionUrl = (item) => item?.manual ? `https://${item.manual}` : ''
 const getGitUrl = (item) => item?.git ? `https://${item.git}` : ''
 const getCmsIcon = (item) => getCmsIconPath(item?.cms)
@@ -57,32 +55,6 @@ onMounted(async () => {
     } finally {
         loaded.value = true
     }
-})
-
-const openSeoAudit = () => chrome.tabs.create({ url: chrome.runtime.getURL('src/seo/index.html') })
-
-const scanSeo = async () => {
-    if (!currentTab.value?.id) return
-    seoLoading.value = true
-    seoMessage.value = ''
-    try {
-        seo.value = await new Promise((resolve, reject) => {
-            chrome.tabs.sendMessage(currentTab.value.id, { type: 'seo:scan' }, (response) => {
-                const error = chrome.runtime.lastError
-                if (error) reject(new Error('SEO-анализ недоступен. Обновите открытую страницу и повторите проверку.'))
-                else if (!response?.ok) reject(new Error(response?.error || 'Не удалось получить SEO-данные'))
-                else resolve(response.data)
-            })
-        })
-    } catch (error) {
-        seoMessage.value = error.message
-    } finally {
-        seoLoading.value = false
-    }
-}
-
-watch(menuItem, (value) => {
-    if (value === 'seo') scanSeo()
 })
 
 const openAdmin = async (accessIndex = 0) => {
@@ -189,148 +161,12 @@ const copyAccessField = async (accessIndex, field) => {
                 </section>
                 <section v-if="ftpAccesses.length" class="grid gap-2">
                     <h2 class="text-sm font-semibold">FTP доступы ({{ ftpAccesses.length }})</h2>
-                    <article v-for="(access, index) in ftpAccesses" :key="`ftp-${access.ftpUrl}-${index}`"
-                        class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/40 p-3">
-                        <div class="min-w-0">
-                            <span class="break-all text-sm font-medium text-slate-100">{{ access.ftpUrl }}</span>
-                            <span v-if="access.ftpHasLogin" class="block text-xs text-slate-400">
-                                Логин: {{ access.ftpLogin || '…' }}
-                            </span>
-                        </div>
-                        <div class="flex shrink-0 gap-2">
-                            <Button v-if="access.ftpHasLogin" variant="ghost" size="sm"
-                                :disabled="copyingAccess === `ftp:${access.sourceIndex}:ftpLogin`"
-                                @click="copyAccessField(access.sourceIndex, 'ftpLogin')">FTP логин</Button>
-                            <Button v-if="access.ftpHasPassword" variant="ghost" size="sm"
-                                :disabled="copyingAccess === `ftp:${access.sourceIndex}:ftpPassword`"
-                                @click="copyAccessField(access.sourceIndex, 'ftpPassword')">FTP пароль</Button>
-                        </div>
-                    </article>
+                    <FtpAccessCard v-for="access in ftpAccesses" :key="access.sourceIndex" :access="access" :project-url="project.url" :index="access.sourceIndex" />
                 </section>
                 <Message v-if="authMessage" type="error">{{ authMessage }}</Message>
             </div>
         </section>
 
-        <section v-else-if="menuItem === 'seo'" class="pl-8 pr-4 text-slate-200">
-            <div class="mb-4 flex items-center justify-between gap-3">
-                <div>
-                    <h1 class="text-lg font-semibold">SEO</h1>
-                    <p class="text-xs text-slate-400">Анализ текущей страницы без внешних сервисов</p>
-                </div>
-                <div class="flex shrink-0 gap-2">
-                    <Button variant="secondary" size="sm" @click="openSeoAudit">Расширенный аудит</Button>
-                    <Button variant="secondary" size="sm" :disabled="seoLoading" @click="scanSeo">
-                        {{ seoLoading ? 'Проверка...' : 'Проверить' }}
-                    </Button>
-                </div>
-            </div>
-
-            <Message v-if="seoMessage" type="error">{{ seoMessage }}</Message>
-            <div v-else-if="seo" class="grid gap-3 text-xs">
-                <div class="grid gap-2 rounded-lg border border-white/10 bg-slate-900/40 p-3">
-                    <div class="flex justify-between gap-3"><span>Title</span><strong>{{ seo.title || 'Нет' }}</strong>
-                    </div>
-                    <div class="flex justify-between gap-3"><span>URL страницы</span><strong
-                            class="max-w-[210px] truncate">{{ seo.url }} ({{ seo.urlLength }})</strong></div>
-                    <div class="flex justify-between gap-3"><span>Длина Title</span><strong
-                            :class="seo.titleLength >= 30 && seo.titleLength <= 65 ? 'text-emerald-400' : 'text-amber-300'">{{
-                                seo.titleLength }}</strong></div>
-                    <div class="flex justify-between gap-3"><span>Description</span><strong
-                            class="max-w-[210px] text-right">{{ seo.description || 'Нет' }}</strong></div>
-                    <div class="flex justify-between gap-3"><span>Keywords</span><strong
-                            class="max-w-[210px] text-right">{{ seo.keywords || 'Нет' }}</strong></div>
-                    <div class="flex justify-between gap-3"><span>Длина Description</span><strong
-                            :class="seo.descriptionLength >= 70 && seo.descriptionLength <= 160 ? 'text-emerald-400' : 'text-amber-300'">{{
-                                seo.descriptionLength }}</strong></div>
-                    <div class="flex justify-between gap-3"><span>Язык</span><strong>{{ seo.lang || 'Нет' }}</strong>
-                    </div>
-                    <div class="flex justify-between gap-3"><span>Canonical</span><strong
-                            class="max-w-[210px] truncate">{{ seo.canonical || 'Нет' }}</strong></div>
-                    <div class="flex justify-between gap-3"><span>Robots</span><strong>{{ seo.robots || 'Не указан'
-                    }}</strong></div>
-                    <div class="flex justify-between gap-3"><span>Индексирование</span><strong
-                            :class="seo.robotsAllowed && seo.xRobotsAllowed ? 'text-emerald-400' : 'text-amber-300'">{{
-                                seo.robotsAllowed && seo.xRobotsAllowed ? 'Разрешено' : 'Ограничено' }}</strong></div>
-                    <div class="flex justify-between gap-3"><span>X-Robots-Tag</span>
-                        <strong>{{ seo.xRobots || `Не указан` }}</strong>
-                    </div>
-                    <div class="flex justify-between gap-3"><span>Генератор (CMS)</span><strong
-                            class="max-w-[210px] truncate">{{ seo.generator || 'Не определён' }}</strong></div>
-                    <div class="flex justify-between gap-3"><span>Заголовков H1</span><strong
-                            :class="seo.h1Count === 1 ? 'text-emerald-400' : 'text-amber-300'">{{ seo.h1Count }}</strong></div>
-                    <div v-if="seo.duplicateH1?.length" class="flex justify-between gap-3"><span>Дубли H1</span><strong
-                            class="text-amber-300">{{ seo.duplicateH1.length }}</strong></div>
-                    <div class="flex justify-between gap-3"><span>JSON-LD разметка</span><strong>{{ seo.jsonLdBlocks
-                        }}</strong></div>
-                    <div class="flex justify-between gap-3"><span>Редирект</span><strong
-                            :class="seo.redirected ? 'text-amber-300' : 'text-emerald-400'">{{ seo.redirected ? 'Есть' : 'Нет' }}</strong></div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-2">
-                    <div v-for="level in 6" :key="level" class="rounded-lg border border-white/10 bg-slate-900/40 p-3">
-                        <span>H{{ level }}</span><strong class="mt-1 block text-lg">{{ seo.headings[`h${level}`].length
-                            }}</strong>
-                    </div>
-                    <div class="rounded-lg border border-white/10 bg-slate-900/40 p-3"><span>Слов</span><strong
-                            class="mt-1 block text-lg">{{ seo.wordCount }}</strong></div>
-                    <div class="rounded-lg border border-white/10 bg-slate-900/40 p-3"><span>HTML</span><strong
-                            class="mt-1 block text-lg">{{ Math.round(seo.htmlSize / 1024) }} КБ</strong></div>
-                </div>
-
-                <div class="grid gap-2 rounded-lg border border-white/10 bg-slate-900/40 p-3">
-                    <div class="flex justify-between"><span>Изображений</span><strong>{{ seo.images.total }}</strong>
-                    </div>
-                    <div class="flex justify-between"><span>Без alt</span><strong
-                            :class="seo.images.withoutAlt ? 'text-amber-300' : 'text-emerald-400'">{{
-                                seo.images.withoutAlt }}</strong></div>
-                    <div class="flex justify-between"><span>Ссылок внутренних</span><strong>{{ seo.links.internal
-                    }}</strong></div>
-                    <div class="flex justify-between"><span>Ссылок внешних</span><strong>{{ seo.links.external
-                    }}</strong></div>
-                    <div class="flex justify-between"><span>Ссылок без текста</span><strong>{{ seo.links.withoutText
-                    }}</strong></div>
-                </div>
-
-                <div class="grid gap-2 rounded-lg border border-white/10 bg-slate-900/40 p-3">
-                    <div class="flex justify-between"><span>Код ответа</span><strong
-                            :class="seo.response.ok ? 'text-emerald-400' : 'text-amber-300'">{{ seo.response.status ||
-                                'Не получен' }}</strong></div>
-                    <div class="flex justify-between"><span>robots.txt</span><strong>{{ seo.robotsFile.exists ?
-                        `Доступен (${seo.robotsFile.status})` : 'Отсутствует' }}</strong></div>
-                    <div class="flex justify-between"><span>Индексирование по robots.txt</span><strong
-                            :class="seo.robotsFile.allowed ? 'text-emerald-400' : 'text-amber-300'">{{
-                                seo.robotsFile.allowed ? 'Разрешено' : 'Ограничено' }}</strong></div>
-                    <div class="flex justify-between"><span>sitemap.xml</span><strong>{{ seo.sitemap.exists ? `Доступен
-                            (${seo.sitemap.status})` : 'Отсутствует' }}</strong></div>
-                </div>
-
-                <details class="rounded-lg border border-white/10 bg-slate-900/40 p-3">
-                    <summary class="cursor-pointer">Заголовки H1-H6</summary>
-                    <div class="mt-2 grid gap-2 text-slate-400">
-                        <div v-for="level in 6" :key="level"><strong class="text-slate-200">H{{ level }} ({{
-                            seo.headings[`h${level}`].length }})</strong>
-                            <div v-for="heading in seo.headings[`h${level}`]">{{ heading }}</div><span
-                                v-if="!seo.headings[`h${level}`].length">Нет</span>
-                        </div>
-                    </div>
-                </details>
-
-                <details class="rounded-lg border border-white/10 bg-slate-900/40 p-3">
-                    <summary class="cursor-pointer">Open Graph</summary>
-                    <div class="mt-2 grid gap-1 text-slate-400">
-                        <span>OG title: {{ seo.openGraph.title || 'Нет' }}</span>
-                        <span>OG image: {{ seo.openGraph.image || 'Нет' }}</span>
-                    </div>
-                </details>
-
-                <details v-if="seo.robotsFile.content" class="rounded-lg border border-white/10 bg-slate-900/40 p-3">
-                    <summary class="cursor-pointer">Содержимое robots.txt</summary>
-                    <pre
-                        class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[11px] text-slate-400">{{ seo.robotsFile.content }}</pre>
-                </details>
-            </div>
-        </section>
-
-        <section v-else class="px-4 pt-5 text-sm text-slate-400">Раздел пока не реализован</section>
+        <section v-else-if="menuItem === 'seo' && loaded" class="pl-8 pr-4"><SeoPanel :tab="currentTab" /></section>
     </div>
 </template>

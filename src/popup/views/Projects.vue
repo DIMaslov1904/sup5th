@@ -1,41 +1,43 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { getProjectAccessField, getProjectAccessText, loadErrorLog, loadProjectData, loadProjectDetails } from '../data/projectData'
+import { getProjectAccessField, getProjectAccessText, getServiceField, loadServices, loadProjectData, loadProjectDetails } from '../data/projectData'
 import { ensureUnlocked } from '../unlockStore'
-import switcher from '../../utils/switcher'
+import { searchCatalogue } from '../../utils/catalogue.js'
+import FtpAccessCard from '../components/FtpAccessCard.vue'
 import { getAdminUrl, getCmsIconPath, getTicketUrl } from '../../utils/projectUtils'
 import Button from '../components/ui/Button.vue'
 import Input from '../components/ui/Input.vue'
 import Message from '../components/ui/Message.vue'
 
 const projects = ref([])
+const services = ref([])
 const detailAccesses = ref([])
 const updatedAt = ref(null)
 const search = ref('')
 const detailLoading = ref(false)
 const message = ref({ type: 'error', text: '' })
 const selectedProjectUrl = defineModel('selectedProjectUrl', { type: String, default: '' })
+const selectedServiceId = defineModel('selectedServiceId', { type: String, default: '' })
+const selectedService = computed(() => services.value.find(item => item.id === selectedServiceId.value) || null)
+const selectedItem = computed(() => selectedService.value || selectedProject.value)
+const openItem = (item) => {
+    if (item.kind === 'service') { selectedProjectUrl.value = ''; selectedServiceId.value = item.id; message.value.text = '' }
+    else { selectedServiceId.value = ''; openProjectDetails(item) }
+}
+const copyService = async (field) => {
+    copying.value = field
+    try {
+        const value = await ensureUnlocked(() => getServiceField(selectedService.value.id, field))
+        services.value = await loadServices()
+        await navigator.clipboard.writeText(value)
+        message.value = { type: 'success', text: (field === 'login' ? 'Логин' : 'Пароль') + ' скопирован' }
+    } catch (error) { message.value = { type: 'error', text: error.message } }
+    finally { copying.value = '' }
+}
 const copying = ref('')
 const openAccessMenuId = ref('')
 
-// Варианты запроса с учётом исправления раскладки клавиатуры
-// (например, "ghbdtn" -> "привет", "руддщ" -> "hello")
-const searchVariants = computed(() => {
-    const query = search.value.trim().toLowerCase()
-    if (!query) return []
-    const ru = switcher(query)
-    const en = ru === query ? switcher(query, { type: 'rueng' }) : ''
-    return [...new Set([query, ru, en].filter(Boolean))]
-})
-
-const filteredProjects = computed(() => {
-    const variants = searchVariants.value
-    if (!variants.length) return projects.value
-    return projects.value.filter((project) => {
-        const haystack = `${project.name} ${project.url}`.toLowerCase()
-        return variants.some((variant) => haystack.includes(variant))
-    })
-})
+const filteredProjects = computed(() => searchCatalogue(services.value, projects.value, search.value))
 
 const formatDate = (value) => value ? new Date(value).toLocaleString() : ''
 
@@ -83,19 +85,6 @@ const copyAccess = async (project, index, field, label) => {
     }
 }
 
-const copyFtpField = async (index, field) => {
-    copying.value = `ftp:${index}:${field}`
-    try {
-        const value = await ensureUnlocked(() => getProjectAccessField(selectedProject.value.url, index, field))
-        await navigator.clipboard.writeText(value)
-        message.value = { type: 'success', text: field === 'ftpLogin' ? 'FTP логин скопирован' : 'FTP пароль скопирован' }
-    } catch (error) {
-        message.value = { type: 'error', text: error.message }
-    } finally {
-        copying.value = ''
-    }
-}
-
 const openProjectDetails = async (project) => {
     selectedProjectUrl.value = project.url
     detailAccesses.value = []
@@ -113,9 +102,12 @@ const openProjectDetails = async (project) => {
 
 onMounted(async () => {
     try {
-        const [data] = await Promise.all([
-            loadProjectData()
+        const [data, savedServices] = await Promise.all([
+            loadProjectData(),
+            loadServices()
         ])
+        services.value = savedServices
+        if (!savedServices.some(item => item.id === selectedServiceId.value)) selectedServiceId.value = ''
         applyData(data)
         if (selectedProjectUrl.value) {
             const project = projects.value.find((item) => item.url === selectedProjectUrl.value)
@@ -130,33 +122,45 @@ onMounted(async () => {
 
 <template>
     <section class="w-full px-4 text-slate-200">
-        <div v-if="selectedProject" class="flex items-center justify-between gap-3 mb-4">
+        <div v-if="selectedItem" class="flex items-center justify-between gap-3 mb-4">
             <div class="flex items-center gap-2">
                 <Button variant="ghost" size="sm" aria-label="Назад к списку" title="Назад к списку"
-                    @click="selectedProjectUrl = ''">←</Button>
-                <h1 class="text-lg font-semibold">{{ selectedProject?.name }}</h1>
+                    @click="selectedProjectUrl = ''; selectedServiceId = ''">←</Button>
+                <h1 class="text-lg font-semibold">{{ selectedItem?.name }}</h1>
             </div>
         </div>
 
-        <div v-if="projects.length && !selectedProject" class="mb-4">
-            <Input v-model="search" type="search" placeholder="Поиск проектов" />
+        <div v-if="(projects.length || services.length) && !selectedItem" class="mb-4">
+            <Input v-model="search" type="search" placeholder="Поиск сервисов и проектов" />
         </div>
 
-        <p v-if="!projects.length && !selectedProject" class="text-sm text-slate-400">Проекты еще не загружены</p>
-        <p v-else-if="!selectedProject && !filteredProjects.length" class="text-sm text-slate-400">Ничего не найдено</p>
-        <div v-else-if="!selectedProject" class="grid gap-2">
-            <article v-for="project in filteredProjects" :key="project.url"
+        <p v-if="!projects.length && !services.length && !selectedItem" class="text-sm text-slate-400">Проекты и сервисы ещё не загружены</p>
+        <p v-else-if="!selectedItem && !filteredProjects.length" class="text-sm text-slate-400">Ничего не найдено</p>
+        <div v-else-if="!selectedItem" class="grid gap-2">
+            <article v-for="project in filteredProjects" :key="project.key"
                 class="relative rounded-lg border border-white/10 bg-slate-900/40 py-3 pl-5 pr-3 overflow-hidden">
-                <span v-if="project.hasAccess" class="absolute -left-1 -top-1 h-3 w-3 rounded-full bg-blue-400" role="img" aria-label="Доступ есть"></span>
-                <button type="button" :aria-label="`Открыть детали проекта ${project.name || project.url}`"
-                    class="flex w-full items-start gap-1.5 text-left cursor-pointer" @click="openProjectDetails(project)">
+                <span v-if="project.hasAccess || project.hasLogin || project.hasPassword" class="absolute -left-1 -top-1 h-3 w-3 rounded-full bg-blue-400" role="img" aria-label="Доступ есть"></span>
+                <button type="button" :aria-label="`Открыть детали ${project.kind === 'service' ? 'сервиса' : 'проекта'} ${project.name || project.url}`"
+                    class="flex w-full items-start gap-1.5 text-left cursor-pointer" @click="openItem(project)">
                     <span class="text-sm font-medium leading-snug text-slate-100">{{ project.name || project.url }}</span>
                 </button>
-                <a :href="`https://${project.url}`" target="_blank" rel="noreferrer" title="Перейти на сайт"
+                <a :href="linkHref(project.url)" target="_blank" rel="noreferrer" title="Перейти на сайт"
                     :aria-label="`Перейти на сайт ${project.url}`"
                     class="mt-1 inline-flex items-center gap-1 break-all text-sm text-sky-300 hover:text-sky-200">
                     <span>{{ project.url }}</span><span aria-hidden="true">↗</span>
                 </a>
+            </article>
+        </div>
+        <div v-else-if="selectedService" class="grid gap-4">
+            <p class="text-xs text-slate-500">Сервис</p>
+            <a :href="linkHref(selectedService.url)" target="_blank" rel="noreferrer" class="break-all text-sm text-sky-300">{{ selectedService.url }} ↗</a>
+            <article class="grid gap-3 rounded-lg border border-white/10 bg-slate-900/40 p-3">
+                <h2 class="text-sm font-semibold">Доступ</h2>
+                <p class="break-all text-xs text-slate-300">Логин: {{ selectedService.login || (selectedService.hasLogin ? 'Доступен после первой разблокировки' : 'Не указан') }}</p>
+                <div class="flex flex-wrap gap-2">
+                    <Button v-if="selectedService.hasLogin || selectedService.login" variant="ghost" size="sm" :disabled="Boolean(copying)" @click="copyService('login')">Скопировать логин</Button>
+                    <Button v-if="selectedService.hasPassword || selectedService.password" variant="ghost" size="sm" :disabled="Boolean(copying)" @click="copyService('password')">Скопировать пароль</Button>
+                </div>
             </article>
         </div>
         <div v-else-if="selectedProject" class="grid gap-4">
@@ -220,16 +224,7 @@ onMounted(async () => {
 
             <section v-if="ftpAccesses.length" class="grid gap-2">
                 <h2 class="text-sm font-semibold">FTP доступы ({{ ftpAccesses.length }})</h2>
-                <article v-for="(access, index) in ftpAccesses" :key="`ftp-${access.ftpUrl}-${index}`"
-                    class="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/40 p-3">
-                    <span class="min-w-0 break-all text-xs text-slate-300">{{ access.ftpUrl }}</span>
-                    <div class="flex shrink-0 gap-2">
-                        <Button variant="ghost" size="sm" :disabled="copying === `ftp:${access.sourceIndex}:ftpLogin`"
-                            @click="copyFtpField(access.sourceIndex, 'ftpLogin')">Логин</Button>
-                        <Button variant="ghost" size="sm" :disabled="copying === `ftp:${access.sourceIndex}:ftpPassword`"
-                            @click="copyFtpField(access.sourceIndex, 'ftpPassword')">Пароль</Button>
-                    </div>
-                </article>
+                <FtpAccessCard v-for="access in ftpAccesses" :key="access.sourceIndex" :access="access" :project-url="selectedProject.url" :index="access.sourceIndex" />
             </section>
         </div>
         <p v-if="updatedAt" class="mt-4 text-xs text-slate-500">Последнее обновление: {{ formatDate(updatedAt) }}</p>

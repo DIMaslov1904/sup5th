@@ -5,12 +5,12 @@ import Layout from './components/Layout.vue'
 import UnlockModal from './components/UnlockModal.vue'
 import Site from './views/Site.vue'
 import Projects from './views/Projects.vue'
-import Services from './views/Services.vue'
 import Settings from './views/Settings.vue'
 
 const view = ref('site')
 const stateReady = ref(false)
 const selectedProjectUrl = ref('')
+const selectedServiceId = ref('')
 let statePort = null
 let heartbeat
 
@@ -24,10 +24,6 @@ const viewList = [
     name: 'projects'
   },
   {
-    label: 'Сервисы',
-    name: 'services'
-  },
-  {
     label: 'Настройки',
     name: 'settings'
   }
@@ -35,13 +31,13 @@ const viewList = [
 
 const saveUiState = () => {
   if (!stateReady.value || !statePort) return
-  statePort.postMessage({ type: 'state', state: { view: view.value, projectUrl: selectedProjectUrl.value } })
+  statePort.postMessage({ type: 'state', state: { view: view.value, projectUrl: selectedProjectUrl.value, serviceId: selectedServiceId.value } })
 }
 
 watch(view, (value) => {
-  if (value !== 'projects') selectedProjectUrl.value = ''
+  if (value !== 'projects') { selectedProjectUrl.value = ''; selectedServiceId.value = '' }
 }, { flush: 'sync' })
-watch([view, selectedProjectUrl], saveUiState, { flush: 'sync' })
+watch([view, selectedProjectUrl, selectedServiceId], saveUiState, { flush: 'sync' })
 
 onMounted(() => {
   statePort = chrome.runtime.connect({ name: POPUP_PORT_NAME })
@@ -49,6 +45,7 @@ onMounted(() => {
     if (message?.type !== 'restore') return
     view.value = message.state.view
     selectedProjectUrl.value = message.state.projectUrl
+    selectedServiceId.value = message.state.serviceId || ''
     stateReady.value = true
     saveUiState()
   })
@@ -71,8 +68,7 @@ onUnmounted(() => {
 <template>
   <Layout v-if="stateReady" v-model="view" :menuList="viewList">
     <Site v-if="view === 'site'" />
-    <Projects v-if="view === 'projects'" v-model:selected-project-url="selectedProjectUrl" />
-    <Services v-if="view === 'services'" />
+    <Projects v-if="view === 'projects'" v-model:selected-project-url="selectedProjectUrl" v-model:selected-service-id="selectedServiceId" />
     <Settings v-if="view === 'settings'" />
   </Layout>
   <UnlockModal />

@@ -1,5 +1,13 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
+import { sendSeoToTab, fetchSeo } from '../utils/seoClient.js'
+import { collectSitemap, sitemapRoots } from '../utils/sitemap.js'
+import { evaluateRobots, parseMetaHtml } from '../utils/seoRules.js'
+const props = defineProps({ tab: Object })
+let cancelled = false
+let auditController
+const stopAudit = () => { cancelled = true; auditController?.abort() }
+onUnmounted(stopAudit)
 import Button from '../popup/components/ui/Button.vue'
 import Card from '../popup/components/ui/Card.vue'
 import Message from '../popup/components/ui/Message.vue'
@@ -17,50 +25,21 @@ const robotsRules = ref([])       // [{directive, value, applies, blocked}]
 
 const score = computed(() => {
     const passed = checks.value.filter((item) => item.ok).length
-    const total = checks.value.length
+    const total = checks.value.filter(item => item.ok !== null).length
     return { passed, total, percent: total ? Math.round((passed / total) * 100) : 0 }
 })
 
-const sendToBackground = (type, payload) => new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ type, payload }, (response) => {
-        const error = chrome.runtime.lastError
-        if (error) return reject(new Error(error.message))
-        if (!response?.ok) return reject(new Error(response?.error || 'Неизвестная ошибка'))
-        resolve(response.data)
-    })
-})
-
-const sendToTab = (tabId, type) => new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(tabId, { type }, (response) => {
-        const error = chrome.runtime.lastError
-        if (error) return reject(new Error('Content script недоступен. Обновите страницу и повторите.'))
-        if (!response?.ok) return reject(new Error(response?.error || 'Не удалось получить данные'))
-        resolve(response.data)
-    })
-})
-
-const fetchBg = (url, method = 'GET') => sendToBackground('seo:fetch', { url, method })
-
-// Активная вкладка с сайтом (страница расширения сама по себе не считается)
+const fetchBg = fetchSeo
 const getActiveSiteTab = async () => {
-    const tabs = await chrome.tabs.query({})
-    const activeSites = tabs.filter((tab) => tab.active && tab.url && /^https?:/.test(tab.url))
-    if (activeSites.length) return activeSites[activeSites.length - 1]
-    const anySites = tabs.filter((tab) => tab.url && /^https?:/.test(tab.url))
-    return anySites[anySites.length - 1] || null
+    if (props.tab?.id) return chrome.tabs.get(props.tab.id)
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
+    return tab?.url && /^https?:/.test(tab.url) ? tab : null
 }
-
-const parseTitle = (text) => text.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() || ''
-const parseDescription = (text) => {
-    const match = text.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i)
-        || text.match(/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i)
-    return match?.[1]?.trim() || ''
-}
-const stripHtml = (text) => text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+const parseTitle = text => parseMetaHtml(text).title
+const parseDescription = text => parseMetaHtml(text).description
 const stripQuery = (url) => {
     try {
         const u = new URL(url)
-        u.search = ''
         u.hash = ''
         return u.href
     } catch {
@@ -68,33 +47,9 @@ const stripQuery = (url) => {
     }
 }
 
-const parseSitemapLocations = (text) => [...text.matchAll(/<loc>([^<]+)<\/loc>/gi)].map((match) => match[1].trim())
-
-const checkRobotsForPath = (content, pathname) => {
-    const rules = []
-    let currentGroup = null
-    for (const rawLine of content.split(/\r?\n/)) {
-        const line = rawLine.trim()
-        if (!line || line.startsWith('#')) continue
-        const colonIndex = line.indexOf(':')
-        if (colonIndex < 0) continue
-        const directive = line.slice(0, colonIndex).trim().toLowerCase()
-        const value = line.slice(colonIndex + 1).trim()
-        if (directive === 'user-agent') {
-            currentGroup = value
-            continue
-        }
-        if (!['allow', 'disallow'].includes(directive)) continue
-        const pattern = value.replace(/[*$]/g, '').replace(/\/$/, '')
-        const applies = !pattern || pathname.startsWith(pattern)
-        if (currentGroup === '*' && applies) {
-            rules.push({ directive, value, blocked: directive === 'disallow' })
-        }
-    }
-    return rules
-}
-
 const runAudit = async () => {
+    cancelled = false
+    auditController = new AbortController()
     message.value = ''
     state.value = 'scanning'
     checks.value = []
@@ -109,7 +64,8 @@ const runAudit = async () => {
         if (!tab?.id || !tab?.url || !/^https?:/.test(tab.url)) {
             throw new Error('Откройте проверяемый сайт в активной вкладке')
         }
-        const data = await sendToTab(tab.id, 'seo:scan')
+        const data = await sendSeoToTab(tab.id, 'seo:scan')
+        if (cancelled) { state.value = 'idle'; return }
         report.value = data
 
         const linkList = [...new Set([data.url, ...(data.internalLinks || [])].map(stripQuery))].slice(0, 60)
@@ -122,8 +78,7 @@ const runAudit = async () => {
         for (let i = 0; i < linkList.length; i += BATCH) {
             const batch = linkList.slice(i, i + BATCH)
             const batchResults = await Promise.all(batch.map(async (url) => {
-                let info = await fetchBg(url, 'HEAD')
-                if (!info.ok) info = await fetchBg(url)
+                const info = await fetchBg(url)
                 let title = ''
                 let description = ''
                 if (info.ok && info.text) {
@@ -132,6 +87,7 @@ const runAudit = async () => {
                 }
                 return { url, status: info.status, ok: info.ok, redirected: Boolean(info.url && info.url !== url), ttfb: info.ttfb, title, description }
             }))
+            if (cancelled) { state.value = 'idle'; return }
             results.push(...batchResults)
             progress.value = { current: results.length, total: linkList.length }
         }
@@ -148,27 +104,18 @@ const runAudit = async () => {
         duplicateTitles.value = [...titleCounts.entries()].filter(([, count]) => count > 1)
         duplicateDescriptions.value = [...descCounts.entries()].filter(([, count]) => count > 1)
 
-        // Sitemap
+        const combined = await collectSitemap(sitemapRoots(data.robotsFile.content, data.url), url => fetchBg(url, 'GET', 8 * 1024 * 1024), { signal: auditController.signal })
+        if (cancelled) { state.value = 'idle'; return }
         const sitemapUrl = data.sitemap.url
-        const sitemapRes = await fetchBg(sitemapUrl)
-        const locations = sitemapRes.ok ? parseSitemapLocations(sitemapRes.text) : []
-        const strippedLocations = locations.map(stripQuery)
-        sitemapInfo.value = {
-            url: sitemapUrl,
-            exists: sitemapRes.ok,
-            status: sitemapRes.status,
-            count: locations.length,
-            containsCurrent: strippedLocations.includes(stripQuery(data.url)),
-            duplicates: locations.length - new Set(strippedLocations).size
-        }
-
-        // robots.txt правила для текущего пути
-        const pathname = new URL(data.url).pathname
-        robotsRules.value = checkRobotsForPath(data.robotsFile.content || '', pathname)
+        sitemapInfo.value = { url: sitemapUrl, exists: combined.files.length > 0, status: combined.files.length ? 200 : 0,
+            count: combined.pages.length, containsCurrent: combined.pages.some(item => stripQuery(item.url) === stripQuery(data.url)),
+            duplicates: combined.duplicates, complete: combined.complete, errors: combined.errors, limited: combined.limited }
+        robotsRules.value = evaluateRobots(data.robotsFile.content, data.url).rules.map(rule => ({ ...rule, blocked: rule.directive === 'disallow' }))
 
         buildChecks(data, results)
         state.value = 'done'
     } catch (error) {
+        if (cancelled) { state.value = 'idle'; return }
         message.value = error.message
         state.value = 'error'
     }
@@ -182,10 +129,8 @@ const buildChecks = (data, results) => {
     const list = [
         { label: 'Title заполнен', ok: Boolean(data.title), hint: data.title || '—' },
         { label: 'Длина Title 30–65 символов', ok: data.titleLength >= 30 && data.titleLength <= 65, hint: `${data.titleLength}` },
-        { label: 'Title содержит кириллицу', ok: data.titleHasCyrillic },
         { label: 'Description заполнен', ok: Boolean(data.description), hint: data.description || '—' },
         { label: 'Длина Description 70–160 символов', ok: data.descriptionLength >= 70 && data.descriptionLength <= 160, hint: `${data.descriptionLength}` },
-        { label: 'Description содержит кириллицу', ok: data.descriptionHasCyrillic },
         { label: 'Ровно один H1', ok: data.h1Count === 1, hint: `H1: ${data.h1Count}` },
         { label: 'Нет дублей H1', ok: !data.duplicateH1?.length },
         { label: 'Указан Canonical', ok: Boolean(data.canonical) },
@@ -194,14 +139,13 @@ const buildChecks = (data, results) => {
         { label: 'Указан lang', ok: Boolean(data.lang) },
         { label: 'Указан Viewport', ok: data.viewport },
         { label: 'Есть Favicon', ok: Boolean(data.favicon) },
-        { label: 'Есть JSON-LD разметка', ok: data.jsonLdBlocks > 0 },
         { label: 'Нет ссылок без текста', ok: data.links.withoutText === 0, hint: `${data.links.withoutText}` },
-        { label: 'Все изображения имеют alt', ok: data.images.withoutAlt === 0 && data.images.emptyAlt === 0, hint: `без alt: ${data.images.withoutAlt}` },
+        { label: 'Все изображения имеют alt', ok: data.images.withoutAlt === 0, hint: `без alt: ${data.images.withoutAlt}` },
         { label: 'Нет редиректов', ok: !data.redirected },
-        { label: 'TTFB до 500 мс', ok: data.response.ttfb == null || data.response.ttfb < 500, hint: data.response.ttfb != null ? `${data.response.ttfb} мс` : 'не измерен' },
+        { label: 'TTFB до 500 мс', ok: data.response.ttfb == null ? null : data.response.ttfb < 500, hint: data.response.ttfb != null ? `${data.response.ttfb} мс` : 'не измерен' },
         { label: 'robots.txt доступен', ok: data.robotsFile.exists, hint: data.robotsFile.status ? `HTTP ${data.robotsFile.status}` : '—' },
         { label: 'sitemap.xml доступен', ok: data.sitemap.exists, hint: data.sitemap.status ? `HTTP ${data.sitemap.status}` : '—' },
-        { label: 'Текущая страница в sitemap', ok: sitemapInfo.value?.containsCurrent === true },
+        { label: 'Текущая страница в sitemap', ok: sitemapInfo.value?.containsCurrent ? true : sitemapInfo.value?.complete ? false : null },
         { label: 'Нет битых внутренних ссылок', ok: brokenCount === 0, hint: `${brokenCount} из ${results.length}` },
         { label: 'Медленных страниц нет (>500 мс)', ok: slowPages === 0, hint: `${slowPages}` },
         { label: 'Нет дублей Title на страницах', ok: duplicateTitles.value.length === 0, hint: `${duplicateTitles.value.length}` },
@@ -223,10 +167,12 @@ const openTab = (url) => chrome.tabs.create({ url })
                 </div>
                 <Button variant="primary" size="md" :disabled="state === 'scanning' || state === 'checking-links'"
                     @click="runAudit">
-                    {{ state === 'idle' || state === 'error' ? 'Запустить аудит' : state === 'scanning' ? 'Сканируем страницу...' : 'Проверяем ссылки...' }}
+                    {{ state === 'idle' || state === 'error' || state === 'done' ? 'Запустить аудит' : state === 'scanning' ? 'Сканируем страницу...' : 'Проверяем ссылки...' }}
                 </Button>
             </header>
 
+            <p class="text-xs text-slate-500">Проверяется выборка до 51 страницы без cookies. Процент — доля выполненных технических проверок, а не оценка поисковых позиций. Длины метатегов — ориентиры.</p>
+            <Button v-if="state === 'scanning' || state === 'checking-links'" variant="secondary" size="sm" @click="stopAudit">Остановить аудит</Button>
             <Message v-if="message" type="error">{{ message }}</Message>
 
             <div v-if="state === 'checking-links'" class="rounded-lg border border-white/10 bg-slate-900/40 p-3 text-xs">
@@ -258,7 +204,7 @@ const openTab = (url) => chrome.tabs.create({ url })
                         <li v-for="(item, index) in checks" :key="index"
                             class="flex items-start justify-between gap-3 rounded border border-white/10 bg-slate-950/30 px-3 py-2">
                             <span class="flex items-center gap-2 text-xs">
-                                <span :class="item.ok ? 'text-emerald-400' : 'text-amber-300'" aria-hidden="true">{{ item.ok ? '✓' : '✕' }}</span>
+                                <span :class="item.ok ? 'text-emerald-400' : 'text-amber-300'" aria-hidden="true">{{ item.ok === null ? '?' : item.ok ? '✓' : '✕' }}</span>
                                 {{ item.label }}
                             </span>
                             <span v-if="item.hint" class="max-w-[40%] truncate text-right text-[11px] text-slate-500" :title="item.hint">{{ item.hint }}</span>

@@ -13,7 +13,7 @@ const props = defineProps(['menuList'])
                 {{ menuItem.label }}
             </button>
         </nav>
-        <div class="overflow-y-auto pt-16 pb-6 h-full">
+        <div class="app-scroll min-h-0 overflow-y-auto pt-16 pb-6 h-full">
             <slot />
         </div>
     </div>
