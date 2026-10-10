@@ -14,7 +14,6 @@ const updatedAt = ref(null)
 const search = ref('')
 const detailLoading = ref(false)
 const message = ref({ type: 'error', text: '' })
-const errors = ref([])
 const selectedProjectUrl = defineModel('selectedProjectUrl', { type: String, default: '' })
 const copying = ref('')
 const openAccessMenuId = ref('')
@@ -114,12 +113,10 @@ const openProjectDetails = async (project) => {
 
 onMounted(async () => {
     try {
-        const [data, savedErrors] = await Promise.all([
-            loadProjectData(),
-            loadErrorLog()
+        const [data] = await Promise.all([
+            loadProjectData()
         ])
         applyData(data)
-        errors.value = savedErrors
         if (selectedProjectUrl.value) {
             const project = projects.value.find((item) => item.url === selectedProjectUrl.value)
             if (project) await openProjectDetails(project)
@@ -237,9 +234,5 @@ onMounted(async () => {
         </div>
         <p v-if="updatedAt" class="mt-4 text-xs text-slate-500">Последнее обновление: {{ formatDate(updatedAt) }}</p>
         <Message v-if="message.text" :type="message.type">{{ message.text }}</Message>
-        <details v-if="errors.length"
-            class="mt-3 rounded border border-white/10 bg-slate-900/30 p-3 text-xs text-slate-300">
-            <summary class="cursor-pointer">Ошибки загрузки ({{ errors.length }})</summary>
-        </details>
     </section>
 </template>

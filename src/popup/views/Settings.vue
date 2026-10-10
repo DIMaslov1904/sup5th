@@ -386,14 +386,13 @@ const resetData = async () => {
                 <template v-if="security.mode === 'hello'">
                     <form v-if="!security.unlocked" @submit.prevent="unlockWithHello">
                         <Button type="submit" variant="secondary" :disabled="securityLoading">
-                            {{ securityLoading ? 'Ожидание Windows Hello...' : 'Разблокировать Windows Hello' }}
+                            {{ securityLoading ? 'Ожидание...' : 'Разблокировать' }}
                         </Button>
                     </form>
                     <div v-else class="flex flex-wrap gap-2">
                         <Button variant="secondary" size="sm" :disabled="securityLoading" @click="lockProtection">Заблокировать</Button>
                         <Button variant="danger" size="sm" :disabled="securityLoading" @click="disableProtection">Отключить защиту</Button>
                     </div>
-                    <p class="text-xs text-slate-400">Хранилище автоматически блокируется при закрытии браузера. Для разблокировки потребуется Windows Hello.</p>
                 </template>
 
                 <template v-else>
@@ -425,7 +424,7 @@ const resetData = async () => {
             </ul>
         </details>
 
-        <Button variant="danger" size="sm" class="mt-8 justify-self-start" :disabled="loading.length" @click="resetData">
+        <Button variant="danger" size="sm" class="justify-self-start" :disabled="loading.length" @click="resetData">
             Сбросить все данные
         </Button>
     </div>

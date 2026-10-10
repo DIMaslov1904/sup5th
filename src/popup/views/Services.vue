@@ -40,7 +40,6 @@ const copyField = async (service, field) => {
 
 <template>
     <section class="w-full px-4 text-slate-200">
-        <p class="mb-4 text-xs text-slate-400">Сервисы загружаются вместе с доступами. Обновить их можно в настройках кнопкой «Загрузить всё».</p>
         <p v-if="!loaded" class="text-sm text-slate-400">Загрузка...</p>
         <p v-else-if="!services.length" class="text-sm text-slate-400">В API нет сервисов или данные ещё не загружены</p>
         <div v-else class="flex flex-col gap-2">
