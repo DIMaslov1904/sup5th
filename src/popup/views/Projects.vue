@@ -63,10 +63,9 @@ const projectLinks = computed(() => {
     const project = selectedProject.value
     if (!project) return []
     return [
-        ['Админка', project.urlAdmin || getAdminUrl(project)],
+        ['Админка', getAdminUrl(project)],
         ['Инструкция', project.manual],
         ['Git', project.git],
-        ['Figma', project.figma],
         ['Дополнительный документ', project.addDocument]
     ]
 })

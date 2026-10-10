@@ -560,7 +560,7 @@ const asText = (value) => (value == null ? '' : String(value).trim())
 
 const normalizeProject = (item) => {
     const value = Array.isArray(item)
-        ? { name: item[0], url: item[1], manual: item[2], cms: item[3], ticketKey: item[4], git: item[5] }
+        ? { name: item[0], url: item[1], manual: item[2], urlAdmin: item[3], cms: item[4], ticketKey: item[5], git: item[6] }
         : item || {}
     return {
         name: asText(value.name || value.title || value.project),
@@ -570,7 +570,6 @@ const normalizeProject = (item) => {
         manual: asText(value.manual),
         ticketKey: asText(value.ticketKey),
         git: asText(value.git),
-        figma: asText(value.figma),
         addDocument: asText(value.addDocument)
     }
 }

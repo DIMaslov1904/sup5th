@@ -58,10 +58,10 @@ export const getTicketUrl = (project) => project?.ticketKey
 
 /** Возвращает ссылку на панель администрирования проекта (без авторизации) */
 export const getAdminUrl = (project) => {
+    if (project?.urlAdmin) return /^https?:\/\//i.test(project.urlAdmin) ? project.urlAdmin : `https://${project.urlAdmin}`
     if (!project?.cms || project.cms === 'Нет') return ''
     if (project.cms === 'Tilda') return 'https://tilda.ru/login/'
-    if (project.cms === 'Своя' || project.cms === 'WordPress') return project.urlAdmin ? `https://${project.urlAdmin}` : ''
-    return CMS_PATHS[project.cms] ? `https://${project.url}/${CMS_PATHS[project.cms]}` : project.urlAdmin ? `https://${project.urlAdmin}` : ''
+    return CMS_PATHS[project.cms] ? `https://${project.url}/${CMS_PATHS[project.cms]}` : ''
 }
 
 /** Возвращает путь к SVG-иконке CMS (относительно корня расширения) */
