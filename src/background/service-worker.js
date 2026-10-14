@@ -1017,11 +1017,8 @@ const handlers = {
     'services:field': getServiceField,
     'data:settings:get': () => readApiSettingsRaw().then(toPublicApiSettings),
     'data:settings:set': (payload) => saveApiSettings(payload).then(toPublicApiSettings),
-    'data:projects:get': async () => {
-        const data = toPublicData(await getStoredData())
-        syncCatalogueIcons().catch(error => console.error('[icons] catalogue cache', error))
-        return data
-    },
+    // Чтение кеша не должно запускать загрузку иконок, включая повторные попытки.
+    'data:projects:get': () => getStoredData().then(toPublicData),
     'data:projects:refresh': ({ url }) => refreshProjects(url, { interactive: true }).then(toPublicData),
     'data:accesses:refresh': ({ url }) => refreshAccesses(url, { interactive: true }).then(toPublicData),
     'data:projects:authorize': () => openApiAuthorization('projects'),

@@ -52,8 +52,10 @@ export const findAccessesByUrl = (accesses, url) => {
     return match ? (accesses || []).filter((access) => normalizeHost(access.url) === normalizeHost(match.url)) : []
 }
 
+export const CREATE_TICKET_PARAM = 'sup5th-create-ticket'
+
 export const getTicketUrl = (project) => project?.ticketKey
-    ? `https://support.5th.ru/published/personal.php?key=${encodeURIComponent(project.ticketKey)}&t=requests`
+    ? `https://support.5th.ru/published/personal.php?key=${encodeURIComponent(project.ticketKey)}&t=requests&${CREATE_TICKET_PARAM}=1`
     : ''
 
 /** Возвращает ссылку на панель администрирования проекта (без авторизации) */

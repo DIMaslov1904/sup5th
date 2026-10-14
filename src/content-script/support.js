@@ -1,3 +1,7 @@
+import { startTicketCreation } from './supportTicket.js'
+
+startTicketCreation()
+
 const frameBody = document.getElementById('body-frame')
 let doc = document
 let iframe = null
