@@ -56,8 +56,13 @@ onMounted(async () => {
                 <SiteIcon :url="project.url" :name="project.name" />
 
                 <div class="min-w-0">
-                    <span v-if="project.hasAccess || project.hasLogin || project.hasPassword" class="absolute -left-1 -top-1 h-3 w-3 rounded-full bg-ui-accent" role="img" aria-label="Доступ есть"></span>
-                    <span :title="project.name || displayUrl(project.url)" class="line-clamp-2 wrap-anywhere text-[13px] font-medium leading-snug text-ui-text">{{ project.name || displayUrl(project.url) }}</span>
+                    <div class="flex min-w-0 items-start gap-1.5">
+                        <span :title="project.name || displayUrl(project.url)" class="min-w-0 line-clamp-2 wrap-anywhere text-[13px] font-medium leading-snug text-ui-text">{{ project.name || displayUrl(project.url) }}</span>
+                        <svg v-if="project.hasAccess || project.hasLogin || project.hasPassword" class="mt-0.5 size-3.5 shrink-0 text-ui-muted"  fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Доступ сохранён">
+                            <path d="M14 17c-.536 0-1.484-.502-2.602 0-.405.182-1.3 1.073-2.201 1.963C8.319 19.83 7.436 20.695 7 20.9l-3.5-.4-.4-3.5c.414-.884 3.54-3.598 3.9-4.398.503-1.118 0-2.066 0-2.602a7 7 0 1 1 7 7m-4.803 1.963L7.234 17"/>
+                            <circle cx="14" cy="10" r="2"/>
+                        </svg>
+                    </div>
                     <span :title="displayUrl(project.url)" class="mt-1 block truncate text-xs text-ui-accent">{{ displayUrl(project.url) }}</span>
                 </div>
 

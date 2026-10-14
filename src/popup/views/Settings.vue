@@ -305,7 +305,7 @@ const resetData = async () => {
             <p v-if="projectsNeedAuth" class="mt-2 text-xs text-ui-muted">
                 После входа и подтверждения разрешений вернитесь и нажмите «Загрузить всё».
             </p>
-            <p class="flex items-start mt-2 text-xs text-ui-muted">
+            <p class="block mt-2 text-xs text-ui-muted">
                 Адрес API указан в таблице «База знаний 5th».
             </p>
         </Card>
@@ -334,8 +334,8 @@ const resetData = async () => {
             <p v-if="accessesNeedAuth" class="mt-2 text-xs text-ui-muted">
                 Войдите в открывшейся вкладке, затем вернитесь и нажмите «Загрузить всё».
             </p>
-            <p class="flex items-start mt-2 text-xs text-ui-muted">
-                Как получить адрес API:
+            <p class="block mt-2 text-xs text-ui-muted">
+                Как получить адрес API -
                 <a :href="optionsUrl" target="_blank" rel="noreferrer"
                     class="hover:text-ui-accent text-white/70 underline decoration-sky-300/40 underline-offset-2">инструкция</a>
             </p>
