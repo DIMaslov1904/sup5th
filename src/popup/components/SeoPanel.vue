@@ -136,13 +136,19 @@ const tools = computed(() => {
     if (!report.value) return []
     const url = encodeURIComponent(report.value.url), host = encodeURIComponent(new URL(report.value.url).hostname), title = encodeURIComponent('"' + report.value.title + '"')
     return [
-        ['PageSpeed Insights',`https://pagespeed.web.dev/analysis?url=${url}`], ['Валидатор HTML',`https://validator.w3.org/nu/?doc=${url}`],
-        ['Валидатор CSS',`https://jigsaw.w3.org/css-validator/validator?uri=${url}`], ['Schema.org',`https://validator.schema.org/#url=${url}`],
-        ['Google Rich Results',`https://search.google.com/test/rich-results?url=${url}`], ['WHOIS',`https://www.whois.com/whois/${host}`],
-        ['SSL',`https://www.ssllabs.com/ssltest/analyze.html?d=${host}`], ['Webarchive',`https://web.archive.org/web/*/${report.value.url}`],
-        ['Индексация в Google',`https://www.google.com/search?q=${encodeURIComponent('site:' + report.value.url)}`], ['Индексация в Яндексе',`https://yandex.ru/search/?text=${encodeURIComponent('url:' + report.value.url)}`],
-        ['Дубли Title в Google',`https://www.google.com/search?q=${title}`], ['Дубли Title в Яндексе',`https://yandex.ru/search/?text=${title}`],
-        ['Яндекс Вебмастер', 'https://webmaster.yandex.ru/sites/'], ['Орфография',`https://text.ru/spelling`], ['Проверка сайта по site:',`https://www.google.com/search?q=${encodeURIComponent('site:' + new URL(report.value.url).hostname)}`]
+        ['PageSpeed Insights',`https://pagespeed.web.dev/analysis?url=${url}`], 
+        ['Валидатор HTML',`https://validator.w3.org/nu/?doc=${url}`],
+        ['Валидатор CSS',`https://jigsaw.w3.org/css-validator/validator?uri=${url}`], 
+        ['Schema.org',`https://validator.schema.org/#url=${url}`],
+        ['Google Rich Results',`https://search.google.com/test/rich-results?url=${url}`], 
+        ['WHOIS',`https://www.whois.com/whois/${host}`],
+        ['SSL',`https://www.ssllabs.com/ssltest/analyze.html?d=${host}`], 
+        ['Webarchive',`https://web.archive.org/web/*/${report.value.url}`],
+        ['Яндекс Вебмастер', 'https://webmaster.yandex.ru/sites/'],
+        ['Индексация в Яндексе',`https://yandex.ru/search/?text=${encodeURIComponent('url:' + report.value.url)}`],
+        ['Дубли Title в Яндексе',`https://yandex.ru/search/?text=${title}`],
+        ['Индексация в Google',`https://www.google.com/search?q=${encodeURIComponent('site:' + report.value.url)}`], 
+        ['Дубли Title в Google',`https://www.google.com/search?q=${title}`]
     ]
 })
 </script>
