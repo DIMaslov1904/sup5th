@@ -1,12 +1,13 @@
 import { POPUP_PORT_NAME, POPUP_STATE_KEY, POPUP_RETENTION_MS, closedPopupState, defaultPopupState, normalizePopupState, restorePopupState } from '../utils/popupState.js'
 import { POPUP_EXPIRY_ALARM, SEO_SESSION_KEY, seoContextKey } from '../utils/seoSessionState.js'
+import { storageReady } from './storageRepository.js'
 
 // Serialize reconnects so a new popup reads the previous disconnect's snapshot.
 export const registerPopupSession = () => {
     let pending = Promise.resolve()
     const ports = new Set()
     const enqueue = (action) => {
-        pending = pending.then(action).catch((error) => console.error('[popup] session state', error))
+        pending = pending.then(() => storageReady).then(action).catch((error) => console.error('[popup] session state', error))
     }
 
     const readSeo = async () => {
@@ -31,8 +32,6 @@ export const registerPopupSession = () => {
         if (alarm.name === POPUP_EXPIRY_ALARM) enqueue(expire)
     })
 
-    chrome.storage.local.remove(POPUP_STATE_KEY).catch((error) => console.warn('[popup] legacy state cleanup', error))
-
     chrome.runtime.onConnect.addListener((port) => {
         if (port.name !== POPUP_PORT_NAME) return
         if (port.sender?.id !== chrome.runtime.id || !port.sender?.url?.startsWith(chrome.runtime.getURL('src/popup/'))) {
@@ -51,12 +50,12 @@ export const registerPopupSession = () => {
                     if (!disconnected) port.postMessage({ type: 'seo:restore', requestId: message.requestId, state: entries[key]?.state || null })
                     return
                 }
-                if (!key || !message.state?.report) return
+                if (!key || (!message.state?.report && !entries[key]?.state?.report)) return
                 // Навигация/перезагрузка вкладки делает предыдущий документ неактуальным.
                 for (const previous of Object.keys(entries)) {
                     if (entries[previous].context.tabId === message.context.tabId && previous !== key) delete entries[previous]
                 }
-                entries[key] = { context: message.context, state: message.state, updatedAt: Date.now(), expiresAt: null }
+                entries[key] = { context: message.context, state: { ...entries[key]?.state, ...message.state }, updatedAt: Date.now(), expiresAt: null }
                 await writeSeo(entries)
             })
         })

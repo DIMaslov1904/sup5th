@@ -5,7 +5,7 @@ export const POPUP_RETENTION_MS = 60000
 export const defaultPopupState = () => ({ view: 'site', projectUrl: '', serviceId: '', seoTabId: null, seoUrl: '' })
 
 export const normalizePopupState = (state) => ({
-    view: ['site', 'seo', 'projects', 'settings'].includes(state?.view) ? state.view : 'site',
+    view: ['site', 'seo', 'projects', 'settings', 'tools'].includes(state?.view) ? state.view : 'site',
     projectUrl: state?.view === 'projects' && typeof state.projectUrl === 'string' ? state.projectUrl : '',
     serviceId: state?.view === 'projects' && typeof state.serviceId === 'string' ? state.serviceId : '',
     seoTabId: state?.view === 'seo' && Number.isInteger(state.seoTabId) ? state.seoTabId : null,

@@ -1,59 +1,45 @@
-const AUTH_TTL = 5 * 60 * 1000
-
-const setInputValue = (input, value) => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-    setter?.call(input, value)
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-    input.dispatchEvent(new Event('change', { bubbles: true }))
+const visible = input => input.getClientRects().length > 0 && !input.disabled && !input.readOnly && getComputedStyle(input).visibility !== 'hidden'
+const setValue = (input, value) => {
+    Object.getOwnPropertyDescriptor(input.ownerDocument.defaultView.HTMLInputElement.prototype, 'value').set.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }))
 }
-
-const findInput = (selectors) => selectors
-    .map((selector) => document.querySelector(selector))
-    .find((input) => input instanceof HTMLInputElement)
-
-const fillAdminForm = (auth) => {
-    if (Date.now() - auth.createdAt > AUTH_TTL) return false
-
-    const login = findInput([
-        '[name="USER_LOGIN"]',
-        '[name="username"]',
-        '[name="email"]',
-        '[name="login"]',
-        'input[type="email"]',
-        'input[autocomplete="username"]'
-    ])
-    const password = findInput([
-        '[name="USER_PASSWORD"]',
-        '[name="password"]',
-        'input[type="password"]',
-        'input[autocomplete="current-password"]'
-    ])
-    if (!login || !password) return false
-
-    setInputValue(login, auth.login)
-    setInputValue(password, auth.password)
-
-    if (auth.cms !== 'Tilda') {
-        const submit = document.querySelector('[name="Login"], [name="login"], #send, button[type="submit"], input[type="submit"]')
-        if (submit instanceof HTMLElement) submit.click()
+const findLoginForm = () => {
+    const passwords = [...document.querySelectorAll('input[type="password"]')].filter(input => visible(input) && input.autocomplete !== 'new-password')
+    for (const password of passwords) {
+        const form = password.form, scope = form || password.closest('[role="dialog"],section,main') || password.parentElement
+        const fields = [...scope.querySelectorAll('input')].filter(input => visible(input) && ['text', 'email', 'tel'].includes(input.type))
+        const login = fields.find(input => input.autocomplete === 'username') || fields.find(input => /user|login|email|account/i.test(`${input.name} ${input.id}`)) || fields.at(-1)
+        if (!login || (form && [...form.querySelectorAll('input[type="password"]')].filter(visible).length > 1)) continue
+        return { login, password, form, scope }
     }
-    return true
+    return null
 }
-
-const startAdminAuth = async () => {
-    if (window.top !== window) return
-    const response = await chrome.runtime.sendMessage({ type: 'auth:consume' })
-    const auth = response?.ok ? response.data : null
-    if (!auth || Date.now() - auth.createdAt > AUTH_TTL) return
-
-    if (fillAdminForm(auth)) return
-
-    const observer = new MutationObserver(() => {
-        if (!document.body || !fillAdminForm(auth)) return
-        observer.disconnect()
-    })
-    observer.observe(document.documentElement, { childList: true, subtree: true })
-    setTimeout(() => observer.disconnect(), 15000)
+const start = async () => {
+    if (window.top !== window || globalThis.__sup5thAuthInstalled) return
+    globalThis.__sup5thAuthInstalled = true
+    const context = await chrome.runtime.sendMessage({ type: 'auth:context' })
+    if (!context?.ok || !context.data) return
+    let observer, timer, cancelled = false, busy = false
+    const stop = () => { cancelled = true; observer?.disconnect(); clearTimeout(timer); chrome.runtime.onMessage.removeListener(receive) }
+    const receive = message => { if (message.type === 'auth:cancel') stop() }
+    chrome.runtime.onMessage.addListener(receive)
+    const attempt = async () => {
+        if (cancelled || busy) return
+        const fields = findLoginForm()
+        if (!fields) return
+        busy = true
+        const response = await chrome.runtime.sendMessage({ type: 'auth:consume' }), auth = response?.ok ? response.data : null
+        if (cancelled || !auth || Date.now() - auth.createdAt > 300000) { stop(); return }
+        setValue(fields.login, auth.login); setValue(fields.password, auth.password); stop()
+        if (auth.cms === 'Tilda') return
+        const submit = [...fields.scope.querySelectorAll('button,input[type="submit"]')].find(button => visible(button) &&
+            (button.type === 'submit' || /^(войти|вход|sign in|log in|login|вход в систему)$/i.test(button.textContent.trim())))
+        if (submit) submit.click()
+        else fields.form?.requestSubmit()
+    }
+    observer = new MutationObserver(() => attempt().catch(stop))
+    observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'hidden', 'disabled'] })
+    timer = setTimeout(stop, 15000)
+    await attempt()
 }
-
-startAdminAuth().catch((error) => console.error('[content] admin auth', error))
+start().catch(error => console.error('[auth]', error))

@@ -1,73 +1,31 @@
-/**
- * Общие утилиты работы с проектами.
- * Используются в background, popup и других частях расширения.
- */
-
-export const CMS_PATHS = {
-    UMI: 'admin/content/sitetree/',
-    EzPro: 'ezpro/',
-    Bitrix: 'bitrix/admin/#authorize',
-    ABO: 'login.php',
-    MODX: 'manager/',
-    AdminLTE: 'admin/',
-    Joomla: 'administrator/'
-}
-
+import { siteKey, siteHref, parseSiteAddress, createAccessIndex } from './siteAddress.js'
+export const CMS_PATHS = { UMI: 'admin/content/sitetree/', EzPro: 'ezpro/', Bitrix: 'bitrix/admin/#authorize', ABO: 'login.php', MODX: 'manager/', AdminLTE: 'admin/', Joomla: 'administrator/' }
 export const CMS_ICONS = ['abo', 'adminlte', 'bitrix', 'cms', 'ezpro', 'joomla', 'modx', 'tilda', 'umi', 'wordpress', 'drupal', 'opencart']
-
-/** Приводит значение к имени хоста в нижнем регистре. */
-export const normalizeHost = (value) => {
-    try {
-        const candidate = String(value || '').trim()
-        return new URL(candidate.includes('://') ? candidate : `https://${candidate}`).hostname.toLowerCase()
-    } catch {
-        return String(value || '').trim().replace(/^https?:\/\//i, '').split('/')[0].toLowerCase()
-    }
-}
-
-/**
- * Сначала точный домен, затем ближайший родительский домен.
- * Порядок строк API не влияет на выбор отдельного проекта поддомена.
- */
-export const findProjectByUrl = (projects, url) => {
-    if (!url) return null
-    const host = normalizeHost(url)
-    let match = null
-    let matchLength = -1
-    for (const item of projects || []) {
-        const projectHost = normalizeHost(item?.url)
-        if (!projectHost) continue
-        if (host === projectHost) return item
-        if (host.endsWith(`.${projectHost}`) && projectHost.length > matchLength) {
-            match = item
-            matchLength = projectHost.length
-        }
+export const normalizeHost = siteKey
+export const findProjectByUrl = (projects, value) => {
+    let target
+    try { target = parseSiteAddress(value) } catch { return null }
+    let match = null, length = -1
+    for (const project of projects || []) {
+        let candidate
+        try { candidate = parseSiteAddress(project.url) } catch { continue }
+        if (candidate.port !== target.port) continue
+        if (candidate.hostname === target.hostname) return project
+        if (target.hostname.endsWith('.' + candidate.hostname) && candidate.hostname.length > length) { match = project; length = candidate.hostname.length }
     }
     return match
 }
-
-/** Все записи точного домена либо ближайшего родителя, без смешивания доступов. */
-export const findAccessesByUrl = (accesses, url) => {
-    const match = findProjectByUrl(accesses, url)
-    return match ? (accesses || []).filter((access) => normalizeHost(access.url) === normalizeHost(match.url)) : []
-}
-
+export const findAccessesByUrl = (accesses, url) => createAccessIndex(accesses || [])(url)
 export const CREATE_TICKET_PARAM = 'sup5th-create-ticket'
-
-export const getTicketUrl = (project) => project?.ticketKey
-    ? `https://support.5th.ru/published/personal.php?key=${encodeURIComponent(project.ticketKey)}&t=requests&${CREATE_TICKET_PARAM}=1`
-    : ''
-
-/** Возвращает ссылку на панель администрирования проекта (без авторизации) */
-export const getAdminUrl = (project) => {
-    if (project?.urlAdmin) return /^https?:\/\//i.test(project.urlAdmin) ? project.urlAdmin : `https://${project.urlAdmin}`
+export const getTicketUrl = project => project?.ticketKey ? `https://support.5th.ru/published/personal.php?key=${encodeURIComponent(project.ticketKey)}&t=requests&${CREATE_TICKET_PARAM}=1` : ''
+export const getAdminUrl = project => {
+    if (project?.urlAdmin) return siteHref(project.urlAdmin)
     if (!project?.cms || project.cms === 'Нет') return ''
     if (project.cms === 'Tilda') return 'https://tilda.ru/login/'
-    return CMS_PATHS[project.cms] ? `https://${project.url}/${CMS_PATHS[project.cms]}` : ''
+    const base = siteHref(project.siteUrl || project.url)
+    return base && CMS_PATHS[project.cms] ? new URL('/' + CMS_PATHS[project.cms], base).href : ''
 }
-
-/** Возвращает путь к SVG-иконке CMS (относительно корня расширения) */
-export const getCmsIconPath = (cms) => {
-    const iconName = cms === 'Своя' ? 'cms' : String(cms || '').toLowerCase()
-    return `/assets/icons/${CMS_ICONS.includes(iconName) ? iconName : 'cms'}.svg`
+export const getCmsIconPath = cms => {
+    const icon = cms === 'Своя' ? 'cms' : String(cms || '').toLowerCase()
+    return `/assets/icons/${CMS_ICONS.includes(icon) ? icon : 'cms'}.svg`
 }

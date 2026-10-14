@@ -1,4 +1,3 @@
-import { ICON_CACHE_LIMIT } from './iconPolicy.js'
 
 let database
 const openDatabase = () => {
@@ -37,13 +36,9 @@ export const iconRepository = {
     getNextRequestAt: () => transact('state', 'readonly', store => store.get('nextRequestAt')),
     setNextRequestAt: value => transact('state', 'readwrite', store => store.put(value, 'nextRequestAt')),
     remove: origin => transact('icons', 'readwrite', store => store.delete(origin)),
-    put: async record => {
-        const records = await iconRepository.list()
-        const previous = records.find(item => item.origin === record.origin)
-        const size = records.reduce((sum, item) => sum + (item.image?.size || 0), 0) - (previous?.image?.size || 0) + (record.image?.size || 0)
-        if (size > ICON_CACHE_LIMIT) throw new Error('Кеш иконок достиг лимита 50 МБ')
-        await transact('icons', 'readwrite', store => store.put(record))
-    },
+    put: record => transact('icons', 'readwrite', store => store.put(record)),
+    warningSeen: () => transact('state', 'readonly', store => store.get('largeWarningSeen')),
+    markWarningSeen: () => transact('state', 'readwrite', store => store.put(true, 'largeWarningSeen')),
     clear: async () => {
         await transact('icons', 'readwrite', store => store.clear())
         await transact('state', 'readwrite', store => store.clear())

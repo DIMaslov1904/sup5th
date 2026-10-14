@@ -12,8 +12,8 @@ const copy = async field => {
     copying.value = true; card.value?.close(); message.value = ''
     try {
         const value = await ensureUnlocked(async () => {
-            if (field !== 'ssh') return getProjectAccessField(props.projectUrl, props.index, field)
-            const [host, login] = await Promise.all(['ftpUrl', 'ftpLogin'].map(name => getProjectAccessField(props.projectUrl, props.index, name)))
+            if (field !== 'ssh') return getProjectAccessField(props.projectUrl, props.access.id, field)
+            const [host, login] = await Promise.all(['ftpUrl', 'ftpLogin'].map(name => getProjectAccessField(props.projectUrl, props.access.id, name)))
             return getSshCommand(login, host)
         })
         await navigator.clipboard.writeText(value)

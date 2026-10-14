@@ -28,6 +28,7 @@ export const collectSitemap = async (roots, fetchDocument, { parse = parseSitema
         try {
             const response = await fetchDocument(url)
             signal?.throwIfAborted()
+            if (response.failure === 'permission') throw new Error('Нет разрешения на сайт. Предоставьте доступ и повторите загрузку.')
             if (!response.ok) throw new Error(`HTTP ${response.status || 'не получен'}`)
             if (response.truncated) throw new Error('Файл превышает лимит загрузки; данные неполные')
             const doc = parse(response.text, response.url || url)

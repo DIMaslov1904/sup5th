@@ -35,14 +35,3 @@ export const openBytes = async (sealed, key) => {
 export const sealJson = (value, key) => sealBytes(encoder.encode(JSON.stringify(value)), key)
 
 export const openJson = async (sealed, key) => JSON.parse(decoder.decode(await openBytes(sealed, key)))
-
-export const derivePinWrappingKey = async (pin, salt, iterations) => {
-    const material = await crypto.subtle.importKey('raw', encoder.encode(pin), 'PBKDF2', false, ['deriveKey'])
-    return crypto.subtle.deriveKey(
-        { name: 'PBKDF2', hash: 'SHA-256', salt, iterations },
-        material,
-        { name: 'AES-GCM', length: 256 },
-        false,
-        ['encrypt', 'decrypt']
-    )
-}

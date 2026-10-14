@@ -1,17 +1,16 @@
 // Глобальный механизм разблокировки хранилища по требованию.
 // ensureUnlocked(action) — если хранилище заблокировано, показывает модалку
-// (PIN или Windows Hello) и выполняет action после успешной разблокировки.
+// через системный аутентификатор и выполняет action после разблокировки.
 import { reactive } from 'vue'
 import {
     getCredentialSecurityStatus,
-    unlockCredentialVault,
     unlockCredentialVaultWithHello
 } from './data/projectData.js'
 import { unlockWithBiometricFlow } from '../utils/biometricHello.js'
 
 export const unlockState = reactive({
     visible: false,
-    mode: 'pin', // 'pin' | 'hello'
+    mode: 'hello',
     loading: false,
     error: ''
 })
@@ -52,24 +51,8 @@ export const cancelUnlock = () => {
 export const ensureUnlocked = async (action, options) => {
     const status = await getCredentialSecurityStatus(false, false)
     if (!status.enabled || status.unlocked) return action()
-    await showUnlock(status.mode === 'hello' ? 'hello' : 'pin', options)
+    await showUnlock('hello', options)
     return action()
-}
-
-// Ввод PIN: пробуем разблокировать сразу, без кнопки подтверждения
-export const submitPin = async (pin) => {
-    if (unlockState.loading || !settle) return
-    const request = settle
-    unlockState.loading = true
-    unlockState.error = ''
-    try {
-        await unlockCredentialVault(pin, { refreshAfterUnlock: request.refreshAfterUnlock })
-        finishUnlock(request)
-    } catch (error) {
-        if (isActive(request)) unlockState.error = error.message
-    } finally {
-        if (isActive(request)) unlockState.loading = false
-    }
 }
 
 // Разблокировка Windows Hello (WebAuthn + PRF)

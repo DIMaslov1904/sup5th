@@ -1,9 +1,12 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { callBackground, sendSeoToTab, fetchSeo, openSeoApp, downloadText } from '../../utils/seoClient.js'
 import { buildHeadingTree } from '../../utils/headingTree.js'
 import HeadingTree from './HeadingTree.vue'
-import { evaluateRobots } from '../../utils/seoRules.js'
+import { evaluateRobotsFile } from '../../utils/seoRules.js'
+import { classifyLinkCheck, withoutFragment } from '../../utils/linkCheckStatus.js'
+import { requestOrigins } from '../../utils/hostPermissions.js'
+import Preloader from './ui/Preloader.vue'
 import Button from './ui/Button.vue'
 import Card from './ui/Card.vue'
 import Message from './ui/Message.vue'
@@ -14,12 +17,12 @@ import PropertyList from './ui/PropertyList.vue'
 import OpenGraphPreview from './OpenGraphPreview.vue'
 import { pageWeightRows } from '../../utils/pageWeightDisplay.js'
 
-const props = defineProps({ tab: Object, autoScan: Boolean, session: Object })
+const props = defineProps({ tab: Object, autoScan: { type: Boolean, default: true }, session: Object })
 const notification = ref(''), serverIp = ref(''), serverIpLoading = ref(false)
 const headingTree = computed(() => buildHeadingTree(report.value?.headingRows || []))
-const section = ref('overview'), report = ref(null), loading = ref(false), error = ref('')
+const section = ref('overview'), report = shallowRef(null), loading = ref(true), error = ref('')
 const linkFilter = ref('all'), relFilter = ref('all'), protocolFilter = ref('all'), statusFilter = ref('all'), imageFilter = ref('all'), query = ref(''), visible = ref(100)
-const checked = ref({}), checking = ref(false), checkProgress = ref(0)
+const checked = shallowRef({}), checking = ref(false), checkProgress = ref(0)
 const ogPreviewOpen = ref(false)
 const metaItems = tags => tags.map(item => ({ label: item.name, value: item.content, warning: item.inHead === false ? 'вне head' : '' }))
 const allMeta = computed(() => metaItems(report.value?.metaTags || []))
@@ -34,6 +37,8 @@ const scan = async () => {
     loading.value = true; error.value = ''
     notification.value = ''; serverIp.value = ''
     try {
+        const context = await sendSeoToTab(props.tab?.id, 'seo:context')
+        sessionContext = { tabId: props.tab.id, url: context.url, documentId: context.documentId }
         const data = await sendSeoToTab(props.tab?.id)
         if (alive) {
             report.value = data; checked.value = {}; visible.value = 100
@@ -44,16 +49,22 @@ const scan = async () => {
     catch (e) { if (alive) error.value = e.message }
     finally { if (alive) loading.value = false }
 }
+let persistTimer, reportDirty = false
+const uiSnapshot = () => ({ section: section.value, serverIp: serverIp.value,
+    linkFilter: linkFilter.value, relFilter: relFilter.value, protocolFilter: protocolFilter.value,
+    statusFilter: statusFilter.value, imageFilter: imageFilter.value, query: query.value,
+    visible: visible.value, checked: checked.value, checkProgress: checkProgress.value })
 const persist = () => {
+    clearTimeout(persistTimer)
     if (!alive || restoring || !sessionContext || !report.value) return
-    props.session?.save(sessionContext, JSON.parse(JSON.stringify({
-        report: report.value, section: section.value, serverIp: serverIp.value,
-        linkFilter: linkFilter.value, relFilter: relFilter.value, protocolFilter: protocolFilter.value,
-        statusFilter: statusFilter.value, imageFilter: imageFilter.value, query: query.value,
-        visible: visible.value, checked: checked.value, checkProgress: checkProgress.value
-    })))
+    const patch = uiSnapshot()
+    if (reportDirty) patch.report = report.value
+    props.session?.save(sessionContext, JSON.parse(JSON.stringify(patch)))
+    reportDirty = false
 }
-watch([report, section, serverIp, linkFilter, relFilter, protocolFilter, statusFilter, imageFilter, query, visible, checked, checkProgress], persist, { deep: true, flush: 'post' })
+const schedulePersist = () => { clearTimeout(persistTimer); persistTimer = setTimeout(persist, 200) }
+watch(report, () => { if (!restoring) { reportDirty = true; schedulePersist() } }, { flush: 'sync' })
+watch([section, serverIp, linkFilter, relFilter, protocolFilter, statusFilter, imageFilter, query, visible, checked, checkProgress], schedulePersist)
 onBeforeUnmount(persist)
 onMounted(async () => {
     if (props.session && props.tab?.id) {
@@ -77,27 +88,30 @@ onMounted(async () => {
         } catch { /* Нет доступного content script/кеша — обычная проверка ниже. */ }
         finally { if (alive) loading.value = false }
     }
+    loading.value = false
     if (alive && props.autoScan && !report.value) scan()
 })
-onUnmounted(() => { alive = false; cancelled = true })
+onUnmounted(() => { alive = false; cancelled = true; clearTimeout(persistTimer) })
 const links = computed(() => (report.value?.linkRows || []).filter(item => {
     const info = checked.value[item.url]
     return (linkFilter.value === 'all' || (linkFilter.value === 'external' ? item.external : !item.external)) &&
         (relFilter.value === 'all' || (relFilter.value === 'follow' ? !item.nofollow : item.rel.split(/\s+/).includes(relFilter.value))) &&
         (protocolFilter.value === 'all' || item.protocol === protocolFilter.value) &&
-        (statusFilter.value === 'all' || (statusFilter.value === 'broken' ? info && !info.ok : statusFilter.value === 'redirect' ? info?.redirected : !info)) &&
+        (statusFilter.value === 'all' || (statusFilter.value === 'broken' ? info?.outcome === 'broken' : statusFilter.value === 'redirect' ? info?.redirected : statusFilter.value === 'uncertain' ? info && ['unknown','auth','blocked','server'].includes(info.outcome) : !info)) &&
         `${item.text} ${item.url}`.toLowerCase().includes(query.value.toLowerCase())
 }))
 const images = computed(() => (report.value?.imageRows || []).filter(item => imageFilter.value === 'all' || (imageFilter.value === 'missing' ? item.alt === null : imageFilter.value === 'empty' ? item.alt === '' : Boolean(item.alt))))
-const robotsRules = computed(() => report.value ? evaluateRobots(report.value.robotsFile.content, report.value.url) : null)
+const robotsRules = computed(() => report.value ? evaluateRobotsFile(report.value.robotsFile, report.value.url) : null)
 const checkLinks = async () => {
+    if (checking.value) return
     checking.value = true; cancelled = false; error.value = ''; checkProgress.value = 0
     const urls = [...new Set(links.value.filter(item => /^https?:/.test(item.url)).map(item => item.url))]
     try {
+        await requestOrigins(urls)
         for (let i = 0; i < urls.length && !cancelled; i += 5) {
             const batch = await Promise.all(urls.slice(i, i + 5).map(async url => {
                 let info = await fetchSeo(url, 'HEAD'); if (!info.ok && [0, 405, 501].includes(info.status)) info = await fetchSeo(url)
-                return [url, { ...info, redirected: Boolean(info.url && info.url !== url) }]
+                return [url, { ok: info.ok, status: info.status, url: info.url, ...classifyLinkCheck(info), redirected: Boolean(info.url && withoutFragment(info.url) !== withoutFragment(url)) }]
             }))
             if (cancelled || !alive) break
             checked.value = { ...checked.value, ...Object.fromEntries(batch) }; checkProgress.value += batch.length
@@ -106,7 +120,7 @@ const checkLinks = async () => {
     finally { if (alive) checking.value = false }
 }
 const toggle = async (action) => {
-    try { report.value.actions = await sendSeoToTab(props.tab.id, 'seo:action', { action, enabled: !report.value.actions[action] }) }
+    try { report.value = { ...report.value, actions: await sendSeoToTab(props.tab.id, 'seo:action', { action, enabled: !report.value.actions[action] }) } }
     catch (e) { error.value = e.message }
 }
 const goToHeading = async item => {
@@ -126,7 +140,7 @@ const exportLinks = () => {
     downloadText('\uFEFF' + [['URL','Анкор','Rel','HTTP'], ...links.value.map(item => [item.url,item.text,item.rel,checked.value[item.url]?.status])].map(row => row.map(cell).join(';')).join('\r\n'), 'links.csv', 'text/csv;charset=utf-8')
 }
 const overview = computed(() => report.value ? [
-    ['URL',report.value.url], ['IP сервера',serverIpLoading.value ? 'Определяем…' : serverIp.value || 'Не получен'], ['HTTP',report.value.response.status || 'Не получен'], ['Title',report.value.title || 'Отсутствует'], ['Длина Title',report.value.titleLength],
+    ['URL',report.value.url], ['Base',report.value.baseDisplay + (report.value.baseDeclared ? '' : ' (не задан)')], ['Проверено',new Date(report.value.scannedAt).toLocaleString('ru-RU')], ['IP сервера',serverIpLoading.value ? 'Определяем…' : serverIp.value || 'Не получен'], ['HTTP',report.value.response.status || 'Не получен'], ['Title',report.value.title || 'Отсутствует'], ['Длина Title',report.value.titleLength],
     ['Description',report.value.description || 'Отсутствует'], ['Длина Description',report.value.descriptionLength], ['Keywords',report.value.keywords || 'Отсутствует'],
     ['Язык',report.value.lang || 'Не указан'], ['Canonical',report.value.canonical || 'Не указан'], ['Viewport',report.value.viewport ? 'Есть' : 'Нет'],
     ['Редирект',report.value.redirected ? report.value.finalUrl : 'Нет'], ['TTFB повторного запроса',report.value.response.ttfb == null ? 'Не измерен' : report.value.response.ttfb + ' мс']
@@ -154,11 +168,9 @@ const tools = computed(() => {
 </script>
 <template>
     <div class="grid gap-3 text-ui-text">
-        <Button v-if="!report && !loading" size="sm" variant="secondary" :disabled="!tab?.id" @click="scan">Анализировать</Button>
-        <p v-if="!report && !loading && !error" class="text-xs text-ui-muted">Нажмите «Анализировать», чтобы проверить текущую страницу.</p>
         <Message v-if="error" type="error">{{ error }}</Message>
         <Message v-if="notification" type="warning">{{ notification }}</Message>
-        <p v-if="loading" role="status" class="text-xs text-ui-muted">Получаем данные страницы…</p>
+        <Preloader v-if="loading" label="Получаем данные страницы…" />
         <div v-if="report" class="grid min-w-0 gap-3">
         <Tabs v-model="section" :items="tabs" label="Разделы SEO" wrap @update:model-value="selectSection" />
         <div class="grid min-w-0 gap-3">
@@ -180,14 +192,14 @@ const tools = computed(() => {
                     <Select v-model="linkFilter" aria-label="Тип ссылок"><option value="all">Все ссылки</option><option value="internal">Внутренние</option><option value="external">Внешние</option></Select>
                     <Select v-model="relFilter" aria-label="Rel ссылок"><option value="all">Все rel</option><option value="follow">Follow</option><option>nofollow</option><option>ugc</option><option>sponsored</option></Select>
                     <Select v-model="protocolFilter" aria-label="Протокол ссылок"><option value="all">Все протоколы</option><option value="https:">HTTPS</option><option value="http:">HTTP</option><option value="mailto:">Email</option><option value="tel:">Телефон</option></Select>
-                    <Select v-model="statusFilter" aria-label="Статус ссылок"><option value="all">Все статусы</option><option value="broken">Ошибки</option><option value="redirect">Редиректы</option><option value="unchecked">Не проверены</option></Select>
+                    <Select v-model="statusFilter" aria-label="Статус ссылок"><option value="all">Все статусы</option><option value="broken">Битые: 404 / 410</option><option value="uncertain">Не удалось подтвердить</option><option value="redirect">Редиректы</option><option value="unchecked">Не проверены</option></Select>
                 </div>
                 <Input v-model="query" placeholder="Поиск по URL и анкору" />
                 <div class="flex flex-wrap gap-2"><Button size="sm" variant="secondary" :disabled="checking" @click="checkLinks">Проверить ссылки</Button><Button v-if="checking" size="sm" variant="ghost" @click="cancelled = true">Остановить</Button><Button size="sm" variant="ghost" @click="exportLinks">CSV</Button><Button size="sm" variant="ghost" @click="copyLinks">Копировать URL</Button></div>
                 <p class="text-xs text-ui-muted">Ссылок: {{ links.length }} · Проверено: {{ checkProgress }}. Проверка выполняется без cookies.</p>
                 <article v-for="item in links.slice(0, visible)" :key="item.id" class="grid gap-1 ui-panel text-xs">
                     <a :href="/^https?:/.test(item.url) ? item.url : undefined" target="_blank" rel="noreferrer" class="break-all text-ui-accent">{{ item.url }}</a>
-                    <span>{{ item.text || 'Без анкора' }}</span><span class="text-ui-muted/70">{{ item.external ? 'Внешняя' : 'Внутренняя' }} · {{ item.rel || 'follow' }} <b v-if="checked[item.url]" :class="checked[item.url].ok ? 'text-ui-success' : 'text-ui-warning'">· HTTP {{ checked[item.url].status || 'не получен' }}{{ checked[item.url].redirected ? ' → ' + checked[item.url].url : '' }}</b></span>
+                    <span>{{ item.text || 'Без анкора' }}</span><span class="text-ui-muted/70">{{ item.external ? 'Внешняя' : 'Внутренняя' }} · {{ item.rel || 'follow' }} <b v-if="checked[item.url]" :class="checked[item.url].ok ? 'text-ui-success' : 'text-ui-warning'">· {{ checked[item.url].label }}{{ checked[item.url].redirected ? ' → ' + checked[item.url].url : '' }}</b></span>
                 </article>
                 <Button v-if="links.length > visible" size="sm" variant="ghost" @click="visible += 100">Показать ещё</Button>
             </template>
@@ -216,7 +228,7 @@ const tools = computed(() => {
                 <div class="flex flex-wrap gap-2"><a :href="tools.find(item => item[0] === 'Schema.org')?.[1]" target="_blank" rel="noreferrer" class="text-xs text-ui-accent">Валидатор Schema.org ↗</a><a :href="tools.find(item => item[0] === 'Google Rich Results')?.[1]" target="_blank" rel="noreferrer" class="text-xs text-ui-accent">Google Rich Results ↗</a></div>
             </template>
             <template v-if="section === 'index'">
-                <Card title="Индексация"><div class="grid gap-2 text-xs"><p>Meta robots: {{ report.robots || 'Не задан' }}</p><p>X-Robots-Tag: {{ report.xRobots || 'Не задан' }}</p><p :class="report.robotsAllowed && report.xRobotsAllowed ? 'text-ui-success' : 'text-ui-warning'">{{ report.robotsAllowed && report.xRobotsAllowed ? 'Нет запрета noindex в метатеге/заголовке' : 'Есть запрет noindex' }}</p><p>robots.txt: {{ report.robotsFile.exists ? 'HTTP ' + report.robotsFile.status : 'Недоступен' }} · {{ robotsRules.allowed ? 'Путь разрешён для *' : 'Путь запрещён для *' }}</p><p class="text-ui-muted/70">Отсутствие запрета не гарантирует индексацию. Правила конкретного робота могут отличаться.</p></div></Card>
+                <Card title="Индексация"><div class="grid gap-2 text-xs"><p>Meta robots: {{ report.robots || 'Не задан' }}</p><p>X-Robots-Tag: {{ report.xRobots || 'Не задан' }}</p><p :class="report.robotsAllowed && report.xRobotsAllowed ? 'text-ui-success' : 'text-ui-warning'">{{ !report.robotsAllowed || report.xRobotsAllowed === false ? 'Есть общий запрет noindex' : report.xRobotsAllowed === null ? 'HTTP-заголовки не получены: результат неполный' : 'Общего запрета noindex нет' }}</p><p>robots.txt: {{ report.robotsFile.exists ? 'HTTP ' + report.robotsFile.status : 'Недоступен' }} · {{ robotsRules.allowed === null ? 'Правила не удалось определить' : robotsRules.allowed ? 'Путь разрешён для *' : 'Путь запрещён для *' }}</p><p v-for="item in report.indexingAgents" :key="item.agent">{{ item.agent }}: {{ item.allowed ? 'запрета noindex не найдено' : 'есть запрет noindex' }}{{ report.xRobotsAllowed === null ? ' (HTTP-заголовки не получены)' : '' }}</p><p class="text-ui-muted/70">Отсутствие запрета не гарантирует индексацию. Правила конкретного робота могут отличаться.</p></div></Card>
                 <details class="ui-panel text-xs"><summary class="cursor-pointer">robots.txt</summary><pre class="mt-2 overflow-auto whitespace-pre-wrap">{{ report.robotsFile.content || 'Пустой или не получен' }}</pre></details>
                 <Card title="Canonical / hreflang"><p v-for="(item,index) in report.canonicals" :key="index" class="break-all text-xs">{{ item.href || '(пустой)' }} {{ item.inHead ? '' : 'вне head' }}</p><p v-for="(item,index) in report.hreflang" :key="index" class="break-all text-xs">{{ item.hreflang }}: {{ item.href }}</p></Card>
                 <Button variant="secondary" size="sm" @click="openSeoApp(tab.id,'sitemap')">Открыть единый sitemap ↗</Button>
@@ -231,6 +243,6 @@ const tools = computed(() => {
             <div v-if="section === 'tools'" class="grid gap-2"><a v-for="[label,url] in tools" :key="label" :href="url" target="_blank" rel="noreferrer" class="ui-panel text-xs text-ui-accent hover:bg-white/5">{{ label }} ↗</a></div>
         </div>
         </div>
-        <Button size="sm" variant="ghost" :disabled="!tab?.id" @click="openSeoApp(tab.id)">Аудит ↗</Button>
+        <div class="flex gap-2"><Button size="sm" variant="secondary" :disabled="!tab?.id || loading || checking" @click="scan">Обновить</Button><Button size="sm" variant="ghost" :disabled="!tab?.id" @click="openSeoApp(tab.id)">Аудит ↗</Button></div>
     </div>
 </template>

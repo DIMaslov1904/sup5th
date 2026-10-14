@@ -2,9 +2,24 @@
 import IconButton from './ui/IconButton.vue'
 import Input from './ui/Input.vue'
 import Button from './ui/Button.vue'
+import { securityStatus, refreshSecurityStatus, refreshJob } from '../backgroundState.js'
+import { lockCredentialVault } from '../data/projectData.js'
+import { ensureUnlocked } from '../unlockStore.js'
+import { ref } from 'vue'
 const modelItemMenu = defineModel()
 const search = defineModel('search', { type: String, default: '' })
 const emit = defineEmits(['search', 'ticket'])
+const locking = ref(false), lockError = ref('')
+const toggleLock = async () => {
+    if (!securityStatus.value.enabled) { modelItemMenu.value = 'settings'; return }
+    locking.value = true; lockError.value = ''
+    try {
+        if (securityStatus.value.unlocked) await lockCredentialVault()
+        else await ensureUnlocked(async () => {}, { refreshAfterUnlock: false })
+        await refreshSecurityStatus()
+    } catch (error) { lockError.value = error.message }
+    finally { locking.value = false }
+}
 </script>
 <template>
     <div
@@ -17,22 +32,26 @@ const emit = defineEmits(['search', 'ticket'])
             </IconButton>
             <button type="button" aria-label="SEO" title="SEO-анализ текущей страницы" @click="modelItemMenu = 'seo'"
                 class="ui-icon-button w-auto px-2 text-xs font-semibold">SEO</button>
+            <IconButton label="Инструменты" @click="modelItemMenu = 'tools'"><svg class="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 6.5a5 5 0 0 0-6.1 6.1L3 18a2.1 2.1 0 0 0 3 3l5.4-5.4a5 5 0 0 0 6.1-6.1l-3 3-3-3Z"/></svg></IconButton>
             <label class="relative min-w-0 flex-1">
                 <svg class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
                     <circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" />
                 </svg>
                 <Input v-model="search" type="search" aria-label="Поиск сервисов и проектов" placeholder="Поиск проектов и сервисов" autocomplete="off"
                     class="pr-2 pl-8 text-xs"
-                    @focus="emit('search')" />
+                    @click="emit('search')" @keydown.enter.prevent="emit('search')" />
             </label>
             <Button variant="ghost" class="px-2 text-xs" @click="emit('ticket')">Тикет</Button>
+            <IconButton :label="!securityStatus.enabled ? 'Защита выключена — настройки' : securityStatus.unlocked ? 'Заблокировать хранилище' : 'Разблокировать хранилище'" :disabled="locking || !securityStatus.ready" :class="securityStatus.enabled ? securityStatus.unlocked ? 'text-ui-success' : 'text-ui-warning' : 'text-ui-muted'" @click="toggleLock"><svg class="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path :d="securityStatus.enabled && !securityStatus.unlocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M16 10V6a4 4 0 0 0-8 0'"/><path d="M12 14v3"/></svg></IconButton>
             <IconButton label="Настройки" @click="modelItemMenu = 'settings'">
                 <svg class="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="m9.5 3-.6 2.2-2 .9-2.1-.6-2.5 4.3 1.5 1.6v2.2l-1.5 1.6 2.5 4.3 2.1-.6 2 .9.6 2.2h5l.6-2.2 2-.9 2.1.6 2.5-4.3-1.5-1.6v-2.2l1.5-1.6-2.5-4.3-2.1.6-2-.9L14.5 3Z" /><circle cx="12" cy="12" r="3" />
                 </svg>
             </IconButton>
         </nav>
-        <div class="app-scroll min-h-0 overflow-y-auto pt-16 pb-6 h-full">
+        <div class="app-scroll flex min-h-0 flex-1 flex-col overflow-y-auto pt-16 pb-6">
+            <p v-if="refreshJob.running" role="status" class="mx-4 mb-3 flex items-center gap-2 text-xs text-ui-accent"><span class="ui-loading" aria-hidden="true"></span>Загрузка данных: {{ refreshJob.completed }} / {{ refreshJob.total }}</p>
+            <p v-if="lockError" role="alert" class="mx-4 mb-3 text-xs text-ui-danger">{{ lockError }}</p>
             <slot />
         </div>
     </div>

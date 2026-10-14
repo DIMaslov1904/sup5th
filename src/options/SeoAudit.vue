@@ -2,12 +2,14 @@
 import { computed, onUnmounted, ref } from 'vue'
 import { sendSeoToTab, fetchSeo } from '../utils/seoClient.js'
 import { collectSitemap, sitemapRoots } from '../utils/sitemap.js'
-import { evaluateRobots, parseMetaHtml } from '../utils/seoRules.js'
+import { evaluateRobotsFile, parseMetaHtml } from '../utils/seoRules.js'
 const props = defineProps({ tab: Object })
 let cancelled = false
 let auditController
 const stopAudit = () => { cancelled = true; auditController?.abort() }
 onUnmounted(stopAudit)
+import { classifyLinkCheck, withoutFragment } from '../utils/linkCheckStatus.js'
+import { requestOrigins } from '../utils/hostPermissions.js'
 import Button from '../popup/components/ui/Button.vue'
 import Card from '../popup/components/ui/Card.vue'
 import Message from '../popup/components/ui/Message.vue'
@@ -21,6 +23,7 @@ const linkChecks = ref([])        // [{url, status, ok, redirected, ttfb}]
 const duplicateTitles = ref([])
 const duplicateDescriptions = ref([])
 const sitemapInfo = ref(null)     // {url, exists, count, containsCurrent, duplicates}
+const sampleMetaCount = ref(0), uncertainCount = ref(0)
 const robotsRules = ref([])       // [{directive, value, applies, blocked}]
 
 const score = computed(() => {
@@ -48,11 +51,13 @@ const stripQuery = (url) => {
 }
 
 const runAudit = async () => {
+    if (['scanning','checking-links'].includes(state.value)) return
     cancelled = false
     auditController = new AbortController()
     message.value = ''
     state.value = 'scanning'
     checks.value = []
+    sampleMetaCount.value = 0; uncertainCount.value = 0
     linkChecks.value = []
     duplicateTitles.value = []
     duplicateDescriptions.value = []
@@ -60,6 +65,7 @@ const runAudit = async () => {
     robotsRules.value = []
 
     try {
+        await requestOrigins([props.tab?.url].filter(Boolean))
         const tab = await getActiveSiteTab()
         if (!tab?.id || !tab?.url || !/^https?:/.test(tab.url)) {
             throw new Error('Откройте проверяемый сайт в активной вкладке')
@@ -85,7 +91,7 @@ const runAudit = async () => {
                     title = parseTitle(info.text)
                     description = parseDescription(info.text)
                 }
-                return { url, status: info.status, ok: info.ok, redirected: Boolean(info.url && info.url !== url), ttfb: info.ttfb, title, description }
+                return { url, status: info.status, ok: info.ok, ...classifyLinkCheck(info), redirected: Boolean(info.url && withoutFragment(info.url) !== withoutFragment(url)), ttfb: info.ttfb, title, description }
             }))
             if (cancelled) { state.value = 'idle'; return }
             results.push(...batchResults)
@@ -95,6 +101,8 @@ const runAudit = async () => {
 
         // Дубли title/description среди страниц с валидным HTML
         const withMeta = results.filter((item) => item.title || item.description)
+        sampleMetaCount.value = withMeta.length
+        uncertainCount.value = results.filter(item => !['ok','broken'].includes(item.outcome)).length
         const titleCounts = new Map()
         const descCounts = new Map()
         for (const item of withMeta) {
@@ -110,7 +118,7 @@ const runAudit = async () => {
         sitemapInfo.value = { url: sitemapUrl, exists: combined.files.length > 0, status: combined.files.length ? 200 : 0,
             count: combined.pages.length, containsCurrent: combined.pages.some(item => stripQuery(item.url) === stripQuery(data.url)),
             duplicates: combined.duplicates, complete: combined.complete, errors: combined.errors, limited: combined.limited }
-        robotsRules.value = evaluateRobots(data.robotsFile.content, data.url).rules.map(rule => ({ ...rule, blocked: rule.directive === 'disallow' }))
+        robotsRules.value = evaluateRobotsFile(data.robotsFile, data.url).rules.map(rule => ({ ...rule, blocked: rule.directive === 'disallow' }))
 
         buildChecks(data, results)
         state.value = 'done'
@@ -123,7 +131,7 @@ const runAudit = async () => {
 
 const buildChecks = (data, results) => {
     const linksOk = results.filter((item) => item.ok && item.status >= 200 && item.status < 400)
-    const brokenCount = results.length - linksOk.length
+    const brokenCount = results.filter(item => item.outcome === 'broken').length
     const slowPages = results.filter((item) => item.ttfb != null && item.ttfb > 500).length
 
     const list = [
@@ -135,6 +143,7 @@ const buildChecks = (data, results) => {
         { label: 'Нет дублей H1', ok: !data.duplicateH1?.length },
         { label: 'Указан Canonical', ok: Boolean(data.canonical) },
         { label: 'Индексация разрешена (robots)', ok: data.robotsAllowed },
+        ...data.indexingAgents.map(item => ({ label: `Нет noindex для ${item.agent}`, ok: item.allowed ? (data.xRobotsAllowed === null ? null : true) : false })),
         { label: 'X-Robots-Tag не запрещает', ok: data.xRobotsAllowed },
         { label: 'Указан lang', ok: Boolean(data.lang) },
         { label: 'Указан Viewport', ok: data.viewport },
@@ -146,10 +155,10 @@ const buildChecks = (data, results) => {
         { label: 'robots.txt доступен', ok: data.robotsFile.exists, hint: data.robotsFile.status ? `HTTP ${data.robotsFile.status}` : '—' },
         { label: 'sitemap.xml доступен', ok: data.sitemap.exists, hint: data.sitemap.status ? `HTTP ${data.sitemap.status}` : '—' },
         { label: 'Текущая страница в sitemap', ok: sitemapInfo.value?.containsCurrent ? true : sitemapInfo.value?.complete ? false : null },
-        { label: 'Нет битых внутренних ссылок', ok: brokenCount === 0, hint: `${brokenCount} из ${results.length}` },
+        { label: 'Нет подтверждённых битых внутренних ссылок', ok: brokenCount ? false : uncertainCount.value ? null : true, hint: `Битых: ${brokenCount}; неопределённых: ${uncertainCount.value}; всего: ${results.length}` },
         { label: 'Медленных страниц нет (>500 мс)', ok: slowPages === 0, hint: `${slowPages}` },
-        { label: 'Нет дублей Title на страницах', ok: duplicateTitles.value.length === 0, hint: `${duplicateTitles.value.length}` },
-        { label: 'Нет дублей Description на страницах', ok: duplicateDescriptions.value.length === 0, hint: `${duplicateDescriptions.value.length}` }
+        { label: `Дубли Title среди ${sampleMetaCount.value} страниц с метаданными`, ok: sampleMetaCount.value < 2 ? null : duplicateTitles.value.length === 0, hint: sampleMetaCount.value < 2 ? 'Недостаточно данных' : `Групп дублей: ${duplicateTitles.value.length}` },
+        { label: `Дубли Description среди ${sampleMetaCount.value} страниц с метаданными`, ok: sampleMetaCount.value < 2 ? null : duplicateDescriptions.value.length === 0, hint: sampleMetaCount.value < 2 ? 'Недостаточно данных' : `Групп дублей: ${duplicateDescriptions.value.length}` }
     ]
     checks.value = list
 }
@@ -214,15 +223,16 @@ const openTab = (url) => chrome.tabs.create({ url })
                 <Card v-if="linkChecks.length" title="Проверка внутренних ссылок">
                     <div class="mb-2 flex flex-wrap gap-2 text-[11px]">
                         <span class="rounded bg-emerald-700/20 px-2 py-0.5 text-ui-success">ОК: {{ linkChecks.filter(l => l.ok).length }}</span>
-                        <span class="rounded bg-red-400/20 px-2 py-0.5 text-ui-danger">Битые: {{ linkChecks.filter(l => !l.ok).length }}</span>
+                        <span class="rounded bg-red-400/20 px-2 py-0.5 text-ui-danger">Битые 404/410: {{ linkChecks.filter(l => l.outcome === 'broken').length }}</span>
                         <span class="rounded bg-amber-400/20 px-2 py-0.5 text-ui-warning">Редирект: {{ linkChecks.filter(l => l.redirected).length }}</span>
                     </div>
+                    <p class="mb-2 text-xs text-ui-muted">Выборка: {{ linkChecks.length }} страниц. Не удалось подтвердить: {{ uncertainCount }}.</p>
                     <ul class="grid min-w-0 grid-cols-1 max-h-72 gap-1 overflow-y-auto pr-1">
                         <li v-for="(link, index) in linkChecks" :key="index"
                             class="flex min-w-0 items-center justify-between gap-3 rounded px-2 py-1 text-xs odd:bg-ui-field/40">
                             <a :href="link.url" :title="link.url" target="_blank" rel="noreferrer" class="min-w-0 flex-1 truncate text-ui-muted hover:text-ui-accent">{{ link.url }}</a>
                             <span class="shrink-0"
-                                :class="link.ok ? 'text-emerald-400' : 'text-red-400'">{{ link.status || '—' }}</span>
+                                :class="link.ok ? 'text-emerald-400' : 'text-ui-warning'">{{ link.label }}</span>
                         </li>
                     </ul>
                 </Card>
@@ -251,7 +261,8 @@ const openTab = (url) => chrome.tabs.create({ url })
                             <dd :class="sitemapInfo.exists ? 'text-emerald-400' : 'text-red-400'">{{ sitemapInfo.exists ? `Да (HTTP ${sitemapInfo.status})` : 'Нет' }}</dd></div>
                         <div class="flex justify-between gap-3"><dt class="text-ui-muted">URL в sitemap</dt><dd>{{ sitemapInfo.count }}</dd></div>
                         <div class="flex justify-between gap-3"><dt class="text-ui-muted">Текущая страница есть</dt>
-                            <dd :class="sitemapInfo.containsCurrent ? 'text-emerald-400' : 'text-ui-warning'">{{ sitemapInfo.containsCurrent ? 'Да' : 'Нет' }}</dd></div>
+                            <dd :class="sitemapInfo.containsCurrent ? 'text-emerald-400' : 'text-ui-warning'">{{ sitemapInfo.containsCurrent ? 'Да' : sitemapInfo.complete ? 'Нет' : 'Неизвестно: карта обработана частично' }}</dd></div>
+                        <p v-if="!sitemapInfo.complete" class="text-ui-warning">Обработаны не все sitemap. Выводы по карте неполные.</p><p v-for="error in sitemapInfo.errors" :key="error.url" class="break-all text-ui-warning">{{ error.url }} — {{ error.message }}</p>
                         <div class="flex justify-between gap-3"><dt class="text-ui-muted">Дубли в sitemap</dt>
                             <dd :class="sitemapInfo.duplicates ? 'text-ui-warning' : 'text-emerald-400'">{{ sitemapInfo.duplicates }}</dd></div>
                     </dl>

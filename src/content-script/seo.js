@@ -1,5 +1,5 @@
 import { collectSeoDom } from '../utils/seoDom.js'
-import { evaluateRobots } from '../utils/seoRules.js'
+import { evaluateRobotsFile, collectIndexingRules } from '../utils/seoRules.js'
 import { getSeoActions, setSeoAction } from './seoActions.js'
 import { captureHeadings, focusHeading } from './headingNavigation.js'
 import { collectPageWeight } from './pageWeight.js'
@@ -57,8 +57,8 @@ export const scanSeo = async () => {
     const sitemapUrl = sitemapFromRobots || new URL('/sitemap.xml', location.href).href
     let sitemapInfo = await fetchPageInfo(sitemapUrl, { method: 'HEAD' })
     if (!sitemapInfo.ok) sitemapInfo = await fetchPageInfo(sitemapUrl)
-    const robots = getMeta('meta[name="robots"]')
     const xRobots = pageInfo.headers['x-robots-tag'] || ''
+    const indexing = collectIndexingRules(document, xRobots)
 
     const title = document.title.trim()
     const description = getMeta('meta[name="description"]')
@@ -82,6 +82,9 @@ export const scanSeo = async () => {
         actions: getSeoActions(),
         url: location.href,
         baseUrl: document.baseURI,
+        baseDeclared: Boolean(document.querySelector('base[href]')),
+        baseDisplay: document.querySelector('base[href]')?.href || new URL('/', location.href).href,
+        scannedAt: Date.now(),
         urlLength: location.href.length,
         finalUrl: pageInfo.url || location.href,
         redirected: Boolean(pageInfo.url && pageInfo.url !== location.href),
@@ -93,10 +96,9 @@ export const scanSeo = async () => {
         descriptionHasCyrillic: hasCyrillic(description),
         keywords: getMeta('meta[name="keywords"]'),
         canonical: document.querySelector('link[rel="canonical"]')?.href || '',
-        robots,
-        robotsAllowed: !/(noindex|none)/i.test(robots),
+        ...indexing,
         xRobots,
-        xRobotsAllowed: !/(noindex|none)/i.test(xRobots),
+        xRobotsAllowed: pageInfo.status ? indexing.xRobotsAllowed : null,
         lang: document.documentElement.lang || '',
         viewport: Boolean(getMeta('meta[name="viewport"]')),
         headings,
@@ -125,7 +127,7 @@ export const scanSeo = async () => {
             exists: robotsInfo.ok,
             status: robotsInfo.status,
             content: robotsInfo.text,
-            allowed: evaluateRobots(robotsInfo.text, location.href).allowed
+            allowed: evaluateRobotsFile({ exists: robotsInfo.ok, status: robotsInfo.status, content: robotsInfo.text }, location.href).allowed
         },
         sitemap: {
             url: sitemapUrl,
@@ -175,4 +177,7 @@ const registerSeoHandler = () => {
     })
 }
 
-registerSeoHandler()
+if (!globalThis.__sup5thSeoRegistered) {
+    globalThis.__sup5thSeoRegistered = true
+    registerSeoHandler()
+}

@@ -14,28 +14,6 @@
   },
   "content_scripts": [
     {
-      "all_frames": true,
-      "js": [
-        "src/content-script/index.js"
-      ],
-      "matches": [
-        "http://*/*",
-        "https://*/*"
-      ],
-      "run_at": "document_idle"
-    },
-    {
-      "all_frames": false,
-      "js": [
-        "src/content-script/seo.js"
-      ],
-      "matches": [
-        "http://*/*",
-        "https://*/*"
-      ],
-      "run_at": "document_idle"
-    },
-    {
       "js": [
         "src/content-script/support.js"
       ],
@@ -43,17 +21,6 @@
         "https://support.5th.ru/*"
       ],
       "run_at": "document_idle"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "matches": [
-        "http://*/*",
-        "https://*/*"
-      ],
-      "resources": [
-        "src/content-script/index.js"
-      ]
     }
   ],
   "icons": {
@@ -73,14 +40,22 @@
     "downloads",
     "alarms",
     "tabs",
-    "scripting"
+    "scripting",
+    "activeTab",
+    "idle"
   ],
   "host_permissions": [
+    "https://script.google.com/*",
+    "https://*.googleusercontent.com/*",
+    "https://accounts.google.com/*",
+    "https://support.5th.ru/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "optional_host_permissions": [
     "http://*/*",
     "https://*/*"
   ],
-  "content_security_policy": {
-    "script-src": "self",
-    "object-src": "self"
-  }
+  "minimum_chrome_version": "130"
 }

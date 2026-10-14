@@ -8,6 +8,9 @@ import TicketModal from './components/TicketModal.vue'
 import Site from './views/Site.vue'
 import Projects from './views/Projects.vue'
 import Settings from './views/Settings.vue'
+import { connectBackgroundState } from './backgroundState.js'
+import Preloader from './components/ui/Preloader.vue'
+const Tools = defineAsyncComponent(() => import('./views/Tools.vue'))
 const SeoPanel = defineAsyncComponent(() => import('./components/SeoPanel.vue'))
 const seoTab = ref(null), seoTabReady = ref(false)
 const seoSession = ref(null)
@@ -21,6 +24,7 @@ const search = ref('')
 const ticketOpen = ref(false)
 let statePort = null
 let heartbeat
+let disconnectState
 
 const openCatalogue = () => {
   selectedProjectUrl.value = ''
@@ -48,6 +52,7 @@ watch(view, (value) => {
 watch([view, selectedProjectUrl, selectedServiceId, seoTab], saveUiState, { flush: 'sync' })
 
 onMounted(() => {
+  disconnectState = connectBackgroundState()
   statePort = chrome.runtime.connect({ name: POPUP_PORT_NAME })
   seoSession.value = createSeoSessionClient(statePort)
   statePort.onMessage.addListener(async (message) => {
@@ -76,6 +81,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  disconnectState?.()
   clearInterval(heartbeat)
   seoSession.value?.dispose()
   statePort?.disconnect()
@@ -87,7 +93,9 @@ onUnmounted(() => {
     <section v-if="view === 'seo'" class="px-3"><SeoPanel v-if="seoTabReady" :tab="seoTab" :session="seoSession" auto-scan /></section>
     <Projects v-if="view === 'projects'" v-model:search="search" v-model:selected-project-url="selectedProjectUrl" v-model:selected-service-id="selectedServiceId" />
     <Settings v-if="view === 'settings'" />
+    <Tools v-if="view === 'tools'" />
   </Layout>
+  <Preloader v-else label="Загрузка расширения…" />
   <UnlockModal />
   <TicketModal v-model:open="ticketOpen" />
 </template>

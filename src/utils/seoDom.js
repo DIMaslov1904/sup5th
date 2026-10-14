@@ -14,7 +14,7 @@ export const collectSeoDom = (doc, pageUrl) => {
         content: el.content || el.getAttribute('charset') || '', inHead: Boolean(el.closest('head'))
     })).filter(el => !/^twitter:/i.test(el.name))
     const linkRows = [...doc.querySelectorAll('a[href]')].map((el, id) => {
-        let url; try { url = new URL(el.getAttribute('href'), pageUrl) } catch {}
+        let url; try { url = new URL(el.getAttribute('href'), doc.baseURI || pageUrl) } catch {}
         return { id, url: url?.href || el.getAttribute('href'), text: el.textContent.trim() || el.querySelector('img')?.alt || '', rel: el.rel || '', external: Boolean(url?.hostname && url.hostname !== host), protocol: url?.protocol || '', nofollow: /\b(nofollow|ugc|sponsored)\b/i.test(el.rel) }
     })
     const imageRows = [...doc.images].map((el, id) => ({ id, src: el.currentSrc || el.dataset.src || el.src, alt: el.getAttribute('alt'), title: el.title, width: el.naturalWidth || el.width, height: el.naturalHeight || el.height, loading: el.loading }))

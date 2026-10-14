@@ -1,7 +1,8 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { loadProjectDetails } from '../data/projectData'
 import { getAdminUrl, getCmsIconPath, getTicketUrl } from '../../utils/projectUtils'
+import { siteHref } from '../../utils/siteAddress.js'
 import { displayUrl } from '../../utils/displayUrl.js'
 import SiteIcon from './SiteIcon.vue'
 import ProjectAccessCard from './ProjectAccessCard.vue'
@@ -10,7 +11,7 @@ import Message from './ui/Message.vue'
 
 const props = defineProps({ project: { type: Object, required: true } })
 const accesses = ref([]), loading = ref(false), error = ref('')
-const href = value => value ? (/^https?:\/\//i.test(value) ? value : `https://${value}`) : ''
+const href = siteHref
 const actions = computed(() => [
     { kind: 'admin', label: 'В админку', url: getAdminUrl(props.project) },
     { kind: 'manual', label: 'Инструкция', url: href(props.project.manual) },
@@ -18,23 +19,27 @@ const actions = computed(() => [
     { kind: 'ticket', label: 'Создать тикет', url: getTicketUrl(props.project) }
 ])
 const ftpAccesses = computed(() => accesses.value.map((access, index) => ({ access, index })).filter(item => item.access.hasFtp))
-watch(() => props.project.url, async (url, _previous, onCleanup) => {
-    let active = true
-    onCleanup(() => { active = false })
+let revision = 0
+const reload = async (url = props.project.url) => {
+    const current = ++revision
     accesses.value = []; loading.value = true; error.value = ''
-    try { const details = await loadProjectDetails(url); if (active) accesses.value = details.accesses }
-    catch (reason) { if (active) error.value = reason.message }
-    finally { if (active) loading.value = false }
-}, { immediate: true })
+    try { const details = await loadProjectDetails(url); if (current === revision) accesses.value = details.accesses }
+    catch (reason) { if (current === revision) error.value = reason.message }
+    finally { if (current === revision) loading.value = false }
+}
+watch(() => props.project.url, reload, { immediate: true })
+const changed = changes => { if (changes.projectData || changes.credentialSecurity || changes.unlockedCredentialVaultKey) reload() }
+onMounted(() => chrome.storage.onChanged.addListener(changed))
+onUnmounted(() => { revision++; chrome.storage.onChanged.removeListener(changed) })
 </script>
 <template>
     <div class="grid min-w-0 grid-cols-1 gap-4 text-ui-text">
         <header class="flex min-w-0 items-center gap-3">
             <slot name="leading" />
-            <SiteIcon :url="project.url" :name="project.name" large />
+            <SiteIcon :url="project.siteUrl || project.url" :name="project.name" large />
             <div class="min-w-0 flex-1">
                 <h1 :title="project.name || displayUrl(project.url)" class="ui-title line-clamp-2 wrap-anywhere">{{ project.name || displayUrl(project.url) }}</h1>
-                <a :href="href(project.url)" :title="displayUrl(project.url)" target="_blank" rel="noreferrer" class="block truncate text-xs text-ui-muted hover:text-white">{{ displayUrl(project.url) }}</a>
+                <a :href="href(project.siteUrl || project.url)" :title="displayUrl(project.url)" target="_blank" rel="noreferrer" class="inline-block truncate text-xs text-ui-muted hover:text-white">{{ displayUrl(project.url) }}</a>
             </div>
         </header>
         <div class="grid grid-cols-4 gap-2">
@@ -52,11 +57,11 @@ watch(() => props.project.url, async (url, _previous, onCleanup) => {
             <h2 class="text-[13px] font-semibold">Доступы</h2>
             <p v-if="loading" class="text-xs text-ui-muted">Загрузка доступов…</p>
             <p v-else-if="!accesses.length && !error" class="text-xs text-ui-muted">Для проекта нет сохранённых доступов</p>
-            <ProjectAccessCard v-for="(access, index) in accesses" :key="`${project.url}:${index}`" :access="access" :project="project" :index="index" />
+            <ProjectAccessCard v-for="(access, index) in accesses" :key="access.id" :access="access" :project="project" :index="index" />
         </section>
         <section v-if="ftpAccesses.length" class="grid gap-2">
             <h2 class="text-[13px] font-semibold">FTP доступы</h2>
-            <FtpAccessCard v-for="item in ftpAccesses" :key="`${project.url}:${item.index}`" :access="item.access" :project-url="project.url" :index="item.index" />
+            <FtpAccessCard v-for="item in ftpAccesses" :key="item.access.id" :access="item.access" :project-url="project.url" :index="item.index" />
         </section>
         <Message v-if="error" type="error">{{ error }}</Message>
     </div>

@@ -1,4 +1,4 @@
-export const ICON_CACHE_LIMIT = 50 * 1024 * 1024
+export const ICON_CACHE_WARNING = 50 * 1024 * 1024
 export const ICON_INPUT_LIMIT = 512 * 1024
 export const ICON_SVG_LIMIT = 128 * 1024
 export const ICON_REQUEST_GAP = 2500
@@ -14,6 +14,6 @@ export const iconOrigin = value => {
     } catch { return '' }
 }
 
-export const catalogueOrigins = items => [...new Set(items.map(item => iconOrigin(item.url)).filter(Boolean))]
+export const catalogueOrigins = items => [...new Set(items.map(item => iconOrigin(item.siteUrl || item.url)).filter(Boolean))]
 
 export const iconInitials = name => String(name || '?').trim().split(/\s+/).slice(0, 2).map(word => Array.from(word)[0]).join('').toUpperCase()

@@ -1,16 +1,21 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { getServiceField, loadServices, loadProjectData } from '../data/projectData'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { getServiceField, loadServices, loadProjectData, loadApiSettings } from '../data/projectData'
 import { ensureUnlocked } from '../unlockStore'
 import { searchCatalogue } from '../../utils/catalogue.js'
 import { displayUrl } from '../../utils/displayUrl.js'
+import { siteHref } from '../../utils/siteAddress.js'
+import { refreshJob } from '../backgroundState.js'
+import Preloader from '../components/ui/Preloader.vue'
 import SiteIcon from '../components/SiteIcon.vue'
 import ProjectDetails from '../components/ProjectDetails.vue'
 import Button from '../components/ui/Button.vue'
 import Message from '../components/ui/Message.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
-const projects = ref([]), services = ref([]), copying = ref('')
+const projects = ref([]), services = ref([]), copying = ref(''), loaded = ref(false), connected = ref(false)
+let alive = true, revision = 0
+const downloaded = ref(false), loadError = ref('')
 const search = defineModel('search', { type: String, default: '' })
 const message = ref({ type: 'error', text: '' })
 const selectedProjectUrl = defineModel('selectedProjectUrl', { type: String, default: '' })
@@ -19,7 +24,7 @@ const selectedService = computed(() => services.value.find(item => item.id === s
 const selectedProject = computed(() => projects.value.find(item => item.url === selectedProjectUrl.value) || null)
 const selectedItem = computed(() => selectedService.value || selectedProject.value)
 const filteredProjects = computed(() => searchCatalogue(services.value, projects.value, search.value))
-const linkHref = value => value ? (/^https?:\/\//i.test(value) ? value : `https://${value}`) : ''
+const linkHref = siteHref
 const back = () => { selectedProjectUrl.value = ''; selectedServiceId.value = ''; message.value.text = '' }
 const openItem = item => {
     message.value.text = ''
@@ -36,24 +41,37 @@ const copyService = async field => {
     } catch (reason) { message.value = { type: 'error', text: reason.message } }
     finally { copying.value = '' }
 }
-onMounted(async () => {
+const load = async () => {
+    const current = ++revision
     try {
-        const [data, savedServices] = await Promise.all([loadProjectData(), loadServices()])
+        const [data, savedServices, settings] = await Promise.all([loadProjectData(), loadServices(), loadApiSettings()])
+        if (!alive || current !== revision) return
+        connected.value = Boolean(settings.projectsUrl || settings.accessUrl)
+        downloaded.value = Boolean(data.lastSuccessfulData.projectsUpdatedAt || data.lastSuccessfulData.accessesUpdatedAt)
+        loadError.value = ''
         services.value = savedServices
         projects.value = data.lastSuccessfulData.projects
         if (!savedServices.some(item => item.id === selectedServiceId.value)) selectedServiceId.value = ''
         if (!projects.value.some(item => item.url === selectedProjectUrl.value)) selectedProjectUrl.value = ''
-    } catch (reason) { message.value = { type: 'error', text: reason.message } }
-})
+    } catch (reason) { if (alive) loadError.value = reason.message }
+    finally { if (alive) loaded.value = true }
+}
+const changed = (changes, area) => { if (area === 'local' && (changes.projectData || changes.services || changes.apiSettings)) load() }
+onMounted(() => { chrome.storage.onChanged.addListener(changed); load() })
+onUnmounted(() => { alive = false; revision++; chrome.storage.onChanged.removeListener(changed) })
 </script>
 <template>
     <section class="min-w-0 w-full px-4 text-ui-text">
-        <EmptyState v-if="!projects.length && !services.length && !selectedItem" title="Проекты и сервисы ещё не загружены" description="Укажите адреса API и загрузите данные в настройках." />
+        <Preloader v-if="!loaded || (refreshJob.running && !projects.length && !services.length)" label="Загрузка каталога…" />
+        <Message v-else-if="loadError" type="error">{{ loadError }}</Message>
+        <EmptyState v-else-if="!connected && !projects.length && !services.length" title="Данные ещё не подключены" description="Добавьте адреса API в настройках." />
+        <EmptyState v-else-if="!downloaded && !projects.length && !services.length" title="Данные ещё не загружены" description="API подключён. Запустите первую загрузку в настройках." />
+        <EmptyState v-else-if="!projects.length && !services.length && !selectedItem" title="Каталог пуст" description="Загрузите данные в настройках. Если загрузка выполнена, проверьте содержимое источника." />
         <EmptyState v-else-if="!selectedItem && !filteredProjects.length" title="Ничего не найдено" description="Попробуйте другое название или адрес сайта." />
         <div v-else-if="!selectedItem" class="grid min-w-0 grid-cols-1 gap-2">
-            <article v-for="project in filteredProjects" :key="project.key" @click="openItem(project)" :aria-label="`Открыть детали ${project.kind === 'service' ? 'сервиса' : 'проекта'} ${project.name || project.url}`"
+            <article v-for="project in filteredProjects" :key="project.key" role="button" tabindex="0" @click="openItem(project)" @keydown.enter.self.prevent="openItem(project)" @keydown.space.self.prevent="openItem(project)" :aria-label="`Открыть детали ${project.kind === 'service' ? 'сервиса' : 'проекта'} ${project.name || project.url}`"
                 class="ui-panel relative grid w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 transition-colors hover:border-ui-accent/40 hover:bg-ui-raised">
-                <SiteIcon :url="project.url" :name="project.name" />
+                <SiteIcon :url="project.siteUrl || project.url" :name="project.name" />
 
                 <div class="min-w-0">
                     <div class="flex min-w-0 items-start gap-1.5">
@@ -66,7 +84,7 @@ onMounted(async () => {
                     <span :title="displayUrl(project.url)" class="mt-1 block truncate text-xs text-ui-accent">{{ displayUrl(project.url) }}</span>
                 </div>
 
-                <Button :href="linkHref(project.url)" size="sm" variant="ghost" title="Перейти на сайт" :aria-label="`Перейти на сайт ${displayUrl(project.url)}`" @click.stop class="size-8 p-0">↗</Button>
+                <Button :href="linkHref(project.siteUrl || project.url)" size="sm" variant="ghost" title="Перейти на сайт" :aria-label="`Перейти на сайт ${displayUrl(project.url)}`" @click.stop class="size-8 p-0">↗</Button>
 
             </article>
         </div>

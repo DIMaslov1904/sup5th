@@ -7,7 +7,12 @@ export const sendSeoToTab = async (tabId, type = 'seo:scan', payload = {}) => {
     if (!Number.isInteger(tabId)) throw new Error('Откройте проверяемый сайт')
     let response
     try { response = await chrome.tabs.sendMessage(tabId, { type, payload }, { frameId: 0 }) }
-    catch { throw new Error('Обновите проверяемую страницу, чтобы подключить SEO-инструменты расширения') }
+    catch {
+        try {
+            await chrome.scripting.executeScript({ target: { tabId }, files: [seoScript] })
+            response = await chrome.tabs.sendMessage(tabId, { type, payload }, { frameId: 0 })
+        } catch { throw new Error('Нет доступа к странице. Откройте расширение из проверяемой вкладки или предоставьте доступ к сайту.') }
+    }
     if (!response?.ok) throw new Error(response?.error || 'Не удалось получить SEO-данные')
     return response.data
 }
@@ -19,3 +24,4 @@ export const downloadText = (text, filename, type = 'text/plain') => {
     const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+import seoScript from '../content-script/seo.js?script&iife'

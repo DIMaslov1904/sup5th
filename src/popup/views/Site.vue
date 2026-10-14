@@ -20,7 +20,7 @@ onMounted(async () => {
 })
 </script>
 <template>
-    <section class="min-h-full w-full px-4 text-ui-text flex items-start">
+    <section class="min-h-full min-w-0 w-full px-4 text-ui-text">
         <p v-if="!loaded" class="text-[13px] text-ui-muted">Загрузка…</p>
         <Message v-else-if="error" type="error">{{ error }}</Message>
         <EmptyState v-else-if="!project" title="Данный сайт не является нашим проектом." description="Найдите проект в поиске или откройте SEO для проверки текущей страницы." />

@@ -1,8 +1,9 @@
 import { iconRepository } from './iconRepository.js'
-import { catalogueOrigins } from './iconPolicy.js'
+import { catalogueOrigins, ICON_CACHE_WARNING } from './iconPolicy.js'
 import { createIconQueue } from './iconQueue.js'
 import { createIconFetcher } from './iconFetcher.js'
 import { closeIconDecoder } from './iconDecoder.js'
+import { hasOrigin } from '../utils/hostPermissions.js'
 
 const alarm = 'site-icons-resume'
 const broadcast = data => chrome.runtime.sendMessage({ type: 'icons:changed', ...data }).catch(() => {})
@@ -28,13 +29,18 @@ export const resumeSiteIcons = () => {
 }
 
 export const syncSiteIcons = async (items, options) => {
-    const result = await queue.reconcile(catalogueOrigins(items), options)
+    const origins = catalogueOrigins(items)
+    const allowed = (await Promise.all(origins.map(async origin => await hasOrigin(origin) ? origin : null))).filter(Boolean)
+    const result = await queue.reconcile(allowed, options)
     resumeSiteIcons()
     return result
 }
 export const getSiteIconStatus = async () => {
     const records = await iconRepository.list()
-    return { ...(await queue.status()), cached: records.filter(record => record.image).length, bytes: records.reduce((sum, record) => sum + (record.image?.size || 0), 0) }
+    const bytes = records.reduce((sum, record) => sum + (record.image?.size || 0), 0)
+    const largeWarning = bytes >= ICON_CACHE_WARNING && !await iconRepository.warningSeen()
+    if (largeWarning) await iconRepository.markWarningSeen()
+    return { ...(await queue.status()), cached: records.filter(record => record.image).length, bytes, largeWarning }
 }
 export const cancelSiteIcons = () => queue.cancel()
 export const clearSiteIcons = async () => {

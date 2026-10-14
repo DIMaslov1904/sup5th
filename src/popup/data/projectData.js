@@ -33,12 +33,6 @@ export const saveApiSettings = (patch) =>
 
 export const loadProjectData = () => callBackground('data:projects:get')
 
-export const refreshProjects = (url) =>
-    callBackground('data:projects:refresh', { url })
-
-export const refreshAccesses = (url) =>
-    callBackground('data:accesses:refresh', { url })
-
 export const authorizeAccessApi = () => callBackground('data:accesses:authorize')
 export const authorizeProjectsApi = () => callBackground('data:projects:authorize')
 
@@ -53,32 +47,30 @@ export const loadIconStatus = () => callBackground('icons:status')
 export const refreshSiteIcons = () => callBackground('icons:refresh')
 export const cancelSiteIcons = () => callBackground('icons:cancel')
 
-export const startAdminAuth = (url, index = 0) => callBackground('auth:start', { url, index })
+export const startAdminAuth = (url, accessId) => callBackground('auth:start', { url, accessId })
 
 export const loadServices = () => callBackground('services:get')
 
 export const getServiceField = (id, field) => callBackground('services:field', { id, field })
 
-export const getProjectAccessText = (url, index) =>
-    callBackground('project:copyAccess', { url, index })
+export const getProjectAccessText = (url, accessId) =>
+    callBackground('project:copyAccess', { url, accessId })
 
 export const loadProjectDetails = (url) =>
     callBackground('project:details', { url })
 
-export const getProjectAccessField = (url, index, field) =>
-    callBackground('project:accessField', { url, index, field })
+export const getProjectAccessField = (url, accessId, field) =>
+    callBackground('project:accessField', { url, accessId, field })
 
 export const getCredentialSecurityStatus = (helloAvailable = false, prfSupported = false) =>
     callBackground('security:status', { helloAvailable, prfSupported })
 
-export const enablePinProtection = (pin) => callBackground('security:enablePin', { pin })
-
 export const enableHelloProtection = (payload) => callBackground('security:enableHello', payload)
-
-export const unlockCredentialVault = (pin, { refreshAfterUnlock = true } = {}) => callBackground('security:unlockPin', { pin, refreshAfterUnlock })
 
 export const unlockCredentialVaultWithHello = (key, { refreshAfterUnlock = true } = {}) => callBackground('security:unlockHelloKey', { key, refreshAfterUnlock })
 
 export const lockCredentialVault = () => callBackground('security:lock')
 
 export const disableCredentialProtection = () => callBackground('security:disable')
+
+export const loadRefreshJob = () => callBackground("data:job:get")
