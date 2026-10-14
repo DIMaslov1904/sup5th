@@ -7,6 +7,10 @@ import { evaluateRobots } from '../../utils/seoRules.js'
 import Button from './ui/Button.vue'
 import Card from './ui/Card.vue'
 import Message from './ui/Message.vue'
+import Tabs from './ui/Tabs.vue'
+import Input from './ui/Input.vue'
+import Select from './ui/Select.vue'
+import PageHeader from './ui/PageHeader.vue'
 
 const props = defineProps({ tab: Object, autoScan: Boolean })
 const notification = ref(''), serverIp = ref(''), serverIpLoading = ref(false)
@@ -16,6 +20,7 @@ const linkFilter = ref('all'), relFilter = ref('all'), protocolFilter = ref('all
 const checked = ref({}), checking = ref(false), checkProgress = ref(0)
 let cancelled = false, alive = true, scanRevision = 0
 const tabs = [['overview','Обзор'],['headings','Заголовки'],['links','Ссылки'],['images','Изображения'],['markup','Разметка'],['index','Индексация'],['page','Страница'],['tools','Инструменты']]
+const selectSection = () => { visible.value = 100; notification.value = '' }
 const scan = async () => {
     if (loading.value) return
     const revision = ++scanRevision
@@ -101,90 +106,85 @@ const tools = computed(() => {
 })
 </script>
 <template>
-    <div class="grid gap-3 text-slate-200">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-            <h1 class="text-lg font-semibold">SEO</h1>
-            <div class="flex gap-2"><Button size="sm" variant="secondary" :disabled="loading || checking || !tab?.id" @click="scan">{{ loading ? 'Сканируем…' : report ? 'Обновить' : 'Анализировать' }}</Button><Button size="sm" variant="secondary" :disabled="!tab?.id" @click="openSeoApp(tab.id)">Аудит ↗</Button></div>
-        </div>
-        <p v-if="!report && !loading && !error" class="text-xs text-slate-400">Нажмите «Анализировать», чтобы проверить текущую страницу.</p>
+    <div class="grid gap-3 text-ui-text">
+        <PageHeader title="SEO" class="mb-0"><template #actions><Button size="sm" variant="secondary" :loading="loading" :disabled="checking || !tab?.id" @click="scan">{{ report ? 'Обновить' : 'Анализировать' }}</Button><Button size="sm" variant="ghost" :disabled="!tab?.id" @click="openSeoApp(tab.id)">Аудит ↗</Button></template></PageHeader>
+        <p v-if="!report && !loading && !error" class="text-xs text-ui-muted">Нажмите «Анализировать», чтобы проверить текущую страницу.</p>
         <Message v-if="error" type="error">{{ error }}</Message>
-        <p v-if="notification" role="status" class="rounded-lg border border-amber-400/20 bg-amber-400/10 p-2 text-xs text-amber-200">{{ notification }}</p>
-        <p v-if="loading" role="status" class="text-xs text-slate-400">Получаем данные страницы…</p>
-        <div v-if="report" class="grid min-w-0 grid-cols-[92px_minmax(0,1fr)] items-start gap-3">
-        <nav class="sticky top-16 grid gap-1" role="tablist" aria-orientation="vertical" aria-label="Разделы SEO">
-            <button v-for="item in tabs" :key="item[0]" role="tab" :aria-selected="section === item[0]" @click="section = item[0]; visible = 100; notification = ''" class="cursor-pointer rounded-lg px-2 py-2 text-left text-[11px] transition-colors hover:bg-white/10" :class="section === item[0] ? 'bg-sky-400/15 text-sky-300' : 'text-slate-400'">{{ item[1] }}</button>
-        </nav>
+        <Message v-if="notification" type="warning">{{ notification }}</Message>
+        <p v-if="loading" role="status" class="text-xs text-ui-muted">Получаем данные страницы…</p>
+        <div v-if="report" class="grid min-w-0 gap-3">
+        <Tabs v-model="section" :items="tabs" label="Разделы SEO" @update:model-value="selectSection" />
         <div class="grid min-w-0 gap-3">
             <template v-if="section === 'overview'">
                 <Card title="Метаданные страницы">
-                    <dl class="grid gap-3 text-xs">
-                        <div v-for="[label,value] in overview" :key="label" class="grid gap-1">
-                            <dt class="text-slate-500">{{ label }}</dt>
-                            <dd class="break-all text-slate-200">{{ value }}</dd>
+                    <dl class="grid gap-2 text-xs">
+                        <div v-for="[label,value] in overview" :key="label" class="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-3">
+                            <dt class="text-ui-muted/70">{{ label }}</dt>
+                            <dd class="break-all text-ui-text">{{ value }}</dd>
                         </div>
                     </dl>
-                    <div class="mt-3 grid gap-1 text-xs"><span class="text-slate-500">Яндекс ИКС</span><img :src="yandexCounter" alt="Яндекс ИКС" class="rounded-lg" /></div>
+                    <div class="mt-3 grid gap-1 text-xs"><span class="text-ui-muted/70">Яндекс ИКС</span><img :src="yandexCounter" alt="Яндекс ИКС" class="rounded-lg" /></div>
                 </Card>
                 <Message v-if="report.titles.length !== 1 || report.canonicals.length > 1 || report.metaTags.some(item => !item.inHead)" type="error">Проверьте количество Title/Canonical и расположение метатегов: есть дубли или теги вне head.</Message>
-                <details class="rounded-lg border border-white/10 p-3 text-xs"><summary class="cursor-pointer">Все метатеги ({{ report.metaTags.length }})</summary><div v-for="(item,index) in report.metaTags" :key="index" class="mt-2 break-all"><b>{{ item.name }}</b>: {{ item.content || '(пусто)' }} <span v-if="!item.inHead" class="text-amber-300">вне head</span></div></details>
+                <details class="ui-panel text-xs"><summary class="cursor-pointer">Все метатеги ({{ report.metaTags.length }})</summary><div v-for="(item,index) in report.metaTags" :key="index" class="mt-2 break-all"><b>{{ item.name }}</b>: {{ item.content || '(пусто)' }} <span v-if="!item.inHead" class="text-ui-warning">вне head</span></div></details>
             </template>
             <template v-if="section === 'headings'">
                 <Button size="sm" variant="secondary" @click="toggle('headings')">{{ report.actions.headings ? 'Убрать подсветку' : 'Подсветить H1–H6' }}</Button>
-                <p class="text-xs text-slate-400">H1: {{ report.h1Count }} · Дубли H1: {{ report.duplicateH1.length }}</p>
+                <p class="text-xs text-ui-muted">H1: {{ report.h1Count }} · Дубли H1: {{ report.duplicateH1.length }}</p>
                 <HeadingTree :nodes="headingTree" @select="goToHeading" />
             </template>
             <template v-if="section === 'links'">
                 <div class="grid grid-cols-2 gap-2 text-xs">
-                    <select v-model="linkFilter" aria-label="Тип ссылок" class="rounded bg-slate-800 p-2"><option value="all">Все ссылки</option><option value="internal">Внутренние</option><option value="external">Внешние</option></select>
-                    <select v-model="relFilter" aria-label="Rel ссылок" class="rounded bg-slate-800 p-2"><option value="all">Все rel</option><option value="follow">Follow</option><option>nofollow</option><option>ugc</option><option>sponsored</option></select>
-                    <select v-model="protocolFilter" aria-label="Протокол ссылок" class="rounded bg-slate-800 p-2"><option value="all">Все протоколы</option><option value="https:">HTTPS</option><option value="http:">HTTP</option><option value="mailto:">Email</option><option value="tel:">Телефон</option></select>
-                    <select v-model="statusFilter" aria-label="Статус ссылок" class="rounded bg-slate-800 p-2"><option value="all">Все статусы</option><option value="broken">Ошибки</option><option value="redirect">Редиректы</option><option value="unchecked">Не проверены</option></select>
+                    <Select v-model="linkFilter" aria-label="Тип ссылок"><option value="all">Все ссылки</option><option value="internal">Внутренние</option><option value="external">Внешние</option></Select>
+                    <Select v-model="relFilter" aria-label="Rel ссылок"><option value="all">Все rel</option><option value="follow">Follow</option><option>nofollow</option><option>ugc</option><option>sponsored</option></Select>
+                    <Select v-model="protocolFilter" aria-label="Протокол ссылок"><option value="all">Все протоколы</option><option value="https:">HTTPS</option><option value="http:">HTTP</option><option value="mailto:">Email</option><option value="tel:">Телефон</option></Select>
+                    <Select v-model="statusFilter" aria-label="Статус ссылок"><option value="all">Все статусы</option><option value="broken">Ошибки</option><option value="redirect">Редиректы</option><option value="unchecked">Не проверены</option></Select>
                 </div>
-                <input v-model="query" placeholder="Поиск по URL и анкору" class="rounded border border-white/10 bg-slate-900 p-2 text-xs" />
+                <Input v-model="query" placeholder="Поиск по URL и анкору" />
                 <div class="flex flex-wrap gap-2"><Button size="sm" variant="secondary" :disabled="checking" @click="checkLinks">Проверить ссылки</Button><Button v-if="checking" size="sm" variant="ghost" @click="cancelled = true">Остановить</Button><Button size="sm" variant="ghost" @click="exportLinks">CSV</Button><Button size="sm" variant="ghost" @click="copyLinks">Копировать URL</Button></div>
-                <p class="text-xs text-slate-400">Ссылок: {{ links.length }} · Проверено: {{ checkProgress }}. Проверка выполняется без cookies.</p>
-                <article v-for="item in links.slice(0, visible)" :key="item.id" class="grid gap-1 rounded-lg border border-white/10 bg-slate-900/40 p-3 text-xs">
-                    <a :href="/^https?:/.test(item.url) ? item.url : undefined" target="_blank" rel="noreferrer" class="break-all text-sky-300">{{ item.url }}</a>
-                    <span>{{ item.text || 'Без анкора' }}</span><span class="text-slate-500">{{ item.external ? 'Внешняя' : 'Внутренняя' }} · {{ item.rel || 'follow' }} <b v-if="checked[item.url]" :class="checked[item.url].ok ? 'text-emerald-300' : 'text-amber-300'">· HTTP {{ checked[item.url].status || 'не получен' }}{{ checked[item.url].redirected ? ' → ' + checked[item.url].url : '' }}</b></span>
+                <p class="text-xs text-ui-muted">Ссылок: {{ links.length }} · Проверено: {{ checkProgress }}. Проверка выполняется без cookies.</p>
+                <article v-for="item in links.slice(0, visible)" :key="item.id" class="grid gap-1 ui-panel text-xs">
+                    <a :href="/^https?:/.test(item.url) ? item.url : undefined" target="_blank" rel="noreferrer" class="break-all text-ui-accent">{{ item.url }}</a>
+                    <span>{{ item.text || 'Без анкора' }}</span><span class="text-ui-muted/70">{{ item.external ? 'Внешняя' : 'Внутренняя' }} · {{ item.rel || 'follow' }} <b v-if="checked[item.url]" :class="checked[item.url].ok ? 'text-ui-success' : 'text-ui-warning'">· HTTP {{ checked[item.url].status || 'не получен' }}{{ checked[item.url].redirected ? ' → ' + checked[item.url].url : '' }}</b></span>
                 </article>
                 <Button v-if="links.length > visible" size="sm" variant="ghost" @click="visible += 100">Показать ещё</Button>
             </template>
             <template v-if="section === 'images'">
-                <div class="flex gap-2"><select v-model="imageFilter" aria-label="Alt изображений" class="min-w-0 flex-1 rounded bg-slate-800 p-2 text-xs"><option value="all">Все изображения</option><option value="missing">Без атрибута alt</option><option value="empty">Пустой alt</option><option value="filled">Заполненный alt</option></select><Button size="sm" variant="secondary" @click="toggle('alt')">{{ report.actions.alt ? 'Убрать alt' : 'Показать alt' }}</Button></div>
+                <div class="flex items-center gap-2"><Select v-model="imageFilter" aria-label="Alt изображений" class="min-w-0 flex-1"><option value="all">Все изображения</option><option value="missing">Без атрибута alt</option><option value="empty">Пустой alt</option><option value="filled">Заполненный alt</option></Select><Button size="sm" variant="secondary" @click="toggle('alt')">{{ report.actions.alt ? 'Убрать alt' : 'Показать alt' }}</Button></div>
                 <Button size="sm" variant="secondary" @click="toggle('downloads')">{{ report.actions.downloads ? 'Убрать ссылки скачивания' : 'Ссылки скачивания на странице' }}</Button>
-                <p class="text-xs text-slate-400">Всего: {{ report.images.total }} · Без alt: {{ report.images.withoutAlt }} · Пустой alt: {{ report.images.emptyAlt }}</p>
-                <article v-for="item in images.slice(0,visible)" :key="item.id" class="flex gap-1 rounded-lg border border-white/10 bg-slate-900/40 p-3 text-xs">
+                <p class="text-xs text-ui-muted">Всего: {{ report.images.total }} · Без alt: {{ report.images.withoutAlt }} · Пустой alt: {{ report.images.emptyAlt }}</p>
+                <article v-for="item in images.slice(0,visible)" :key="item.id" class="flex gap-1 ui-panel text-xs">
                     <img v-if="/^https?:/.test(item.src)" :src="item.src" loading="lazy" class="size-6 object-contain shrink-0">
                     <div class="grid gap-1">
-                        <a :href="/^https?:/.test(item.src) ? item.src : undefined" target="_blank" rel="noreferrer" class="break-all text-sky-300">{{ item.src || 'Источник отсутствует' }}</a>
+                        <a :href="/^https?:/.test(item.src) ? item.src : undefined" target="_blank" rel="noreferrer" class="break-all text-ui-accent">{{ item.src || 'Источник отсутствует' }}</a>
                         <span>Alt: {{ item.alt === null ? 'Отсутствует' : item.alt || '(пустой)' }}</span>
                         <span>Title: {{ item.title || 'Нет' }} · {{ item.width }} × {{ item.height }} · {{ item.loading || 'eager' }}</span>
-                        <button v-if="/^https?:/.test(item.src)" type="button" class="w-fit cursor-pointer text-sky-300 hover:underline" @click="downloadImage(item.src)">Скачать</button>
+                        <button v-if="/^https?:/.test(item.src)" type="button" class="w-fit cursor-pointer text-ui-accent hover:underline" @click="downloadImage(item.src)">Скачать</button>
                     </div>
 
                 </article>
                 <Button v-if="images.length > visible" size="sm" variant="ghost" @click="visible += 100">Показать ещё</Button>
             </template>
             <template v-if="section === 'markup'">
-                <Card title="Open Graph"><div v-for="item in report.metaTags.filter(item => /^og:/i.test(item.name))" :key="item.name" class="break-all text-xs"><b>{{ item.name }}</b>: {{ item.content }}</div><p v-if="!report.metaTags.some(item => /^og:/i.test(item.name))" class="text-xs text-slate-400">Не найден</p></Card>
-                <Card title="JSON-LD"><div v-for="(item,index) in report.jsonLd" :key="index" class="mb-2"><p class="text-xs" :class="item.valid ? 'text-emerald-300' : 'text-amber-300'">{{ item.valid ? 'Корректный JSON' : item.error }}</p><pre class="max-h-72 overflow-auto whitespace-pre-wrap break-all text-[11px]">{{ item.valid ? JSON.stringify(item.value,null,2) : item.raw }}</pre></div><p v-if="!report.jsonLd.length" class="text-xs text-slate-400">Не найден</p></Card>
+                <Card title="Open Graph"><div v-for="item in report.metaTags.filter(item => /^og:/i.test(item.name))" :key="item.name" class="break-all text-xs"><b>{{ item.name }}</b>: {{ item.content }}</div><p v-if="!report.metaTags.some(item => /^og:/i.test(item.name))" class="text-xs text-ui-muted">Не найден</p></Card>
+                <Card title="JSON-LD"><div v-for="(item,index) in report.jsonLd" :key="index" class="mb-2"><p class="text-xs" :class="item.valid ? 'text-ui-success' : 'text-ui-warning'">{{ item.valid ? 'Корректный JSON' : item.error }}</p><pre class="max-h-72 overflow-auto whitespace-pre-wrap break-all text-[11px]">{{ item.valid ? JSON.stringify(item.value,null,2) : item.raw }}</pre></div><p v-if="!report.jsonLd.length" class="text-xs text-ui-muted">Не найден</p></Card>
                 <Card title="Microdata / RDFa"><pre class="max-h-72 overflow-auto whitespace-pre-wrap break-all text-[11px]">{{ JSON.stringify({ microdata: report.microdata, rdfa: report.rdfa },null,2) }}</pre></Card>
-                <div class="flex flex-wrap gap-2"><a :href="tools.find(item => item[0] === 'Schema.org')?.[1]" target="_blank" rel="noreferrer" class="text-xs text-sky-300">Валидатор Schema.org ↗</a><a :href="tools.find(item => item[0] === 'Google Rich Results')?.[1]" target="_blank" rel="noreferrer" class="text-xs text-sky-300">Google Rich Results ↗</a></div>
+                <div class="flex flex-wrap gap-2"><a :href="tools.find(item => item[0] === 'Schema.org')?.[1]" target="_blank" rel="noreferrer" class="text-xs text-ui-accent">Валидатор Schema.org ↗</a><a :href="tools.find(item => item[0] === 'Google Rich Results')?.[1]" target="_blank" rel="noreferrer" class="text-xs text-ui-accent">Google Rich Results ↗</a></div>
             </template>
             <template v-if="section === 'index'">
-                <Card title="Индексация"><div class="grid gap-2 text-xs"><p>Meta robots: {{ report.robots || 'Не задан' }}</p><p>X-Robots-Tag: {{ report.xRobots || 'Не задан' }}</p><p :class="report.robotsAllowed && report.xRobotsAllowed ? 'text-emerald-300' : 'text-amber-300'">{{ report.robotsAllowed && report.xRobotsAllowed ? 'Нет запрета noindex в метатеге/заголовке' : 'Есть запрет noindex' }}</p><p>robots.txt: {{ report.robotsFile.exists ? 'HTTP ' + report.robotsFile.status : 'Недоступен' }} · {{ robotsRules.allowed ? 'Путь разрешён для *' : 'Путь запрещён для *' }}</p><p class="text-slate-500">Отсутствие запрета не гарантирует индексацию. Правила конкретного робота могут отличаться.</p></div></Card>
-                <details class="rounded-lg border border-white/10 p-3 text-xs"><summary class="cursor-pointer">robots.txt</summary><pre class="mt-2 overflow-auto whitespace-pre-wrap">{{ report.robotsFile.content || 'Пустой или не получен' }}</pre></details>
+                <Card title="Индексация"><div class="grid gap-2 text-xs"><p>Meta robots: {{ report.robots || 'Не задан' }}</p><p>X-Robots-Tag: {{ report.xRobots || 'Не задан' }}</p><p :class="report.robotsAllowed && report.xRobotsAllowed ? 'text-ui-success' : 'text-ui-warning'">{{ report.robotsAllowed && report.xRobotsAllowed ? 'Нет запрета noindex в метатеге/заголовке' : 'Есть запрет noindex' }}</p><p>robots.txt: {{ report.robotsFile.exists ? 'HTTP ' + report.robotsFile.status : 'Недоступен' }} · {{ robotsRules.allowed ? 'Путь разрешён для *' : 'Путь запрещён для *' }}</p><p class="text-ui-muted/70">Отсутствие запрета не гарантирует индексацию. Правила конкретного робота могут отличаться.</p></div></Card>
+                <details class="ui-panel text-xs"><summary class="cursor-pointer">robots.txt</summary><pre class="mt-2 overflow-auto whitespace-pre-wrap">{{ report.robotsFile.content || 'Пустой или не получен' }}</pre></details>
                 <Card title="Canonical / hreflang"><p v-for="(item,index) in report.canonicals" :key="index" class="break-all text-xs">{{ item.href || '(пустой)' }} {{ item.inHead ? '' : 'вне head' }}</p><p v-for="(item,index) in report.hreflang" :key="index" class="break-all text-xs">{{ item.hreflang }}: {{ item.href }}</p></Card>
                 <Button variant="secondary" size="sm" @click="openSeoApp(tab.id,'sitemap')">Открыть единый sitemap ↗</Button>
             </template>
             <template v-if="section === 'page'">
-                <p class="text-xs text-slate-400">Изменения действуют только на этой странице до выключения или её закрытия/перезагрузки.</p>
+                <p class="text-xs text-ui-muted">Изменения действуют только на этой странице до выключения или её закрытия/перезагрузки.</p>
                 <Button v-for="[action,label] in [['external','Внешние ссылки'],['noindex','Noindex / nofollow'],['headings','Заголовки H1–H6'],['alt','Alt изображений'],['downloads','Ссылки скачивания изображений'],['css','Отключить CSS']]" :key="action" size="sm" variant="secondary" @click="toggle(action)">{{ report.actions[action] ? '✓ ' : '' }}{{ label }}</Button>
                 <Card title="Статистика текста"><p class="text-xs">Слов: {{ report.statistics.words }} · Символов: {{ report.statistics.characters }} · Без пробелов: {{ report.statistics.withoutSpaces }}</p><p class="text-xs">Выделенный текст: {{ report.statistics.selection.words }} слов, {{ report.statistics.selection.characters }} символов</p>
-                    <details v-for="[key,label] in [['top','Частые слова'],['bigrams','Биграммы'],['withoutAnchors','Без анкоров'],['anchors','Анкоры'],['imageText','Alt и title изображений']]" :key="key" class="mt-3 text-xs"><summary class="cursor-pointer text-sky-300">{{ label }}</summary><p v-for="row in (Array.isArray(report.statistics[key]) ? report.statistics[key] : report.statistics[key].top)" :key="row.word">{{ row.word }} — {{ row.count }} ({{ row.density }}%)</p></details>
+                    <details v-for="[key,label] in [['top','Частые слова'],['bigrams','Биграммы'],['withoutAnchors','Без анкоров'],['anchors','Анкоры'],['imageText','Alt и title изображений']]" :key="key" class="mt-3 text-xs"><summary class="cursor-pointer text-ui-accent">{{ label }}</summary><p v-for="row in (Array.isArray(report.statistics[key]) ? report.statistics[key] : report.statistics[key].top)" :key="row.word">{{ row.word }} — {{ row.count }} ({{ row.density }}%)</p></details>
                 </Card>
             </template>
-            <div v-if="section === 'tools'" class="grid gap-2"><a v-for="[label,url] in tools" :key="label" :href="url" target="_blank" rel="noreferrer" class="rounded-lg border border-white/10 bg-slate-900/40 p-3 text-xs text-sky-300 hover:bg-white/5">{{ label }} ↗</a></div>
+            <div v-if="section === 'tools'" class="grid gap-2"><a v-for="[label,url] in tools" :key="label" :href="url" target="_blank" rel="noreferrer" class="ui-panel text-xs text-ui-accent hover:bg-white/5">{{ label }} ↗</a></div>
         </div>
         </div>
     </div>

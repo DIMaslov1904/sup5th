@@ -5,6 +5,7 @@ const SeoAudit = defineAsyncComponent(() => import('./SeoAudit.vue'))
 const SitemapView = defineAsyncComponent(() => import('./SitemapView.vue'))
 const SeoPanel = defineAsyncComponent(() => import('../popup/components/SeoPanel.vue'))
 import Message from '../popup/components/ui/Message.vue'
+import Tabs from '../popup/components/ui/Tabs.vue'
 
 const params = new URLSearchParams(location.search)
 const homeUrl = chrome.runtime.getURL('src/options/index.html')
@@ -21,13 +22,11 @@ onMounted(async () => {
 const select = name => { section.value = name; params.set('tool', name); history.replaceState(null, '', `?${params}`) }
 </script>
 <template>
-    <main class="min-h-screen bg-linear-[135deg,#0f172a,0%,#1e293b,30%,#334155,60%,#1e293b] text-slate-200">
+    <main class="min-h-screen ui-background text-ui-text">
         <div class="mx-auto max-w-5xl px-5 py-6">
-            <header class="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
-                <a :href="homeUrl" class="font-semibold tracking-wide text-sky-300">SUP 5th</a>
-                <nav class="flex flex-wrap gap-1" aria-label="Инструменты расширения">
-                    <button v-for="[name,label] in [['instruction','Инструкция'],['overview','SEO страницы'],['seo','Детальный аудит'],['sitemap','Единый sitemap']]" :key="name" @click="select(name)" class="cursor-pointer rounded-lg px-3 py-2 text-sm hover:bg-white/10" :class="section === name ? 'bg-sky-400/15 text-sky-300' : 'text-slate-400'">{{ label }}</button>
-                </nav>
+            <header class="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-ui-border/70 pb-4">
+                <a :href="homeUrl" class="font-semibold tracking-wide text-ui-accent">SUP 5th</a>
+                <Tabs v-model="section" :items="[['instruction','Инструкция'],['overview','SEO страницы'],['seo','Детальный аудит'],['sitemap','Единый sitemap']]" label="Инструменты расширения" @update:model-value="select" />
             </header>
             <Instruction v-if="section === 'instruction'" />
             <template v-else-if="ready">

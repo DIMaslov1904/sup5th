@@ -8,6 +8,7 @@ import SiteIcon from '../components/SiteIcon.vue'
 import ProjectDetails from '../components/ProjectDetails.vue'
 import Button from '../components/ui/Button.vue'
 import Message from '../components/ui/Message.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const projects = ref([]), services = ref([]), copying = ref('')
 const search = defineModel('search', { type: String, default: '' })
@@ -46,29 +47,34 @@ onMounted(async () => {
 })
 </script>
 <template>
-    <section class="w-full px-4 text-slate-200">
-        <p v-if="!projects.length && !services.length && !selectedItem" class="text-sm text-slate-400">Проекты и сервисы ещё не загружены</p>
-        <p v-else-if="!selectedItem && !filteredProjects.length" class="text-sm text-slate-400">Ничего не найдено</p>
-        <div v-else-if="!selectedItem" class="grid gap-2">
+    <section class="min-w-0 w-full px-4 text-ui-text">
+        <EmptyState v-if="!projects.length && !services.length && !selectedItem" title="Проекты и сервисы ещё не загружены" description="Укажите адреса API и загрузите данные в настройках." />
+        <EmptyState v-else-if="!selectedItem && !filteredProjects.length" title="Ничего не найдено" description="Попробуйте другое название или адрес сайта." />
+        <div v-else-if="!selectedItem" class="grid min-w-0 grid-cols-1 gap-2">
             <article v-for="project in filteredProjects" :key="project.key" @click="openItem(project)" :aria-label="`Открыть детали ${project.kind === 'service' ? 'сервиса' : 'проекта'} ${project.name || project.url}`"
-                class="relative rounded-lg border border-white/10 bg-slate-900/40 py-3 pl-14 pr-12 overflow-hidden cursor-pointer">
-                <SiteIcon :url="project.url" :name="project.name" class="absolute left-3 top-3" />
-                <span v-if="project.hasAccess || project.hasLogin || project.hasPassword" class="absolute -left-1 -top-1 h-3 w-3 rounded-full bg-blue-400" role="img" aria-label="Доступ есть"></span>
-                <span class="text-sm font-medium leading-snug text-slate-100">{{ project.name || displayUrl(project.url) }}</span>
-                <span class="mt-1 text-sm text-sky-300 line-clamp-1">{{ displayUrl(project.url) }}</span>
-                <a :href="linkHref(project.url)" target="_blank" rel="noreferrer" title="Перейти на сайт" @click.stop class="absolute top-3 right-3 inline-flex items-center justify-center gap-1.5 rounded font-medium transition cursor-pointer select-none px-2.5 py-1.5 text-xs border border-white/10 text-slate-200 hover:bg-white/10 hover:text-sky-200">↗</a>
+                class="ui-panel relative grid w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 transition-colors hover:border-ui-accent/40 hover:bg-ui-raised">
+                <SiteIcon :url="project.url" :name="project.name" />
+
+                <div class="min-w-0">
+                    <span v-if="project.hasAccess || project.hasLogin || project.hasPassword" class="absolute -left-1 -top-1 h-3 w-3 rounded-full bg-ui-accent" role="img" aria-label="Доступ есть"></span>
+                    <span :title="project.name || displayUrl(project.url)" class="line-clamp-2 wrap-anywhere text-[13px] font-medium leading-snug text-ui-text">{{ project.name || displayUrl(project.url) }}</span>
+                    <span :title="displayUrl(project.url)" class="mt-1 block truncate text-xs text-ui-accent">{{ displayUrl(project.url) }}</span>
+                </div>
+
+                <Button :href="linkHref(project.url)" size="sm" variant="ghost" title="Перейти на сайт" :aria-label="`Перейти на сайт ${displayUrl(project.url)}`" @click.stop class="size-8 p-0">↗</Button>
+
             </article>
         </div>
         <div v-else-if="selectedService" class="grid gap-4">
-            <div class="flex items-center gap-2">
+            <div class="flex min-w-0 items-center gap-2">
                 <Button variant="ghost" size="sm" aria-label="Назад к списку" title="Назад к списку" @click="back">←</Button>
                 <SiteIcon :url="selectedService.url" :name="selectedService.name" />
-                <h1 class="text-lg font-semibold">{{ selectedService.name }}</h1>
+                <h1 :title="selectedService.name" class="ui-title min-w-0 line-clamp-2 wrap-anywhere">{{ selectedService.name }}</h1>
             </div>
-            <a :href="linkHref(selectedService.url)" target="_blank" rel="noreferrer" class="break-all text-sm text-sky-300">{{ displayUrl(selectedService.url) }} ↗</a>
-            <article class="grid gap-3 rounded-lg border border-white/10 bg-slate-900/40 p-3">
-                <h2 class="text-sm font-semibold">Доступ</h2>
-                <p class="break-all text-xs text-slate-300">Логин: {{ selectedService.login || (selectedService.hasLogin ? 'Доступен после первой разблокировки' : 'Не указан') }}</p>
+            <a :href="linkHref(selectedService.url)" :title="displayUrl(selectedService.url)" target="_blank" rel="noreferrer" class="min-w-0 truncate text-[13px] text-ui-accent">{{ displayUrl(selectedService.url) }} ↗</a>
+            <article class="grid gap-3 ui-panel">
+                <h2 class="text-[13px] font-semibold">Доступ</h2>
+                <p class="break-all text-xs text-ui-muted">Логин: {{ selectedService.login || (selectedService.hasLogin ? 'Доступен после первой разблокировки' : 'Не указан') }}</p>
                 <div class="flex flex-wrap gap-2">
                     <Button v-if="selectedService.hasLogin || selectedService.login" variant="ghost" size="sm" :disabled="Boolean(copying)" @click="copyService('login')">Скопировать логин</Button>
                     <Button v-if="selectedService.hasPassword || selectedService.password" variant="ghost" size="sm" :disabled="Boolean(copying)" @click="copyService('password')">Скопировать пароль</Button>

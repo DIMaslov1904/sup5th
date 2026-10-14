@@ -27,7 +27,7 @@ const copy = async field => {
     <CredentialCard ref="card" :title="access.ftpUrl || 'Host не указан'" menu-label="Действия FTP" :message="message" :error="error">
         <template #menu>
             <button v-for="item in [['ftpUrl', 'Скопировать host', Boolean(access.ftpUrl)], ['ftpLogin', 'Скопировать логин', access.ftpHasLogin], ['ftpPassword', 'Скопировать пароль', access.ftpHasPassword], ['ssh', 'Скопировать SSH', access.ftpHasLogin && Boolean(access.ftpUrl)]]"
-                v-show="item[2]" :key="item[0]" type="button" :disabled="copying" @click="copy(item[0])" class="cursor-pointer rounded px-3 py-2 text-left text-xs text-slate-200 hover:bg-white/10 disabled:opacity-50">{{ item[1] }}</button>
+                v-show="item[2]" :key="item[0]" type="button" :disabled="copying" @click="copy(item[0])" class="ui-menu-item">{{ item[1] }}</button>
         </template>
     </CredentialCard>
 </template>

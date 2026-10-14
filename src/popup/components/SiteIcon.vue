@@ -26,7 +26,7 @@ onUnmounted(() => { disposed = true; revision++; chrome.runtime.onMessage.remove
 </script>
 
 <template>
-    <span aria-hidden="true" :class="[large ? 'size-12' : 'size-8', {'border border-white/10 bg-slate-800': !source, 'bg-white': source}]" class="flex rounded-lg shrink-0 items-center justify-center overflow-hidden text-[11px] font-semibold text-slate-300">
+    <span aria-hidden="true" :class="[large ? 'size-12' : 'size-8', {'border border-ui-border bg-ui-raised': !source, 'bg-white': source}]" class="flex rounded-panel shrink-0 items-center justify-center overflow-hidden text-[11px] font-semibold text-ui-muted">
         <img v-if="source" :src="source" alt="" class="h-full w-full object-contain" @error="revoke" />
         <span v-else>{{ iconInitials(name || origin) }}</span>
     </span>

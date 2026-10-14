@@ -1,5 +1,59 @@
 @import "tailwindcss";
 
+@theme {
+  --color-ui-canvas: #101827;
+  --color-ui-panel: #172234;
+  --color-ui-raised: #203047;
+  --color-ui-field: #101b2b;
+  --color-ui-border: #33445a;
+  --color-ui-text: #e7edf5;
+  --color-ui-muted: #a4b2c5;
+  --color-ui-accent: #72b7ff;
+  --color-ui-primary: #2367a6;
+  --color-ui-success: #83d5b0;
+  --color-ui-warning: #e8c47d;
+  --color-ui-danger: #f2a3a3;
+  --radius-control: 6px;
+  --radius-panel: 8px;
+  --radius-modal: 12px;
+}
+
+@layer base {
+  html { color-scheme: dark; }
+  body { @apply bg-ui-canvas text-ui-text text-[13px] leading-5; }
+  button, a, summary, input, select { -webkit-tap-highlight-color: transparent; }
+  button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--color-ui-accent); outline-offset: 2px; }
+}
+
+@layer components {
+  .ui-background {
+    background: radial-gradient(ellipse at 95% 0%, #28466666, transparent 62%), linear-gradient(145deg, #101827, #1b2b41 55%, #142135);
+    background-attachment: fixed;
+  }
+  .ui-panel { @apply min-w-0 max-w-full rounded-panel border border-ui-border/70 bg-ui-panel/90 p-3; }
+  .ui-panel > .ui-message { @apply mt-3; }
+  .ui-title { @apply text-base font-semibold leading-6 text-ui-text; }
+  .ui-field { @apply h-9 w-full min-w-0 rounded-control border border-ui-border bg-ui-field px-3 text-[13px] text-ui-text outline-none transition-colors placeholder:text-ui-muted/65 focus:border-ui-accent focus:ring-1 focus:ring-ui-accent/25 disabled:opacity-50; }
+  .ui-button { @apply inline-flex h-9 max-w-full shrink-0 cursor-pointer select-none items-center justify-center gap-2 rounded-control border px-3 text-center text-[13px] font-medium leading-4 transition-colors disabled:pointer-events-none disabled:opacity-45; }
+  .ui-button--sm { @apply h-7 gap-1.5 px-2 text-xs; }
+  .ui-button--primary { @apply border-ui-primary bg-ui-primary text-white hover:bg-ui-primary/85; }
+  .ui-button--secondary { @apply border-ui-border bg-ui-raised text-ui-text hover:border-ui-muted/50 hover:bg-ui-raised/75; }
+  .ui-button--ghost { @apply border-ui-border bg-transparent text-ui-text hover:border-ui-accent/50 hover:bg-ui-accent/12 hover:text-ui-accent; }
+  .ui-button--danger { @apply border-ui-danger/40 bg-ui-danger/5 text-ui-danger hover:bg-ui-danger/15; }
+  .ui-icon-button { @apply inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-control border border-transparent text-ui-muted transition-colors hover:bg-ui-raised hover:text-ui-text disabled:pointer-events-none disabled:opacity-45; }
+  .ui-menu { @apply grid min-w-44 gap-1 rounded-panel border border-ui-border bg-ui-raised p-1 text-ui-text shadow-xl; }
+  .ui-menu-item { @apply flex min-h-8 w-full cursor-pointer items-center rounded-control px-3 py-1.5 text-left text-xs transition-colors hover:bg-white/8 disabled:pointer-events-none disabled:opacity-45; }
+  .ui-tab { @apply flex h-8 shrink-0 cursor-pointer items-center justify-center rounded-control border border-transparent px-3 text-xs font-medium whitespace-nowrap text-ui-muted transition-colors hover:bg-ui-raised hover:text-ui-text; }
+  .ui-tab[aria-selected="true"] { @apply border-ui-accent/25 bg-ui-accent/12 text-ui-accent; }
+  .ui-modal { @apply fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-sm rounded-modal border border-ui-border bg-ui-panel p-4 text-ui-text shadow-2xl; }
+  .ui-modal::backdrop { background: #080f1dcc; backdrop-filter: blur(3px); }
+  .ui-action-tile { @apply flex min-h-20 flex-col items-center justify-center gap-2 rounded-panel border border-ui-border/70 bg-ui-panel/90 p-2 text-center text-xs text-ui-text transition-colors hover:border-ui-accent/40 hover:bg-ui-raised; }
+  .ui-link { @apply text-ui-accent underline-offset-2 hover:underline; }
+  .ui-loading { @apply size-4 shrink-0 rounded-full border-2 border-current/25 border-t-current motion-safe:animate-spin; }
+  .ui-tabs-scroll { scrollbar-width: none; }
+  .ui-tabs-scroll::-webkit-scrollbar { display: none; }
+}
+
 #app {
   height: 100dvh;
   width: 100%;
@@ -10,4 +64,3 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #475569; border: 2px solid transparent; border-radius: 10px; background-clip: padding-box; }
 ::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
-button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid #60a5fa; outline-offset: 3px; }

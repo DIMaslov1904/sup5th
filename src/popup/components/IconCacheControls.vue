@@ -23,11 +23,11 @@ onUnmounted(() => chrome.runtime.onMessage.removeListener(changed))
         <div class="flex flex-wrap items-center gap-2">
             <Button variant="secondary" size="sm" :disabled="busy || status.active" @click="run(refreshSiteIcons)">Обновить иконки</Button>
             <Button v-if="status.active" variant="ghost" size="sm" :disabled="busy" @click="run(cancelSiteIcons)">Отменить</Button>
-            <span v-if="status.active" role="status" class="text-xs text-slate-400">Иконки: {{ status.completed }} / {{ status.total }}</span>
-            <span v-else class="text-xs text-slate-500">В кеше: {{ status.cached }} · {{ (status.bytes / 1024 / 1024).toFixed(1) }} МБ / 50 МБ</span>
+            <span v-if="status.active" role="status" class="text-xs text-ui-muted">Иконки: {{ status.completed }} / {{ status.total }}</span>
+            <span v-else class="text-xs text-ui-muted/70">В кеше: {{ status.cached }} · {{ (status.bytes / 1024 / 1024).toFixed(1) }} МБ / 50 МБ</span>
         </div>
         <progress v-if="status.active" :value="status.completed" :max="status.total || 1" aria-label="Загрузка иконок" class="h-1 w-full accent-sky-400" />
-        <p v-if="status.failed" class="text-xs text-amber-300">Не удалось обновить: {{ status.failed }}. Для них сохраняется прежняя иконка или инициалы.</p>
-        <p v-if="error" class="text-xs text-red-300">{{ error }}</p>
+        <p v-if="status.failed" class="text-xs text-ui-warning">Не удалось обновить: {{ status.failed }}. Для них сохраняется прежняя иконка или инициалы.</p>
+        <p v-if="error" class="text-xs text-ui-danger">{{ error }}</p>
     </div>
 </template>

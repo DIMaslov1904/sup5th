@@ -5,11 +5,12 @@ defineProps({
 </script>
 
 <template>
-    <p v-if="$slots.default" class="mt-3 rounded p-2 text-xs text-white"
+    <p v-if="$slots.default" :role="type === 'error' ? 'alert' : 'status'" class="ui-message rounded-panel border px-3 py-2 text-xs leading-5"
         :class="{
-            'bg-[#c1a100cc]': type === 'error',
-            'bg-slate-800 text-slate-200': type === 'info',
-            'bg-emerald-700': type === 'success'
+            'border-ui-danger/30 bg-ui-danger/8 text-ui-danger': type === 'error',
+            'border-ui-border bg-ui-raised/60 text-ui-muted': type === 'info',
+            'border-ui-success/30 bg-ui-success/8 text-ui-success': type === 'success',
+            'border-ui-warning/30 bg-ui-warning/8 text-ui-warning': type === 'warning'
         }">
         <slot />
     </p>

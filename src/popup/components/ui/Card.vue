@@ -5,8 +5,8 @@ defineProps({
 </script>
 
 <template>
-    <section class="rounded-lg border border-white/10 bg-slate-900/40 p-3">
-        <h3 v-if="title" class="mb-2 text-sm font-semibold">{{ title }}</h3>
+    <section class="ui-panel">
+        <h3 v-if="title" class="mb-3 text-[13px] font-semibold text-ui-text">{{ title }}</h3>
         <slot />
     </section>
 </template>

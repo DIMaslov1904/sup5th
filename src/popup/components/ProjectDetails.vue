@@ -28,19 +28,19 @@ watch(() => props.project.url, async (url, _previous, onCleanup) => {
 }, { immediate: true })
 </script>
 <template>
-    <div class="grid gap-4 text-slate-200">
-        <header class="flex items-center gap-3">
+    <div class="grid min-w-0 grid-cols-1 gap-4 text-ui-text">
+        <header class="flex min-w-0 items-center gap-3">
             <slot name="leading" />
             <SiteIcon :url="project.url" :name="project.name" large />
-            <div class="min-w-0">
-                <h1 class="text-lg font-semibold">{{ project.name || displayUrl(project.url) }}</h1>
-                <a :href="href(project.url)" target="_blank" rel="noreferrer" class="break-all text-xs text-slate-400 hover:text-white">{{ displayUrl(project.url) }}</a>
+            <div class="min-w-0 flex-1">
+                <h1 :title="project.name || displayUrl(project.url)" class="ui-title line-clamp-2 wrap-anywhere">{{ project.name || displayUrl(project.url) }}</h1>
+                <a :href="href(project.url)" :title="displayUrl(project.url)" target="_blank" rel="noreferrer" class="block truncate text-xs text-ui-muted hover:text-white">{{ displayUrl(project.url) }}</a>
             </div>
         </header>
         <div class="grid grid-cols-4 gap-2">
             <a v-for="action in actions" :key="action.kind" :href="action.url || undefined" target="_blank" rel="noreferrer" :aria-disabled="!action.url" :tabindex="action.url ? undefined : -1"
-                class="flex min-h-20 flex-col items-center justify-center gap-1 rounded-lg border border-white/10 bg-slate-900/50 p-2 text-center text-xs text-slate-200 transition-colors"
-                :class="action.url ? 'hover:bg-slate-700' : 'pointer-events-none opacity-40'">
+                class="ui-action-tile"
+                :class="action.url ? '' : 'pointer-events-none opacity-40'">
                 <span v-if="action.kind === 'admin'" class="flex size-8 items-center justify-center rounded bg-white p-1"><img :src="getCmsIconPath(project.cms)" :alt="project.cms || 'CMS'" class="size-full object-contain" /></span>
                 <svg v-else-if="action.kind === 'manual'" class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3h12l4 4v14H4Z M15 3v5h5 M8 12h8 M8 16h6" /></svg>
                 <svg v-else-if="action.kind === 'git'" class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="5" r="2" /><circle cx="6" cy="19" r="2" /><circle cx="18" cy="6" r="2" /><path d="M6 7v10 M18 8v2c0 4-12 4-12 7" /></svg>
@@ -49,13 +49,13 @@ watch(() => props.project.url, async (url, _previous, onCleanup) => {
             </a>
         </div>
         <section class="grid gap-2">
-            <h2 class="text-sm font-semibold">Доступы</h2>
-            <p v-if="loading" class="text-xs text-slate-400">Загрузка доступов…</p>
-            <p v-else-if="!accesses.length && !error" class="text-xs text-slate-400">Для проекта нет сохранённых доступов</p>
+            <h2 class="text-[13px] font-semibold">Доступы</h2>
+            <p v-if="loading" class="text-xs text-ui-muted">Загрузка доступов…</p>
+            <p v-else-if="!accesses.length && !error" class="text-xs text-ui-muted">Для проекта нет сохранённых доступов</p>
             <ProjectAccessCard v-for="(access, index) in accesses" :key="`${project.url}:${index}`" :access="access" :project="project" :index="index" />
         </section>
         <section v-if="ftpAccesses.length" class="grid gap-2">
-            <h2 class="text-sm font-semibold">FTP доступы</h2>
+            <h2 class="text-[13px] font-semibold">FTP доступы</h2>
             <FtpAccessCard v-for="item in ftpAccesses" :key="`${project.url}:${item.index}`" :access="item.access" :project-url="project.url" :index="item.index" />
         </section>
         <Message v-if="error" type="error">{{ error }}</Message>

@@ -1,11 +1,11 @@
 <template>
   <div
-    class="w-full text-slate-200 text-sm leading-relaxed">
+    class="w-full text-ui-text text-[13px] leading-relaxed">
     <div class="max-w-3xl">
-      <h1 class="text-3xl font-bold mb-5">Инструкция по созданию api в гугл таблице</h1>
+      <h1 class="ui-title mb-4">Инструкция по созданию api в гугл таблице</h1>
       <ol>
         <li>Переходим в Вашу таблицу доступов</li>
-        <li>Необходимо задать название листа <b class="bg-gray-500 px-2 rounded">Доступы к сайтам</b></li>
+        <li>Необходимо задать название листа <b class="bg-ui-raised px-2 rounded">Доступы к сайтам</b></li>
         <li>
           Проверяем столбцы
           <ul class="grid grid-cols-4 mb-3">
@@ -19,17 +19,15 @@
           </ul>
         </li>
         <li>
-          Создайте лист <b class="bg-gray-500 px-2 rounded">Корпоративные доступы</b> со столбцами
+          Создайте лист <b class="bg-ui-raised px-2 rounded">Корпоративные доступы</b> со столбцами
           [A] Название, [B] Ссылка, [C] Логин, [D] Пароль. Первая строка — заголовки.
           Логин и пароль можно оставить пустыми.
         </li>
         <li>В верхнем меню выбираем &#128073;Расширения &#128073;Apps script</li>
         <li>
-          Копируем код: <button @click="copyCode"
-            class="rounded bg-slate-800 py-1 px-2.5 border border-transparent text-center text-sm text-white transition-all shadow-sm hover:shadow focus:bg-slate-700 focus:shadow-none active:bg-slate-700 hover:bg-slate-700 active:shadow-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none cursor-pointer"
-            type="button">
+          Копируем код: <Button size="sm" variant="secondary" @click="copyCode">
             {{ copyCodeText }}
-          </button>
+          </Button>
         </li>
         <li>Вставляем код в редактор, удаляя пустую функцию по умолчанию</li>
         <li>Нажимаем сверху кнопку &#128073;Начать развертывание</li>
@@ -45,7 +43,7 @@
         </li>
         <li>Копируем URL</li>
         <li>
-          Вставляем в поле <b class="bg-gray-500 px-2 rounded">API получения личных доступов</b>
+          Вставляем в поле <b class="bg-ui-raised px-2 rounded">API получения личных доступов</b>
         </li>
       </ol>
     </div>
@@ -54,6 +52,7 @@
 
 <script setup>
 import { ref } from "vue";
+import Button from '../popup/components/ui/Button.vue'
 
 defineEmits(["return"]);
 

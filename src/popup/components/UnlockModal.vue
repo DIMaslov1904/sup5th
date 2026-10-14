@@ -1,8 +1,11 @@
 <script setup>
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { cancelUnlock, runHelloUnlock, submitPin, unlockState } from '../unlockStore'
 import Input from './ui/Input.vue'
 import Button from './ui/Button.vue'
+import Modal from './ui/Modal.vue'
+import Message from './ui/Message.vue'
+const modalOpen = computed({ get: () => unlockState.visible, set: value => { if (!value && unlockState.visible) cancelUnlock() } })
 
 const pin = ref('')
 const inputRef = ref(null)
@@ -38,27 +41,26 @@ watch(() => unlockState.error, async (error) => {
 </script>
 
 <template>
-    <div v-if="unlockState.visible" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
-        <div class="w-full max-w-xs grid gap-4 rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-2xl">
-            <h2 class="text-base font-semibold text-white">Разблокировка хранилища</h2>
+    <Modal v-model:open="modalOpen" title="Разблокировка хранилища">
+        <div class="grid gap-4">
 
             <template v-if="unlockState.mode === 'pin'">
                 <Input ref="inputRef" v-model="pin" type="password" inputmode="numeric" autocomplete="off"
-                    maxlength="12" placeholder="PIN-код" :disabled="unlockState.loading" />
-                <p class="text-xs text-slate-400">Введите PIN — хранилище разблокируется сразу после ввода.</p>
+                    maxlength="12" placeholder="PIN-код" :disabled="unlockState.loading" autofocus />
+                <p class="text-xs text-ui-muted">Введите PIN — хранилище разблокируется сразу после ввода.</p>
             </template>
 
             <template v-else>
-                <div v-if="unlockState.loading" role="status" class="flex items-center gap-3 text-sm text-sky-300">
-                    <span class="h-5 w-5 shrink-0 rounded-full border-2 border-sky-300/25 border-t-sky-300 motion-safe:animate-spin" aria-hidden="true"></span>
+                <div v-if="unlockState.loading" role="status" class="flex items-center gap-3 text-[13px] text-ui-accent">
+                    <span class="ui-loading" aria-hidden="true"></span>
                     <span>Ожидаем Windows Hello…</span>
                 </div>
-                <p class="text-xs text-slate-300">
+                <p class="text-xs text-ui-muted">
                     Выполните проверку Windows Hello в открывшемся системном окне (PIN / отпечаток / лицо).
                 </p>
             </template>
 
-            <p v-if="unlockState.error" class="text-xs text-red-300">{{ unlockState.error }}</p>
+            <Message v-if="unlockState.error" type="error">{{ unlockState.error }}</Message>
 
             <div class="flex justify-end gap-2">
                 <Button v-if="unlockState.mode === 'hello'" variant="secondary" size="sm"
@@ -66,5 +68,5 @@ watch(() => unlockState.error, async (error) => {
                 <Button variant="ghost" size="sm" @click="cancelUnlock">Отмена</Button>
             </div>
         </div>
-    </div>
+    </Modal>
 </template>

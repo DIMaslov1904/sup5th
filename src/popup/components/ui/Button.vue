@@ -5,25 +5,22 @@ const props = defineProps({
     variant: { type: String, default: 'primary' }, // primary | secondary | ghost | danger
     size: { type: String, default: 'md' },         // sm | md
     href: { type: String, default: '' },
-    disabled: { type: Boolean, default: false }
+    disabled: { type: Boolean, default: false },
+    loading: { type: Boolean, default: false },
+    type: { type: String, default: 'button' },
+    target: { type: String, default: '_blank' }
 })
 
 const classes = computed(() => {
-    const base = 'inline-flex items-center justify-center gap-1.5 rounded font-medium transition cursor-pointer disabled:pointer-events-none disabled:opacity-50 select-none'
-    const sizes = { sm: 'px-2.5 py-1.5 text-xs', md: 'px-3 py-2 text-sm' }
-    const variants = {
-        primary: 'bg-sky-700 text-white hover:bg-sky-600',
-        secondary: 'bg-slate-800 text-white hover:bg-slate-700 border border-white/10',
-        ghost: 'border border-white/10 text-slate-200 hover:bg-white/10',
-        danger: 'border border-red-400/40 text-red-300 hover:bg-red-400/10'
-    }
-    return `${base} ${sizes[props.size]} ${variants[props.variant]}`
+    const variant = ['primary', 'secondary', 'ghost', 'danger'].includes(props.variant) ? props.variant : 'primary'
+    return ['ui-button', `ui-button--${variant}`, props.size === 'sm' ? 'ui-button--sm' : '']
 })
 </script>
 
 <template>
-    <component :is="href ? 'a' : 'button'" :href="href || undefined" target="_blank" rel="noreferrer"
-        :type="href ? undefined : 'button'" :disabled="!href && disabled" :class="classes">
+    <component :is="href ? 'a' : 'button'" :href="href && !disabled && !loading ? href : undefined" :target="href ? target : undefined" :rel="href ? 'noreferrer' : undefined"
+        :type="href ? undefined : type" :disabled="!href && (disabled || loading)" :aria-disabled="href && (disabled || loading) ? true : undefined" :aria-busy="loading || undefined" :tabindex="href && (disabled || loading) ? -1 : undefined" :class="[classes, href && (disabled || loading) ? 'pointer-events-none opacity-45' : '']" @click="event => { if (disabled || loading) { event.preventDefault(); event.stopImmediatePropagation() } }">
+        <span v-if="loading" class="ui-loading" aria-hidden="true"></span>
         <slot />
     </component>
 </template>

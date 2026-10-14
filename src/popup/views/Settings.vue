@@ -29,6 +29,7 @@ import Card from '../components/ui/Card.vue'
 import Message from '../components/ui/Message.vue'
 import { ensureUnlocked } from '../unlockStore'
 import IconCacheControls from '../components/IconCacheControls.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
 
 const optionsUrl = chrome.runtime.getURL('src/options/index.html')
 
@@ -278,9 +279,10 @@ const resetData = async () => {
 </script>
 
 <template>
-    <div class="grid gap-5 w-full px-4">
+    <div class="grid w-full gap-4 px-4">
+        <PageHeader title="Настройки" class="mb-0" />
         <Card title="API получения всех проектов">
-            <div class="flex gap-1">
+            <div class="flex items-center gap-2">
                 <Input v-model="projectsUrlInput" :placeholder="projectsPlaceholder"
                     :disabled="loading === 'all' || savingApi === 'projects'" />
                 <Button variant="secondary" :disabled="loading === 'all' || savingApi === 'projects'" @click="saveProjectsUrl">
@@ -300,16 +302,16 @@ const resetData = async () => {
                 :disabled="Boolean(authorizing) || Boolean(loading) || savingApi === 'projects'" @click="authorizeApi('projects')">
                 {{ authorizing === 'projects' ? 'Открываю...' : data.projectApiStatus === 'authorization_needed' ? 'Подтвердить разрешения' : 'Авторизоваться в Google' }}
             </Button>
-            <p v-if="projectsNeedAuth" class="mt-2 text-xs text-slate-400">
+            <p v-if="projectsNeedAuth" class="mt-2 text-xs text-ui-muted">
                 После входа и подтверждения разрешений вернитесь и нажмите «Загрузить всё».
             </p>
-            <p class="flex items-start mt-2 text-xs text-slate-400">
-                Общий url. Указан в таблице База знаний 5th
+            <p class="flex items-start mt-2 text-xs text-ui-muted">
+                Адрес API указан в таблице «База знаний 5th».
             </p>
         </Card>
 
         <Card title="API получения личных доступов">
-            <div class="flex gap-1">
+            <div class="flex items-center gap-2">
                 <Input v-model="accessUrlInput" :placeholder="accessPlaceholder"
                     :disabled="loading === 'all' || savingApi === 'access'" />
                 <Button variant="secondary" :disabled="loading === 'all' || savingApi === 'access'" @click="saveAccessUrl">
@@ -329,13 +331,13 @@ const resetData = async () => {
                 :disabled="Boolean(authorizing) || Boolean(loading) || savingApi === 'access'" @click="authorizeApi('accesses')">
                 {{ authorizing === 'accesses' ? 'Открываю...' : data.accessApiStatus === 'authorization_needed' ? 'Подтвердить разрешения' : 'Авторизоваться в Google' }}
             </Button>
-            <p v-if="accessesNeedAuth" class="mt-2 text-xs text-slate-400">
+            <p v-if="accessesNeedAuth" class="mt-2 text-xs text-ui-muted">
                 Войдите в открывшейся вкладке, затем вернитесь и нажмите «Загрузить всё».
             </p>
-            <p class="flex items-start mt-2 text-xs text-slate-400">
-                Инструкция по получению -
+            <p class="flex items-start mt-2 text-xs text-ui-muted">
+                Как получить адрес API:
                 <a :href="optionsUrl" target="_blank" rel="noreferrer"
-                    class="hover:text-sky-300 text-white/70 underline decoration-sky-300/40 underline-offset-2">инструкция</a>
+                    class="hover:text-ui-accent text-white/70 underline decoration-sky-300/40 underline-offset-2">инструкция</a>
             </p>
         </Card>
 
@@ -343,19 +345,16 @@ const resetData = async () => {
             <Button variant="secondary" :disabled="Boolean(loading)" @click="loadAll">
                 {{ loading === 'all' ? 'Загрузка...' : 'Загрузить всё' }}
             </Button>
-            <p class="flex items-start mt-2 text-xs text-slate-400">
+            <p class="flex items-start mt-2 text-xs text-ui-muted">
                 Загружает проекты, доступы и сервисы по сохранённым адресам API.
             </p>
         </Card>
 
         <Card title="Защита паролей">
             <div v-if="!security.enabled" class="grid gap-3">
-                <p class="text-xs text-slate-300">Защита выключена. При включении пароли и FTP-доступы будут зашифрованы локальным ключом, логины останутся открытыми.</p>
+                <p class="text-xs text-ui-muted">Защита выключена. При включении пароли и FTP-доступы будут зашифрованы локальным ключом, логины останутся открытыми.</p>
 
-                <label class="flex items-center gap-2 text-sm text-slate-200">
-                    <input type="radio" checked disabled class="accent-sky-500" />
-                    PIN-код
-                </label>
+                <h4 class="text-[13px] font-medium text-ui-text">PIN-код</h4>
                 <Input v-model="pin" type="password" inputmode="numeric" autocomplete="new-password"
                     maxlength="12" placeholder="PIN, 4–12 цифр" :disabled="securityLoading" />
                 <Input v-model="pinConfirm" type="password" inputmode="numeric" autocomplete="new-password"
@@ -363,32 +362,29 @@ const resetData = async () => {
                 <Button variant="secondary" :disabled="securityLoading || !pin || !pinConfirm" @click="enableProtection">
                     {{ securityLoading ? 'Включение...' : 'Включить защиту' }}
                 </Button>
-                <p class="text-xs text-amber-300">PIN нельзя восстановить. Копия профиля Chrome позволяет атаковать короткий PIN офлайн; рекомендуются 10–12 цифр. Потеря PIN означает потерю доступа к сохранённым секретам.</p>
+                <p class="text-xs text-ui-warning">PIN нельзя восстановить. Копия профиля Chrome позволяет атаковать короткий PIN офлайн; рекомендуются 10–12 цифр. Потеря PIN означает потерю доступа к сохранённым секретам.</p>
 
-                <div class="border-t border-white/10 pt-3 grid gap-3">
-                    <label class="flex items-center gap-2 text-sm text-slate-200">
-                        <input type="radio" checked disabled class="accent-sky-500" />
-                        Windows Hello (биометрия)
-                    </label>
+                <div class="border-t border-ui-border/70 pt-3 grid gap-3">
+                    <h4 class="text-[13px] font-medium text-ui-text">Windows Hello (биометрия)</h4>
                     <Button variant="secondary" :disabled="securityLoading || !security.helloAvailable"
                         @click="enableHelloProtectionFn">
                         {{ securityLoading ? 'Включение...' : 'Включить вход по Windows Hello' }}
                     </Button>
-                    <p v-if="!security.helloAvailable" class="text-xs text-amber-300">
+                    <p v-if="!security.helloAvailable" class="text-xs text-ui-warning">
                         Windows Hello недоступен на этом устройстве. Он появится в Chrome на Windows 10/11 с настроенной биометрией или PIN.
                     </p>
-                    <p v-else-if="!security.prfSupported" class="text-xs text-amber-300">
+                    <p v-else-if="!security.prfSupported" class="text-xs text-ui-warning">
                         Chrome не подтверждает PRF-расширение для passkey. Попробуйте включить — если браузер не выдаст секрет, включите «Создавать passkey в Windows Hello» в chrome://settings/passkeys и удалите лишние passkey этого расширения.
                     </p>
-                    <p v-else class="text-xs text-slate-400">
+                    <p v-else class="text-xs text-ui-muted">
                         Будет создан passkey, привязанный к Windows Hello (PIN / отпечаток / лицо). Ключ хранилища шифруется секретом passkey и не покидает систему.
                     </p>
                 </div>
             </div>
             <div v-else class="grid gap-3">
-                <div class="flex items-center justify-between gap-3 text-sm">
+                <div class="flex items-center justify-between gap-3 text-[13px]">
                     <span>{{ security.mode === 'hello' ? 'Windows Hello' : 'PIN-защита' }}</span>
-                    <span :class="security.unlocked ? 'text-emerald-300' : 'text-amber-300'">
+                    <span :class="security.unlocked ? 'text-ui-success' : 'text-ui-warning'">
                         {{ security.unlocked ? 'Разблокировано' : 'Заблокировано' }}
                     </span>
                 </div>
@@ -417,24 +413,24 @@ const resetData = async () => {
                         <Button variant="secondary" size="sm" :disabled="securityLoading" @click="lockProtection">Заблокировать</Button>
                         <Button variant="danger" size="sm" :disabled="securityLoading" @click="disableProtection">Отключить защиту</Button>
                     </div>
-                    <p class="text-xs text-slate-400">Хранилище автоматически блокируется при закрытии браузера. PIN не синхронизируется и не имеет восстановления.</p>
+                    <p class="text-xs text-ui-muted">Хранилище автоматически блокируется при закрытии браузера. PIN не синхронизируется и не имеет восстановления.</p>
                 </template>
             </div>
         </Card>
 
         <Message v-if="message.text" :type="message.type" class="whitespace-pre-line">{{ message.text }}</Message>
 
-        <details v-if="errors.length" class="rounded border border-white/10 bg-slate-900/30 p-3 text-xs text-slate-300">
+        <details v-if="errors.length" class="ui-panel text-xs text-ui-muted">
             <summary class="cursor-pointer">Журнал ошибок ({{ errors.length }})</summary>
             <ul class="mt-2 grid gap-2">
                 <li v-for="error in errors.slice(0, 10)" :key="`${error.createdAt}-${error.type}`">
-                    <span class="text-slate-500">{{ formatDate(error.createdAt) }}</span>
+                    <span class="text-ui-muted/70">{{ formatDate(error.createdAt) }}</span>
                     {{ error.type === 'projects' ? 'Проекты' : 'Доступы' }}: {{ error.message }}
                 </li>
             </ul>
         </details>
 
-        <div class="rounded-lg border border-white/10 p-3"><IconCacheControls /></div>
+        <Card title="Иконки сайтов"><IconCacheControls /></Card>
         <div class="flex flex-wrap gap-2">
         <Button variant="secondary" size="sm" :disabled="Boolean(loading) || !errors.length" @click="clearErrors">Очистить журнал ошибок</Button>
         <Button variant="danger" size="sm" :disabled="Boolean(loading)" @click="resetData">

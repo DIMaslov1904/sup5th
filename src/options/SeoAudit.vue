@@ -158,12 +158,12 @@ const openTab = (url) => chrome.tabs.create({ url })
 </script>
 
 <template>
-    <div class="min-h-screen w-full bg-linear-[135deg,#0f172a,0%,#1e293b,30%,#334155,60%,#1e293b] text-slate-200">
-        <div class="mx-auto flex max-w-4xl flex-col gap-4 px-5 py-6">
+    <div class="min-h-screen w-full ui-background text-ui-text">
+        <div class="mx-auto flex min-w-0 w-full max-w-4xl flex-col gap-4 px-5 py-6">
             <header class="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h1 class="text-2xl font-bold">SEO-аудит</h1>
-                    <p class="text-xs text-slate-400">Расширенная проверка текущей страницы и внутренних ссылок</p>
+                    <h1 class="ui-title">SEO-аудит</h1>
+                    <p class="text-xs text-ui-muted">Расширенная проверка текущей страницы и внутренних ссылок</p>
                 </div>
                 <Button variant="primary" size="md" :disabled="state === 'scanning' || state === 'checking-links'"
                     @click="runAudit">
@@ -171,73 +171,73 @@ const openTab = (url) => chrome.tabs.create({ url })
                 </Button>
             </header>
 
-            <p class="text-xs text-slate-500">Проверяется выборка до 51 страницы без cookies. Процент — доля выполненных технических проверок, а не оценка поисковых позиций. Длины метатегов — ориентиры.</p>
+            <p class="text-xs text-ui-muted/70">Проверяется выборка до 51 страницы без cookies. Процент — доля выполненных технических проверок, а не оценка поисковых позиций. Длины метатегов — ориентиры.</p>
             <Button v-if="state === 'scanning' || state === 'checking-links'" variant="secondary" size="sm" @click="stopAudit">Остановить аудит</Button>
             <Message v-if="message" type="error">{{ message }}</Message>
 
-            <div v-if="state === 'checking-links'" class="rounded-lg border border-white/10 bg-slate-900/40 p-3 text-xs">
+            <div v-if="state === 'checking-links'" class="ui-panel text-xs">
                 Проверено страниц: {{ progress.current }} из {{ progress.total }}
-                <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-ui-raised">
                     <div class="h-full bg-sky-600 transition-all" :style="{ width: `${progress.total ? Math.round(progress.current / progress.total * 100) : 0}%` }"></div>
                 </div>
             </div>
 
             <template v-if="state === 'done'">
                 <Card class="p-5!">
-                    <div class="flex items-center gap-6">
-                        <div class="relative grid h-24 w-24 place-items-center rounded-full border-4"
+                    <div class="flex min-w-0 items-center gap-6">
+                        <div class="relative grid h-24 w-24 shrink-0 place-items-center rounded-full border-4"
                             :class="score.percent >= 80 ? 'border-emerald-500' : score.percent >= 50 ? 'border-amber-400' : 'border-red-400'">
                             <span class="text-2xl font-bold">{{ score.percent }}%</span>
                         </div>
-                        <div>
-                            <p class="text-lg font-semibold">{{ score.passed }} из {{ score.total }} проверок пройдено</p>
-                            <p v-if="report" class="mt-1 break-all text-xs text-slate-400">
-                                <a :href="report.url" target="_blank" rel="noreferrer" class="text-sky-300 hover:text-sky-200">{{ report.url }}</a>
+                        <div class="min-w-0 flex-1">
+                            <p class="ui-title">{{ score.passed }} из {{ score.total }} проверок пройдено</p>
+                            <p v-if="report" class="mt-1 min-w-0 text-xs text-ui-muted">
+                                <a :href="report.url" :title="report.url" target="_blank" rel="noreferrer" class="block truncate text-ui-accent hover:underline">{{ report.url }}</a>
                             </p>
                         </div>
                     </div>
                 </Card>
 
                 <Card title="Чек-лист">
-                    <ul class="grid gap-1.5">
+                    <ul class="grid min-w-0 grid-cols-1 gap-1.5">
                         <li v-for="(item, index) in checks" :key="index"
-                            class="flex items-start justify-between gap-3 rounded border border-white/10 bg-slate-950/30 px-3 py-2">
-                            <span class="flex items-center gap-2 text-xs">
-                                <span :class="item.ok ? 'text-emerald-400' : 'text-amber-300'" aria-hidden="true">{{ item.ok === null ? '?' : item.ok ? '✓' : '✕' }}</span>
-                                {{ item.label }}
+                            class="grid min-w-0 grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start gap-3 rounded-control border border-ui-border/70 bg-ui-field/40 px-3 py-2">
+                            <span class="flex min-w-0 items-start gap-2 text-xs">
+                                <span class="shrink-0" :class="item.ok ? 'text-emerald-400' : 'text-ui-warning'" aria-hidden="true">{{ item.ok === null ? '?' : item.ok ? '✓' : '✕' }}</span>
+                                <span class="min-w-0 wrap-anywhere">{{ item.label }}</span>
                             </span>
-                            <span v-if="item.hint" class="max-w-[40%] truncate text-right text-[11px] text-slate-500" :title="item.hint">{{ item.hint }}</span>
+                            <span v-if="item.hint" class="min-w-0 truncate text-right text-[11px] text-ui-muted/70" :title="item.hint">{{ item.hint }}</span>
                         </li>
                     </ul>
                 </Card>
 
                 <Card v-if="linkChecks.length" title="Проверка внутренних ссылок">
                     <div class="mb-2 flex flex-wrap gap-2 text-[11px]">
-                        <span class="rounded bg-emerald-700/20 px-2 py-0.5 text-emerald-300">ОК: {{ linkChecks.filter(l => l.ok).length }}</span>
-                        <span class="rounded bg-red-400/20 px-2 py-0.5 text-red-300">Битые: {{ linkChecks.filter(l => !l.ok).length }}</span>
-                        <span class="rounded bg-amber-400/20 px-2 py-0.5 text-amber-300">Редирект: {{ linkChecks.filter(l => l.redirected).length }}</span>
+                        <span class="rounded bg-emerald-700/20 px-2 py-0.5 text-ui-success">ОК: {{ linkChecks.filter(l => l.ok).length }}</span>
+                        <span class="rounded bg-red-400/20 px-2 py-0.5 text-ui-danger">Битые: {{ linkChecks.filter(l => !l.ok).length }}</span>
+                        <span class="rounded bg-amber-400/20 px-2 py-0.5 text-ui-warning">Редирект: {{ linkChecks.filter(l => l.redirected).length }}</span>
                     </div>
-                    <ul class="grid max-h-72 gap-1 overflow-auto pr-1">
+                    <ul class="grid min-w-0 grid-cols-1 max-h-72 gap-1 overflow-y-auto pr-1">
                         <li v-for="(link, index) in linkChecks" :key="index"
-                            class="flex items-center justify-between gap-3 rounded px-2 py-1 text-xs odd:bg-slate-950/30">
-                            <a :href="link.url" target="_blank" rel="noreferrer" class="min-w-0 truncate text-slate-300 hover:text-sky-300">{{ link.url }}</a>
+                            class="flex min-w-0 items-center justify-between gap-3 rounded px-2 py-1 text-xs odd:bg-ui-field/40">
+                            <a :href="link.url" :title="link.url" target="_blank" rel="noreferrer" class="min-w-0 flex-1 truncate text-ui-muted hover:text-ui-accent">{{ link.url }}</a>
                             <span class="shrink-0"
                                 :class="link.ok ? 'text-emerald-400' : 'text-red-400'">{{ link.status || '—' }}</span>
                         </li>
                     </ul>
                 </Card>
 
-                <div v-if="duplicateTitles.length || duplicateDescriptions.length" class="grid gap-4">
+                <div v-if="duplicateTitles.length || duplicateDescriptions.length" class="grid min-w-0 grid-cols-1 gap-4">
                     <Card v-if="duplicateTitles.length" title="Дубли Title">
                         <ul class="grid gap-1.5">
-                            <li v-for="([title, count], index) in duplicateTitles" :key="index" class="text-xs text-amber-300">
+                            <li v-for="([title, count], index) in duplicateTitles" :key="index" :title="title" class="line-clamp-2 wrap-anywhere text-xs text-ui-warning">
                                 «{{ title }}» — {{ count }} страниц
                             </li>
                         </ul>
                     </Card>
                     <Card v-if="duplicateDescriptions.length" title="Дубли Description">
                         <ul class="grid gap-1.5">
-                            <li v-for="([description, count], index) in duplicateDescriptions" :key="index" class="text-xs text-amber-300">
+                            <li v-for="([description, count], index) in duplicateDescriptions" :key="index" :title="description" class="line-clamp-2 wrap-anywhere text-xs text-ui-warning">
                                 «{{ description }}» — {{ count }} страниц
                             </li>
                         </ul>
@@ -246,29 +246,29 @@ const openTab = (url) => chrome.tabs.create({ url })
 
                 <Card v-if="sitemapInfo" title="Sitemap">
                     <dl class="grid gap-1.5 text-xs">
-                        <div class="flex justify-between gap-3"><dt class="text-slate-400">Файл</dt><dd class="truncate">{{ sitemapInfo.url }}</dd></div>
-                        <div class="flex justify-between gap-3"><dt class="text-slate-400">Доступен</dt>
+                        <div class="flex min-w-0 justify-between gap-3"><dt class="shrink-0 text-ui-muted">Файл</dt><dd :title="sitemapInfo.url" class="min-w-0 flex-1 truncate text-right">{{ sitemapInfo.url }}</dd></div>
+                        <div class="flex justify-between gap-3"><dt class="text-ui-muted">Доступен</dt>
                             <dd :class="sitemapInfo.exists ? 'text-emerald-400' : 'text-red-400'">{{ sitemapInfo.exists ? `Да (HTTP ${sitemapInfo.status})` : 'Нет' }}</dd></div>
-                        <div class="flex justify-between gap-3"><dt class="text-slate-400">URL в sitemap</dt><dd>{{ sitemapInfo.count }}</dd></div>
-                        <div class="flex justify-between gap-3"><dt class="text-slate-400">Текущая страница есть</dt>
-                            <dd :class="sitemapInfo.containsCurrent ? 'text-emerald-400' : 'text-amber-300'">{{ sitemapInfo.containsCurrent ? 'Да' : 'Нет' }}</dd></div>
-                        <div class="flex justify-between gap-3"><dt class="text-slate-400">Дубли в sitemap</dt>
-                            <dd :class="sitemapInfo.duplicates ? 'text-amber-300' : 'text-emerald-400'">{{ sitemapInfo.duplicates }}</dd></div>
+                        <div class="flex justify-between gap-3"><dt class="text-ui-muted">URL в sitemap</dt><dd>{{ sitemapInfo.count }}</dd></div>
+                        <div class="flex justify-between gap-3"><dt class="text-ui-muted">Текущая страница есть</dt>
+                            <dd :class="sitemapInfo.containsCurrent ? 'text-emerald-400' : 'text-ui-warning'">{{ sitemapInfo.containsCurrent ? 'Да' : 'Нет' }}</dd></div>
+                        <div class="flex justify-between gap-3"><dt class="text-ui-muted">Дубли в sitemap</dt>
+                            <dd :class="sitemapInfo.duplicates ? 'text-ui-warning' : 'text-emerald-400'">{{ sitemapInfo.duplicates }}</dd></div>
                     </dl>
                 </Card>
 
                 <Card v-if="robotsRules.length" title="Robots.txt для текущего пути">
                     <ul class="grid gap-1.5 text-xs">
                         <li v-for="(rule, index) in robotsRules" :key="index"
-                            class="flex items-center justify-between rounded bg-slate-950/30 px-3 py-1.5">
-                            <span>{{ rule.directive.toUpperCase() }}: {{ rule.value || '/' }}</span>
-                            <span :class="rule.blocked ? 'text-red-400' : 'text-emerald-400'">{{ rule.blocked ? 'запрещено' : 'разрешено' }}</span>
+                            class="flex items-center justify-between rounded bg-ui-field/40 px-3 py-1.5">
+                            <span :title="`${rule.directive.toUpperCase()}: ${rule.value || '/'}`" class="min-w-0 flex-1 truncate">{{ rule.directive.toUpperCase() }}: {{ rule.value || '/' }}</span>
+                            <span class="shrink-0" :class="rule.blocked ? 'text-red-400' : 'text-emerald-400'">{{ rule.blocked ? 'запрещено' : 'разрешено' }}</span>
                         </li>
                     </ul>
                 </Card>
             </template>
 
-            <p v-else-if="state === 'idle'" class="text-sm text-slate-400">
+            <p v-else-if="state === 'idle'" class="text-[13px] text-ui-muted">
                 Аудит проверит текущую страницу: мета-теги, заголовки, индексацию, скорость (TTFB),
                 а затем обойдёт внутренние ссылки, найдёт битые ссылки и дубли Title/Description.
             </p>
