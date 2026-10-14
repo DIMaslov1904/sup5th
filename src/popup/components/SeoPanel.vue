@@ -1,23 +1,38 @@
 <script setup>
-import { computed, onUnmounted, ref } from 'vue'
-import { sendSeoToTab, fetchSeo, openSeoApp, downloadText } from '../../utils/seoClient.js'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { callBackground, sendSeoToTab, fetchSeo, openSeoApp, downloadText } from '../../utils/seoClient.js'
+import { buildHeadingTree } from '../../utils/headingTree.js'
+import HeadingTree from './HeadingTree.vue'
 import { evaluateRobots } from '../../utils/seoRules.js'
 import Button from './ui/Button.vue'
 import Card from './ui/Card.vue'
 import Message from './ui/Message.vue'
 
-const props = defineProps({ tab: Object })
+const props = defineProps({ tab: Object, autoScan: Boolean })
+const notification = ref(''), serverIp = ref(''), serverIpLoading = ref(false)
+const headingTree = computed(() => buildHeadingTree(report.value?.headingRows || []))
 const section = ref('overview'), report = ref(null), loading = ref(false), error = ref('')
 const linkFilter = ref('all'), relFilter = ref('all'), protocolFilter = ref('all'), statusFilter = ref('all'), imageFilter = ref('all'), query = ref(''), visible = ref(100)
 const checked = ref({}), checking = ref(false), checkProgress = ref(0)
-let cancelled = false, alive = true
+let cancelled = false, alive = true, scanRevision = 0
 const tabs = [['overview','Обзор'],['headings','Заголовки'],['links','Ссылки'],['images','Изображения'],['markup','Разметка'],['index','Индексация'],['page','Страница'],['tools','Инструменты']]
 const scan = async () => {
+    if (loading.value) return
+    const revision = ++scanRevision
     loading.value = true; error.value = ''
-    try { const data = await sendSeoToTab(props.tab?.id); if (alive) { report.value = data; checked.value = {}; visible.value = 100 } }
+    notification.value = ''; serverIp.value = ''
+    try {
+        const data = await sendSeoToTab(props.tab?.id)
+        if (alive) {
+            report.value = data; checked.value = {}; visible.value = 100
+            serverIpLoading.value = true
+            callBackground('seo:serverIp', { url: data.finalUrl || data.url }).then(result => { if (alive && revision === scanRevision) serverIp.value = result.address || '' }).catch(() => {}).finally(() => { if (alive && revision === scanRevision) serverIpLoading.value = false })
+        }
+    }
     catch (e) { if (alive) error.value = e.message }
     finally { if (alive) loading.value = false }
 }
+onMounted(() => { if (props.autoScan) scan() })
 onUnmounted(() => { alive = false; cancelled = true })
 const links = computed(() => (report.value?.linkRows || []).filter(item => {
     const info = checked.value[item.url]
@@ -48,17 +63,29 @@ const toggle = async (action) => {
     try { report.value.actions = await sendSeoToTab(props.tab.id, 'seo:action', { action, enabled: !report.value.actions[action] }) }
     catch (e) { error.value = e.message }
 }
+const goToHeading = async item => {
+    notification.value = ''; error.value = ''
+    try {
+        const result = await sendSeoToTab(props.tab.id, 'seo:heading', { id: item.id })
+        if (result.hidden) notification.value = 'Заголовок скрыт на странице. Прокрутка к нему невозможна.'
+    } catch (reason) { error.value = reason.message }
+}
+const downloadImage = async url => {
+    try { await callBackground('seo:downloadImage', { url }) }
+    catch (reason) { error.value = reason.message }
+}
 const copyLinks = async () => { try { await navigator.clipboard.writeText(links.value.map(item => item.url).join('\n')) } catch (e) { error.value = e.message } }
 const exportLinks = () => {
     const cell = value => `"${String(value ?? '').replaceAll('"', '""')}"`
     downloadText('\uFEFF' + [['URL','Анкор','Rel','HTTP'], ...links.value.map(item => [item.url,item.text,item.rel,checked.value[item.url]?.status])].map(row => row.map(cell).join(';')).join('\r\n'), 'links.csv', 'text/csv;charset=utf-8')
 }
 const overview = computed(() => report.value ? [
-    ['URL',report.value.url], ['HTTP',report.value.response.status || 'Не получен'], ['Title',report.value.title || 'Отсутствует'], ['Длина Title',report.value.titleLength],
+    ['URL',report.value.url], ['IP сервера',serverIpLoading.value ? 'Определяем…' : serverIp.value || 'Не получен'], ['HTTP',report.value.response.status || 'Не получен'], ['Title',report.value.title || 'Отсутствует'], ['Длина Title',report.value.titleLength],
     ['Description',report.value.description || 'Отсутствует'], ['Длина Description',report.value.descriptionLength], ['Keywords',report.value.keywords || 'Отсутствует'],
     ['Язык',report.value.lang || 'Не указан'], ['Canonical',report.value.canonical || 'Не указан'], ['Viewport',report.value.viewport ? 'Есть' : 'Нет'],
-    ['Редирект',report.value.redirected ? report.value.finalUrl : 'Нет'], ['TTFB повторного запроса',report.value.response.ttfb == null ? 'Не измерен' : report.value.response.ttfb + ' мс'], ['Яндекс ИКС', `<img class="rounded-lg" src="https://webmaster.yandex.ru/sqicounter?theme=dark&host=${report.value.url}">`]
+    ['Редирект',report.value.redirected ? report.value.finalUrl : 'Нет'], ['TTFB повторного запроса',report.value.response.ttfb == null ? 'Не измерен' : report.value.response.ttfb + ' мс']
 ] : [])
+const yandexCounter = computed(() => report.value ? `https://webmaster.yandex.ru/sqicounter?theme=dark&host=${encodeURIComponent(new URL(report.value.url).hostname)}` : '')
 const tools = computed(() => {
     if (!report.value) return []
     const url = encodeURIComponent(report.value.url), host = encodeURIComponent(new URL(report.value.url).hostname), title = encodeURIComponent('"' + report.value.title + '"')
@@ -80,20 +107,23 @@ const tools = computed(() => {
             <div class="flex gap-2"><Button size="sm" variant="secondary" :disabled="loading || checking || !tab?.id" @click="scan">{{ loading ? 'Сканируем…' : report ? 'Обновить' : 'Анализировать' }}</Button><Button size="sm" variant="secondary" :disabled="!tab?.id" @click="openSeoApp(tab.id)">Аудит ↗</Button></div>
         </div>
         <p v-if="!report && !loading && !error" class="text-xs text-slate-400">Нажмите «Анализировать», чтобы проверить текущую страницу.</p>
-        <div v-if="report" class="flex flex-wrap gap-1" role="tablist" aria-label="Разделы SEO">
-            <button v-for="item in tabs" :key="item[0]" role="tab" :aria-selected="section === item[0]" @click="section = item[0]; visible = 100" class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-white/10" :class="section === item[0] ? 'bg-sky-400/15 text-sky-300' : 'text-slate-400'">{{ item[1] }}</button>
-        </div>
         <Message v-if="error" type="error">{{ error }}</Message>
+        <p v-if="notification" role="status" class="rounded-lg border border-amber-400/20 bg-amber-400/10 p-2 text-xs text-amber-200">{{ notification }}</p>
         <p v-if="loading" role="status" class="text-xs text-slate-400">Получаем данные страницы…</p>
-        <template v-if="report">
+        <div v-if="report" class="grid min-w-0 grid-cols-[92px_minmax(0,1fr)] items-start gap-3">
+        <nav class="sticky top-16 grid gap-1" role="tablist" aria-orientation="vertical" aria-label="Разделы SEO">
+            <button v-for="item in tabs" :key="item[0]" role="tab" :aria-selected="section === item[0]" @click="section = item[0]; visible = 100; notification = ''" class="cursor-pointer rounded-lg px-2 py-2 text-left text-[11px] transition-colors hover:bg-white/10" :class="section === item[0] ? 'bg-sky-400/15 text-sky-300' : 'text-slate-400'">{{ item[1] }}</button>
+        </nav>
+        <div class="grid min-w-0 gap-3">
             <template v-if="section === 'overview'">
                 <Card title="Метаданные страницы">
                     <dl class="grid gap-3 text-xs">
                         <div v-for="[label,value] in overview" :key="label" class="grid gap-1">
                             <dt class="text-slate-500">{{ label }}</dt>
-                            <dd class="break-all text-slate-200" v-html="value"></dd>
+                            <dd class="break-all text-slate-200">{{ value }}</dd>
                         </div>
                     </dl>
+                    <div class="mt-3 grid gap-1 text-xs"><span class="text-slate-500">Яндекс ИКС</span><img :src="yandexCounter" alt="Яндекс ИКС" class="rounded-lg" /></div>
                 </Card>
                 <Message v-if="report.titles.length !== 1 || report.canonicals.length > 1 || report.metaTags.some(item => !item.inHead)" type="error">Проверьте количество Title/Canonical и расположение метатегов: есть дубли или теги вне head.</Message>
                 <details class="rounded-lg border border-white/10 p-3 text-xs"><summary class="cursor-pointer">Все метатеги ({{ report.metaTags.length }})</summary><div v-for="(item,index) in report.metaTags" :key="index" class="mt-2 break-all"><b>{{ item.name }}</b>: {{ item.content || '(пусто)' }} <span v-if="!item.inHead" class="text-amber-300">вне head</span></div></details>
@@ -101,7 +131,7 @@ const tools = computed(() => {
             <template v-if="section === 'headings'">
                 <Button size="sm" variant="secondary" @click="toggle('headings')">{{ report.actions.headings ? 'Убрать подсветку' : 'Подсветить H1–H6' }}</Button>
                 <p class="text-xs text-slate-400">H1: {{ report.h1Count }} · Дубли H1: {{ report.duplicateH1.length }}</p>
-                <div v-for="(item,index) in report.headingRows" :key="index" class="rounded-lg border border-white/10 bg-slate-900/40 p-3 text-xs" :style="{ marginLeft: (item.level - 1) * 6 + 'px' }"><b class="mr-2 text-sky-300">H{{ item.level }}</b>{{ item.text || '(пустой)' }}</div>
+                <HeadingTree :nodes="headingTree" @select="goToHeading" />
             </template>
             <template v-if="section === 'links'">
                 <div class="grid grid-cols-2 gap-2 text-xs">
@@ -121,8 +151,18 @@ const tools = computed(() => {
             </template>
             <template v-if="section === 'images'">
                 <div class="flex gap-2"><select v-model="imageFilter" aria-label="Alt изображений" class="min-w-0 flex-1 rounded bg-slate-800 p-2 text-xs"><option value="all">Все изображения</option><option value="missing">Без атрибута alt</option><option value="empty">Пустой alt</option><option value="filled">Заполненный alt</option></select><Button size="sm" variant="secondary" @click="toggle('alt')">{{ report.actions.alt ? 'Убрать alt' : 'Показать alt' }}</Button></div>
+                <Button size="sm" variant="secondary" @click="toggle('downloads')">{{ report.actions.downloads ? 'Убрать ссылки скачивания' : 'Ссылки скачивания на странице' }}</Button>
                 <p class="text-xs text-slate-400">Всего: {{ report.images.total }} · Без alt: {{ report.images.withoutAlt }} · Пустой alt: {{ report.images.emptyAlt }}</p>
-                <article v-for="item in images.slice(0,visible)" :key="item.id" class="grid gap-1 rounded-lg border border-white/10 bg-slate-900/40 p-3 text-xs"><a :href="/^https?:/.test(item.src) ? item.src : undefined" target="_blank" rel="noreferrer" class="break-all text-sky-300">{{ item.src || 'Источник отсутствует' }}</a><span>Alt: {{ item.alt === null ? 'Отсутствует' : item.alt || '(пустой)' }}</span><span>Title: {{ item.title || 'Нет' }} · {{ item.width }} × {{ item.height }} · {{ item.loading || 'eager' }}</span></article>
+                <article v-for="item in images.slice(0,visible)" :key="item.id" class="flex gap-1 rounded-lg border border-white/10 bg-slate-900/40 p-3 text-xs">
+                    <img v-if="/^https?:/.test(item.src)" :src="item.src" loading="lazy" class="size-6 object-contain shrink-0">
+                    <div class="grid gap-1">
+                        <a :href="/^https?:/.test(item.src) ? item.src : undefined" target="_blank" rel="noreferrer" class="break-all text-sky-300">{{ item.src || 'Источник отсутствует' }}</a>
+                        <span>Alt: {{ item.alt === null ? 'Отсутствует' : item.alt || '(пустой)' }}</span>
+                        <span>Title: {{ item.title || 'Нет' }} · {{ item.width }} × {{ item.height }} · {{ item.loading || 'eager' }}</span>
+                        <button v-if="/^https?:/.test(item.src)" type="button" class="w-fit cursor-pointer text-sky-300 hover:underline" @click="downloadImage(item.src)">Скачать</button>
+                    </div>
+
+                </article>
                 <Button v-if="images.length > visible" size="sm" variant="ghost" @click="visible += 100">Показать ещё</Button>
             </template>
             <template v-if="section === 'markup'">
@@ -139,12 +179,13 @@ const tools = computed(() => {
             </template>
             <template v-if="section === 'page'">
                 <p class="text-xs text-slate-400">Изменения действуют только на этой странице до выключения или её закрытия/перезагрузки.</p>
-                <Button v-for="[action,label] in [['external','Внешние ссылки'],['noindex','Noindex / nofollow'],['headings','Заголовки H1–H6'],['alt','Alt изображений'],['css','Отключить CSS']]" :key="action" size="sm" variant="secondary" @click="toggle(action)">{{ report.actions[action] ? '✓ ' : '' }}{{ label }}</Button>
+                <Button v-for="[action,label] in [['external','Внешние ссылки'],['noindex','Noindex / nofollow'],['headings','Заголовки H1–H6'],['alt','Alt изображений'],['downloads','Ссылки скачивания изображений'],['css','Отключить CSS']]" :key="action" size="sm" variant="secondary" @click="toggle(action)">{{ report.actions[action] ? '✓ ' : '' }}{{ label }}</Button>
                 <Card title="Статистика текста"><p class="text-xs">Слов: {{ report.statistics.words }} · Символов: {{ report.statistics.characters }} · Без пробелов: {{ report.statistics.withoutSpaces }}</p><p class="text-xs">Выделенный текст: {{ report.statistics.selection.words }} слов, {{ report.statistics.selection.characters }} символов</p>
                     <details v-for="[key,label] in [['top','Частые слова'],['bigrams','Биграммы'],['withoutAnchors','Без анкоров'],['anchors','Анкоры'],['imageText','Alt и title изображений']]" :key="key" class="mt-3 text-xs"><summary class="cursor-pointer text-sky-300">{{ label }}</summary><p v-for="row in (Array.isArray(report.statistics[key]) ? report.statistics[key] : report.statistics[key].top)" :key="row.word">{{ row.word }} — {{ row.count }} ({{ row.density }}%)</p></details>
                 </Card>
             </template>
             <div v-if="section === 'tools'" class="grid gap-2"><a v-for="[label,url] in tools" :key="label" :href="url" target="_blank" rel="noreferrer" class="rounded-lg border border-white/10 bg-slate-900/40 p-3 text-xs text-sky-300 hover:bg-white/5">{{ label }} ↗</a></div>
-        </template>
+        </div>
+        </div>
     </div>
 </template>

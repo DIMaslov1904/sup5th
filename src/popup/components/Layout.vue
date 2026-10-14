@@ -13,6 +13,8 @@ const emit = defineEmits(['search', 'ticket'])
                     <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-8H9v8H4a1 1 0 0 1-1-1Z" />
                 </svg>
             </button>
+            <button type="button" aria-label="SEO" title="SEO-анализ текущей страницы" @click="modelItemMenu = 'seo'"
+                class="h-9 shrink-0 cursor-pointer rounded-lg px-2 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white">SEO</button>
             <label class="relative min-w-0 flex-1">
                 <svg class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
                     <circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" />

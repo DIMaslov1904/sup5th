@@ -1,4 +1,6 @@
 import { fetchSeoResource } from './seoFetch.js'
+import { getServerAddress } from './serverAddress.js'
+import { downloadSeoImage } from './imageDownload.js'
 import { syncSiteIcons, getSiteIconStatus, cancelSiteIcons, clearSiteIcons } from '../icons/iconService.js'
 import { findAccessesByUrl, findProjectByUrl, getAdminUrl } from '../utils/projectUtils.js'
 import { apiAuthorizationError, classifyApiAuthorization } from './apiAuthorization.js'
@@ -1006,6 +1008,8 @@ const syncCatalogueIcons = async options => {
 }
 
 const handlers = {
+    'seo:downloadImage': downloadSeoImage,
+    'seo:serverIp': getServerAddress,
     'icons:status': getSiteIconStatus,
     'icons:refresh': () => syncCatalogueIcons({ force: true }),
     'icons:cancel': cancelSiteIcons,
@@ -1044,7 +1048,7 @@ const handlers = {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const handler = handlers[message?.type]
     if (!handler) return false
-    const internalOnly = !['auth:consume', 'seo:fetch'].includes(message.type)
+    const internalOnly = !['auth:consume', 'seo:fetch', 'seo:downloadImage'].includes(message.type)
     if (internalOnly && (!sender?.url?.startsWith(chrome.runtime.getURL('')) || sender.id !== chrome.runtime.id)) {
         sendResponse({ ok: false, error: 'Операция доступна только в интерфейсе расширения' })
         return false

@@ -1,16 +1,13 @@
 <script setup>
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { getProjectAccessField, loadProjectData, loadProjectDetails, startAdminAuth } from '../data/projectData'
 import { findProjectByUrl, getAdminUrl, getCmsIconPath, getTicketUrl } from '../../utils/projectUtils'
 import { ensureUnlocked } from '../unlockStore'
 import { displayUrl } from '../../utils/displayUrl.js'
 import Button from '../components/ui/Button.vue'
 import Message from '../components/ui/Message.vue'
-import LeftMenu from '../components/LeftMenu.vue'
-const SeoPanel = defineAsyncComponent(() => import('../components/SeoPanel.vue'))
 import FtpAccessCard from '../components/FtpAccessCard.vue'
 
-const menuItem = ref('project')
 
 const project = ref(null)
 const currentTab = ref(null)
@@ -29,13 +26,6 @@ const getCmsIcon = (item) => getCmsIconPath(item?.cms)
 const siteUrl = computed(() => project.value ? `https://${project.value.url}` : '')
 const faviconUrl = computed(() => currentTab.value?.favIconUrl || (siteUrl.value ? `${siteUrl.value}/favicon.ico` : ''))
 const cmsLabel = computed(() => project.value?.cms && project.value.cms !== 'Нет' ? project.value.cms : 'CMS')
-const menuList = computed(() => {
-    if (!project.value) return [{ label: 'SEO', name: 'seo' }]
-    return [
-        { label: 'Проект', name: 'project' },
-        { label: 'SEO', name: 'seo' }
-    ]
-})
 
 onMounted(async () => {
     try {
@@ -47,7 +37,6 @@ onMounted(async () => {
         const projects = data.lastSuccessfulData?.projects || []
         if (tab?.url && /^https?:/.test(tab.url)) project.value = findProjectByUrl(projects, tab.url)
         if (!project.value) {
-            menuItem.value = 'seo'
             return
         }
 
@@ -88,11 +77,9 @@ const copyAccessField = async (accessIndex, field) => {
 
 <template>
     <div class="relative min-h-full w-full">
-        <LeftMenu v-model="menuItem" :menuList="menuList" />
-
-        <section v-if="menuItem === 'project'" class="pl-8 pr-4 text-slate-200">
+        <section class="px-4 text-slate-200">
             <p v-if="!loaded" class="text-sm text-slate-400">Загрузка...</p>
-            <p v-else-if="!project" class="text-sm text-slate-400">Текущий сайт не найден среди проектов</p>
+            <p v-else-if="!project" class="text-sm text-slate-400">Данный сайт не является нашим проектом.</p>
             <div v-else class="grid gap-4">
                 <div class="flex items-center gap-3">
                     <img v-if="faviconUrl" :src="faviconUrl" :alt="project.name"
@@ -168,6 +155,5 @@ const copyAccessField = async (accessIndex, field) => {
             </div>
         </section>
 
-        <section v-else-if="menuItem === 'seo' && loaded" class="pl-8 pr-4"><SeoPanel :tab="currentTab" /></section>
     </div>
 </template>

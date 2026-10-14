@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { POPUP_PORT_NAME } from '../utils/popupState.js'
 import Layout from './components/Layout.vue'
 import UnlockModal from './components/UnlockModal.vue'
@@ -7,6 +7,9 @@ import TicketModal from './components/TicketModal.vue'
 import Site from './views/Site.vue'
 import Projects from './views/Projects.vue'
 import Settings from './views/Settings.vue'
+const SeoPanel = defineAsyncComponent(() => import('./components/SeoPanel.vue'))
+const seoTab = ref(null), seoTabReady = ref(false)
+let tabRevision = 0
 
 const view = ref('site')
 const stateReady = ref(false)
@@ -31,6 +34,13 @@ const saveUiState = () => {
 
 watch(view, (value) => {
   if (value !== 'projects') { selectedProjectUrl.value = ''; selectedServiceId.value = '' }
+  const revision = ++tabRevision
+  seoTabReady.value = false
+  if (value === 'seo') chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+    if (revision !== tabRevision) return
+    seoTab.value = tab || null
+    seoTabReady.value = true
+  })
 }, { flush: 'sync' })
 watch([view, selectedProjectUrl, selectedServiceId], saveUiState, { flush: 'sync' })
 
@@ -63,6 +73,7 @@ onUnmounted(() => {
 <template>
   <Layout v-if="stateReady" v-model="view" v-model:search="search" @search="openCatalogue" @ticket="ticketOpen = true">
     <Site v-if="view === 'site'" />
+    <section v-if="view === 'seo'" class="px-3"><SeoPanel v-if="seoTabReady" :tab="seoTab" auto-scan /></section>
     <Projects v-if="view === 'projects'" v-model:search="search" v-model:selected-project-url="selectedProjectUrl" v-model:selected-service-id="selectedServiceId" />
     <Settings v-if="view === 'settings'" />
   </Layout>

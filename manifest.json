@@ -69,6 +69,8 @@
   "permissions": [
     "storage",
     "offscreen",
+    "webRequest",
+    "downloads",
     "alarms",
     "tabs",
     "scripting"

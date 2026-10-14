@@ -1,6 +1,7 @@
 import { collectSeoDom } from '../utils/seoDom.js'
 import { evaluateRobots } from '../utils/seoRules.js'
 import { getSeoActions, setSeoAction } from './seoActions.js'
+import { captureHeadings, focusHeading } from './headingNavigation.js'
 /**
  * SEO-анализ текущей страницы.
  * Выполняется в контексте content script (доступ к DOM).
@@ -73,6 +74,7 @@ export const scanSeo = async () => {
         }
     }))].slice(0, 50)
 
+    captureHeadings()
     return {
         ...collectSeoDom(document, location.href),
         actions: getSeoActions(),
@@ -147,6 +149,11 @@ export const scanSeo = async () => {
 /** Регистрирует обработчик сообщений 'seo:scan' */
 const registerSeoHandler = () => {
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+        if (message?.type === 'seo:heading') {
+            try { sendResponse({ ok: true, data: focusHeading(message.payload || {}) }) }
+            catch (error) { sendResponse({ ok: false, error: error.message }) }
+            return false
+        }
         if (message?.type === 'seo:action') {
             try { sendResponse({ ok: true, data: setSeoAction(message.payload) }) }
             catch (error) { sendResponse({ ok: false, error: error.message }) }

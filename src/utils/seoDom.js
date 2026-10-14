@@ -28,7 +28,7 @@ export const collectSeoDom = (doc, pageUrl) => {
     return {
         metaTags, titles: [...doc.querySelectorAll('title')].map(el => ({ text: el.textContent.trim(), inHead: Boolean(el.closest('head')) })),
         canonicals: [...doc.querySelectorAll('link[rel~="canonical"]')].map(el => ({ href: el.href, raw: el.getAttribute('href'), inHead: Boolean(el.closest('head')) })),
-        headingRows: [...doc.querySelectorAll('h1,h2,h3,h4,h5,h6')].map(el => ({ level: Number(el.tagName[1]), text: el.textContent.trim() })),
+        headingRows: [...doc.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((el, id) => ({ id, level: Number(el.tagName[1]), text: el.textContent.trim() })),
         linkRows, imageRows, jsonLd,
         microdata: [...doc.querySelectorAll('[itemscope]')].map(el => ({ type: el.getAttribute('itemtype') || '', properties: [...el.querySelectorAll('[itemprop]')].map(p => ({ name: p.getAttribute('itemprop'), value: p.getAttribute('content') || p.getAttribute('href') || p.textContent.trim() })) })),
         rdfa: [...doc.querySelectorAll('[typeof]')].map(el => ({ type: el.getAttribute('typeof'), text: el.textContent.trim().slice(0, 500) })),
