@@ -1,0 +1,63 @@
+<script setup>
+import { computed, ref, watch } from 'vue'
+import { loadProjectDetails } from '../data/projectData'
+import { getAdminUrl, getCmsIconPath, getTicketUrl } from '../../utils/projectUtils'
+import { displayUrl } from '../../utils/displayUrl.js'
+import SiteIcon from './SiteIcon.vue'
+import ProjectAccessCard from './ProjectAccessCard.vue'
+import FtpAccessCard from './FtpAccessCard.vue'
+import Message from './ui/Message.vue'
+
+const props = defineProps({ project: { type: Object, required: true } })
+const accesses = ref([]), loading = ref(false), error = ref('')
+const href = value => value ? (/^https?:\/\//i.test(value) ? value : `https://${value}`) : ''
+const actions = computed(() => [
+    { kind: 'admin', label: 'В админку', url: getAdminUrl(props.project) },
+    { kind: 'manual', label: 'Инструкция', url: href(props.project.manual) },
+    { kind: 'git', label: 'Git', url: href(props.project.git) },
+    { kind: 'ticket', label: 'Создать тикет', url: getTicketUrl(props.project) }
+])
+const ftpAccesses = computed(() => accesses.value.map((access, index) => ({ access, index })).filter(item => item.access.hasFtp))
+watch(() => props.project.url, async (url, _previous, onCleanup) => {
+    let active = true
+    onCleanup(() => { active = false })
+    accesses.value = []; loading.value = true; error.value = ''
+    try { const details = await loadProjectDetails(url); if (active) accesses.value = details.accesses }
+    catch (reason) { if (active) error.value = reason.message }
+    finally { if (active) loading.value = false }
+}, { immediate: true })
+</script>
+<template>
+    <div class="grid gap-4 text-slate-200">
+        <header class="flex items-center gap-3">
+            <slot name="leading" />
+            <SiteIcon :url="project.url" :name="project.name" large />
+            <div class="min-w-0">
+                <h1 class="text-lg font-semibold">{{ project.name || displayUrl(project.url) }}</h1>
+                <a :href="href(project.url)" target="_blank" rel="noreferrer" class="break-all text-xs text-slate-400 hover:text-white">{{ displayUrl(project.url) }}</a>
+            </div>
+        </header>
+        <div class="grid grid-cols-4 gap-2">
+            <a v-for="action in actions" :key="action.kind" :href="action.url || undefined" target="_blank" rel="noreferrer" :aria-disabled="!action.url" :tabindex="action.url ? undefined : -1"
+                class="flex min-h-20 flex-col items-center justify-center gap-1 rounded-lg border border-white/10 bg-slate-900/50 p-2 text-center text-xs text-slate-200 transition-colors"
+                :class="action.url ? 'hover:bg-slate-700' : 'pointer-events-none opacity-40'">
+                <span v-if="action.kind === 'admin'" class="flex size-8 items-center justify-center rounded bg-white p-1"><img :src="getCmsIconPath(project.cms)" :alt="project.cms || 'CMS'" class="size-full object-contain" /></span>
+                <svg v-else-if="action.kind === 'manual'" class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3h12l4 4v14H4Z M15 3v5h5 M8 12h8 M8 16h6" /></svg>
+                <svg v-else-if="action.kind === 'git'" class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="5" r="2" /><circle cx="6" cy="19" r="2" /><circle cx="18" cy="6" r="2" /><path d="M6 7v10 M18 8v2c0 4-12 4-12 7" /></svg>
+                <svg v-else class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v5a2 2 0 0 0 0 4v5H3v-5a2 2 0 0 0 0-4Z M12 8v8 M9 12h6" /></svg>
+                <span>{{ action.label }}</span>
+            </a>
+        </div>
+        <section class="grid gap-2">
+            <h2 class="text-sm font-semibold">Доступы</h2>
+            <p v-if="loading" class="text-xs text-slate-400">Загрузка доступов…</p>
+            <p v-else-if="!accesses.length && !error" class="text-xs text-slate-400">Для проекта нет сохранённых доступов</p>
+            <ProjectAccessCard v-for="(access, index) in accesses" :key="`${project.url}:${index}`" :access="access" :project="project" :index="index" />
+        </section>
+        <section v-if="ftpAccesses.length" class="grid gap-2">
+            <h2 class="text-sm font-semibold">FTP доступы</h2>
+            <FtpAccessCard v-for="item in ftpAccesses" :key="`${project.url}:${item.index}`" :access="item.access" :project-url="project.url" :index="item.index" />
+        </section>
+        <Message v-if="error" type="error">{{ error }}</Message>
+    </div>
+</template>

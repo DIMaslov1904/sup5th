@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { iconRepository } from '../../icons/iconRepository.js'
 import { iconInitials, iconOrigin } from '../../icons/iconPolicy.js'
 
-const props = defineProps({ url: String, name: String })
+const props = defineProps({ url: String, name: String, large: Boolean })
 const source = ref('')
 const origin = computed(() => iconOrigin(props.url))
 let revision = 0, disposed = false
@@ -26,7 +26,7 @@ onUnmounted(() => { disposed = true; revision++; chrome.runtime.onMessage.remove
 </script>
 
 <template>
-    <span aria-hidden="true" :class="{'border border-white/10 bg-slate-800': !source, 'bg-white': source}" class="flex rounded-lg h-8 w-8 shrink-0 items-center justify-center overflow-hidden   text-[11px] font-semibold text-slate-300">
+    <span aria-hidden="true" :class="[large ? 'size-12' : 'size-8', {'border border-white/10 bg-slate-800': !source, 'bg-white': source}]" class="flex rounded-lg shrink-0 items-center justify-center overflow-hidden text-[11px] font-semibold text-slate-300">
         <img v-if="source" :src="source" alt="" class="h-full w-full object-contain" @error="revoke" />
         <span v-else>{{ iconInitials(name || origin) }}</span>
     </span>
