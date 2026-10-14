@@ -32,6 +32,7 @@ import IconCacheControls from '../components/IconCacheControls.vue'
 import SplitButton from '../components/ui/SplitButton.vue'
 
 const optionsUrl = chrome.runtime.getURL('src/options/index.html')
+const extensionVersion = chrome.runtime.getManifest().version
 
 const settings = ref({ hasProjectsUrl: false, hasAccessUrl: false })
 const projectsUrlInput = ref('')
@@ -444,5 +445,6 @@ const resetData = async () => {
             Сбросить все данные
         </Button>
         </div>
+        <p class="text-right text-[11px] text-ui-muted/70">Версия {{ extensionVersion }}</p>
     </div>
 </template>
