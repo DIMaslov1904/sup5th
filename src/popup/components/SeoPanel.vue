@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from 'vue'
 import { callBackground, sendSeoToTab, fetchSeo, openSeoApp, downloadText } from '../../utils/seoClient.js'
 import { buildHeadingTree } from '../../utils/headingTree.js'
 import HeadingTree from './HeadingTree.vue'
@@ -10,15 +10,22 @@ import Message from './ui/Message.vue'
 import Tabs from './ui/Tabs.vue'
 import Input from './ui/Input.vue'
 import Select from './ui/Select.vue'
-import PageHeader from './ui/PageHeader.vue'
+import PropertyList from './ui/PropertyList.vue'
+import OpenGraphPreview from './OpenGraphPreview.vue'
+import { pageWeightRows } from '../../utils/pageWeightDisplay.js'
 
-const props = defineProps({ tab: Object, autoScan: Boolean })
+const props = defineProps({ tab: Object, autoScan: Boolean, session: Object })
 const notification = ref(''), serverIp = ref(''), serverIpLoading = ref(false)
 const headingTree = computed(() => buildHeadingTree(report.value?.headingRows || []))
 const section = ref('overview'), report = ref(null), loading = ref(false), error = ref('')
 const linkFilter = ref('all'), relFilter = ref('all'), protocolFilter = ref('all'), statusFilter = ref('all'), imageFilter = ref('all'), query = ref(''), visible = ref(100)
 const checked = ref({}), checking = ref(false), checkProgress = ref(0)
+const ogPreviewOpen = ref(false)
+const metaItems = tags => tags.map(item => ({ label: item.name, value: item.content, warning: item.inHead === false ? 'вне head' : '' }))
+const allMeta = computed(() => metaItems(report.value?.metaTags || []))
+const openGraphMeta = computed(() => metaItems((report.value?.metaTags || []).filter(item => /^og:/i.test(item.name))))
 let cancelled = false, alive = true, scanRevision = 0
+let sessionContext = null, restoring = false
 const tabs = [['overview','Обзор'],['headings','Заголовки'],['links','Ссылки'],['images','Изображения'],['markup','Разметка'],['index','Индексация'],['page','Страница'],['tools','Инструменты']]
 const selectSection = () => { visible.value = 100; notification.value = '' }
 const scan = async () => {
@@ -37,7 +44,41 @@ const scan = async () => {
     catch (e) { if (alive) error.value = e.message }
     finally { if (alive) loading.value = false }
 }
-onMounted(() => { if (props.autoScan) scan() })
+const persist = () => {
+    if (!alive || restoring || !sessionContext || !report.value) return
+    props.session?.save(sessionContext, JSON.parse(JSON.stringify({
+        report: report.value, section: section.value, serverIp: serverIp.value,
+        linkFilter: linkFilter.value, relFilter: relFilter.value, protocolFilter: protocolFilter.value,
+        statusFilter: statusFilter.value, imageFilter: imageFilter.value, query: query.value,
+        visible: visible.value, checked: checked.value, checkProgress: checkProgress.value
+    })))
+}
+watch([report, section, serverIp, linkFilter, relFilter, protocolFilter, statusFilter, imageFilter, query, visible, checked, checkProgress], persist, { deep: true, flush: 'post' })
+onBeforeUnmount(persist)
+onMounted(async () => {
+    if (props.session && props.tab?.id) {
+        loading.value = true
+        try {
+            const context = await sendSeoToTab(props.tab.id, 'seo:context')
+            sessionContext = { tabId: props.tab.id, url: context.url, documentId: context.documentId }
+            const saved = await props.session.load(sessionContext)
+            if (!alive) return
+            if (saved?.report) {
+                restoring = true
+                report.value = { ...saved.report, actions: context.actions }
+                section.value = tabs.some(([name]) => name === saved.section) ? saved.section : 'overview'
+                serverIp.value = saved.serverIp || ''
+                linkFilter.value = saved.linkFilter || 'all'; relFilter.value = saved.relFilter || 'all'
+                protocolFilter.value = saved.protocolFilter || 'all'; statusFilter.value = saved.statusFilter || 'all'
+                imageFilter.value = saved.imageFilter || 'all'; query.value = saved.query || ''
+                visible.value = saved.visible || 100; checked.value = saved.checked || {}; checkProgress.value = saved.checkProgress || 0
+                restoring = false
+            }
+        } catch { /* Нет доступного content script/кеша — обычная проверка ниже. */ }
+        finally { if (alive) loading.value = false }
+    }
+    if (alive && props.autoScan && !report.value) scan()
+})
 onUnmounted(() => { alive = false; cancelled = true })
 const links = computed(() => (report.value?.linkRows || []).filter(item => {
     const info = checked.value[item.url]
@@ -89,7 +130,7 @@ const overview = computed(() => report.value ? [
     ['Description',report.value.description || 'Отсутствует'], ['Длина Description',report.value.descriptionLength], ['Keywords',report.value.keywords || 'Отсутствует'],
     ['Язык',report.value.lang || 'Не указан'], ['Canonical',report.value.canonical || 'Не указан'], ['Viewport',report.value.viewport ? 'Есть' : 'Нет'],
     ['Редирект',report.value.redirected ? report.value.finalUrl : 'Нет'], ['TTFB повторного запроса',report.value.response.ttfb == null ? 'Не измерен' : report.value.response.ttfb + ' мс']
-] : [])
+].map(([label,value]) => ({ label, value })).concat(pageWeightRows(report.value.pageWeight)) : [])
 const yandexCounter = computed(() => report.value ? `https://webmaster.yandex.ru/sqicounter?theme=dark&host=${encodeURIComponent(new URL(report.value.url).hostname)}` : '')
 const tools = computed(() => {
     if (!report.value) return []
@@ -107,26 +148,21 @@ const tools = computed(() => {
 </script>
 <template>
     <div class="grid gap-3 text-ui-text">
-        <PageHeader title="SEO" class="mb-0"><template #actions><Button size="sm" variant="secondary" :loading="loading" :disabled="checking || !tab?.id" @click="scan">{{ report ? 'Обновить' : 'Анализировать' }}</Button><Button size="sm" variant="ghost" :disabled="!tab?.id" @click="openSeoApp(tab.id)">Аудит ↗</Button></template></PageHeader>
+        <Button v-if="!report && !loading" size="sm" variant="secondary" :disabled="!tab?.id" @click="scan">Анализировать</Button>
         <p v-if="!report && !loading && !error" class="text-xs text-ui-muted">Нажмите «Анализировать», чтобы проверить текущую страницу.</p>
         <Message v-if="error" type="error">{{ error }}</Message>
         <Message v-if="notification" type="warning">{{ notification }}</Message>
         <p v-if="loading" role="status" class="text-xs text-ui-muted">Получаем данные страницы…</p>
         <div v-if="report" class="grid min-w-0 gap-3">
-        <Tabs v-model="section" :items="tabs" label="Разделы SEO" @update:model-value="selectSection" />
+        <Tabs v-model="section" :items="tabs" label="Разделы SEO" wrap @update:model-value="selectSection" />
         <div class="grid min-w-0 gap-3">
             <template v-if="section === 'overview'">
                 <Card title="Метаданные страницы">
-                    <dl class="grid gap-2 text-xs">
-                        <div v-for="[label,value] in overview" :key="label" class="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-3">
-                            <dt class="text-ui-muted/70">{{ label }}</dt>
-                            <dd class="break-all text-ui-text">{{ value }}</dd>
-                        </div>
-                    </dl>
+                    <PropertyList :items="overview" />
                     <div class="mt-3 grid gap-1 text-xs"><span class="text-ui-muted/70">Яндекс ИКС</span><img :src="yandexCounter" alt="Яндекс ИКС" class="rounded-lg" /></div>
                 </Card>
                 <Message v-if="report.titles.length !== 1 || report.canonicals.length > 1 || report.metaTags.some(item => !item.inHead)" type="error">Проверьте количество Title/Canonical и расположение метатегов: есть дубли или теги вне head.</Message>
-                <details class="ui-panel text-xs"><summary class="cursor-pointer">Все метатеги ({{ report.metaTags.length }})</summary><div v-for="(item,index) in report.metaTags" :key="index" class="mt-2 break-all"><b>{{ item.name }}</b>: {{ item.content || '(пусто)' }} <span v-if="!item.inHead" class="text-ui-warning">вне head</span></div></details>
+                <details class="ui-panel text-xs"><summary class="cursor-pointer">Все метатеги ({{ report.metaTags.length }})</summary><PropertyList :items="allMeta" class="mt-3" /></details>
             </template>
             <template v-if="section === 'headings'">
                 <Button size="sm" variant="secondary" @click="toggle('headings')">{{ report.actions.headings ? 'Убрать подсветку' : 'Подсветить H1–H6' }}</Button>
@@ -166,7 +202,9 @@ const tools = computed(() => {
                 <Button v-if="images.length > visible" size="sm" variant="ghost" @click="visible += 100">Показать ещё</Button>
             </template>
             <template v-if="section === 'markup'">
-                <Card title="Open Graph"><div v-for="item in report.metaTags.filter(item => /^og:/i.test(item.name))" :key="item.name" class="break-all text-xs"><b>{{ item.name }}</b>: {{ item.content }}</div><p v-if="!report.metaTags.some(item => /^og:/i.test(item.name))" class="text-xs text-ui-muted">Не найден</p></Card>
+                <Card title="Open Graph"><PropertyList v-if="openGraphMeta.length" :items="openGraphMeta" /><p v-else class="text-xs text-ui-muted">Не найден</p></Card>
+                <Button size="sm" variant="secondary" @click="ogPreviewOpen = true">Предпросмотр</Button>
+                <OpenGraphPreview v-model:open="ogPreviewOpen" :report="report" />
                 <Card title="JSON-LD"><div v-for="(item,index) in report.jsonLd" :key="index" class="mb-2"><p class="text-xs" :class="item.valid ? 'text-ui-success' : 'text-ui-warning'">{{ item.valid ? 'Корректный JSON' : item.error }}</p><pre class="max-h-72 overflow-auto whitespace-pre-wrap break-all text-[11px]">{{ item.valid ? JSON.stringify(item.value,null,2) : item.raw }}</pre></div><p v-if="!report.jsonLd.length" class="text-xs text-ui-muted">Не найден</p></Card>
                 <Card title="Microdata / RDFa"><pre class="max-h-72 overflow-auto whitespace-pre-wrap break-all text-[11px]">{{ JSON.stringify({ microdata: report.microdata, rdfa: report.rdfa },null,2) }}</pre></Card>
                 <div class="flex flex-wrap gap-2"><a :href="tools.find(item => item[0] === 'Schema.org')?.[1]" target="_blank" rel="noreferrer" class="text-xs text-ui-accent">Валидатор Schema.org ↗</a><a :href="tools.find(item => item[0] === 'Google Rich Results')?.[1]" target="_blank" rel="noreferrer" class="text-xs text-ui-accent">Google Rich Results ↗</a></div>
@@ -187,5 +225,6 @@ const tools = computed(() => {
             <div v-if="section === 'tools'" class="grid gap-2"><a v-for="[label,url] in tools" :key="label" :href="url" target="_blank" rel="noreferrer" class="ui-panel text-xs text-ui-accent hover:bg-white/5">{{ label }} ↗</a></div>
         </div>
         </div>
+        <Button size="sm" variant="ghost" :disabled="!tab?.id" @click="openSeoApp(tab.id)">Аудит ↗</Button>
     </div>
 </template>

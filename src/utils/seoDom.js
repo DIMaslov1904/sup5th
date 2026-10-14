@@ -9,8 +9,9 @@ export const textStatistics = (text) => {
 }
 export const collectSeoDom = (doc, pageUrl) => {
     const host = new URL(pageUrl).hostname
-    const metaTags = [...doc.querySelectorAll('meta[name],meta[property]')].map(el => ({
-        name: el.getAttribute('name') || el.getAttribute('property'), content: el.content || '', inHead: Boolean(el.closest('head'))
+    const metaTags = [...doc.querySelectorAll('meta')].map(el => ({
+        name: el.getAttribute('name') || el.getAttribute('property') || el.getAttribute('http-equiv') || (el.hasAttribute('charset') ? 'charset' : '(без названия)'),
+        content: el.content || el.getAttribute('charset') || '', inHead: Boolean(el.closest('head'))
     })).filter(el => !/^twitter:/i.test(el.name))
     const linkRows = [...doc.querySelectorAll('a[href]')].map((el, id) => {
         let url; try { url = new URL(el.getAttribute('href'), pageUrl) } catch {}

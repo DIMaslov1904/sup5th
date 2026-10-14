@@ -29,7 +29,7 @@ import Card from '../components/ui/Card.vue'
 import Message from '../components/ui/Message.vue'
 import { ensureUnlocked } from '../unlockStore'
 import IconCacheControls from '../components/IconCacheControls.vue'
-import PageHeader from '../components/ui/PageHeader.vue'
+import SplitButton from '../components/ui/SplitButton.vue'
 
 const optionsUrl = chrome.runtime.getURL('src/options/index.html')
 
@@ -41,6 +41,11 @@ const authorizing = ref('')
 const data = ref({ lastSuccessfulData: { projects: [], accesses: [], projectsUpdatedAt: null, accessesUpdatedAt: null } })
 const errors = ref([])
 const loading = ref('')
+const loadingData = computed(() => ['all', 'projects', 'accesses'].includes(loading.value))
+const loadOptions = computed(() => [
+    { value: 'projects', label: 'Загрузить только проекты', disabled: !settings.value.hasProjectsUrl },
+    { value: 'accesses', label: 'Загрузить только доступы', disabled: !settings.value.hasAccessUrl }
+])
 const securityLoading = ref(false)
 const security = ref({ enabled: false, mode: 'off', unlocked: true, helloAvailable: false, prfSupported: false, wrappedKey: null })
 const pin = ref('')
@@ -230,13 +235,15 @@ const authorizeApi = async (type) => {
     }
 }
 
-const loadAll = async () => {
-    loading.value = 'all'
+const loadData = async (scope = 'all') => {
+    if (loading.value) return
+    loading.value = scope
     message.value = { type: 'error', text: '' }
     try {
-        data.value = settings.value.hasAccessUrl
-            ? await ensureUnlocked(() => refreshAll(), { refreshAfterUnlock: false })
-            : await refreshAll()
+        const action = () => refreshAll({ scope })
+        data.value = scope !== 'projects' && settings.value.hasAccessUrl
+            ? await ensureUnlocked(action, { refreshAfterUnlock: false })
+            : await action()
         errors.value = await loadErrorLog()
         const snapshot = data.value.lastSuccessfulData
         const counts = []
@@ -251,6 +258,8 @@ const loadAll = async () => {
             text: [summary, ...refreshErrors].filter(Boolean).join('\n')
         }
     } catch (error) {
+        data.value = await loadProjectData().catch(() => data.value)
+        errors.value = await loadErrorLog().catch(() => errors.value)
         message.value = { type: 'error', text: error.message }
     } finally {
         loading.value = ''
@@ -280,12 +289,11 @@ const resetData = async () => {
 
 <template>
     <div class="grid w-full gap-4 px-4">
-        <PageHeader title="Настройки" class="mb-0" />
         <Card title="API получения всех проектов">
             <div class="flex items-center gap-2">
                 <Input v-model="projectsUrlInput" :placeholder="projectsPlaceholder"
-                    :disabled="loading === 'all' || savingApi === 'projects'" />
-                <Button variant="secondary" :disabled="loading === 'all' || savingApi === 'projects'" @click="saveProjectsUrl">
+                    :disabled="loadingData || savingApi === 'projects'" />
+                <Button variant="secondary" :disabled="loadingData || savingApi === 'projects'" @click="saveProjectsUrl">
                     {{ savingApi === 'projects' ? 'Сохранение...' : 'Сохранить' }}
                 </Button>
             </div>
@@ -313,8 +321,8 @@ const resetData = async () => {
         <Card title="API получения личных доступов">
             <div class="flex items-center gap-2">
                 <Input v-model="accessUrlInput" :placeholder="accessPlaceholder"
-                    :disabled="loading === 'all' || savingApi === 'access'" />
-                <Button variant="secondary" :disabled="loading === 'all' || savingApi === 'access'" @click="saveAccessUrl">
+                    :disabled="loadingData || savingApi === 'access'" />
+                <Button variant="secondary" :disabled="loadingData || savingApi === 'access'" @click="saveAccessUrl">
                     {{ savingApi === 'access' ? 'Сохранение...' : 'Сохранить' }}
                 </Button>
             </div>
@@ -342,9 +350,8 @@ const resetData = async () => {
         </Card>
 
         <Card title="Загрузка данных">
-            <Button variant="secondary" :disabled="Boolean(loading)" @click="loadAll">
-                {{ loading === 'all' ? 'Загрузка...' : 'Загрузить всё' }}
-            </Button>
+            <SplitButton :items="loadOptions" :disabled="Boolean(loading) || Boolean(savingApi)" :loading="loadingData"
+                menu-label="Выбрать данные для загрузки" @click="loadData()" @select="loadData">Загрузить всё</SplitButton>
             <p class="flex items-start mt-2 text-xs text-ui-muted">
                 Загружает проекты, доступы и сервисы по сохранённым адресам API.
             </p>

@@ -2,6 +2,8 @@ import { collectSeoDom } from '../utils/seoDom.js'
 import { evaluateRobots } from '../utils/seoRules.js'
 import { getSeoActions, setSeoAction } from './seoActions.js'
 import { captureHeadings, focusHeading } from './headingNavigation.js'
+import { collectPageWeight } from './pageWeight.js'
+const documentId = [...crypto.getRandomValues(new Uint32Array(4))].join('-')
 /**
  * SEO-анализ текущей страницы.
  * Выполняется в контексте content script (доступ к DOM).
@@ -79,6 +81,7 @@ export const scanSeo = async () => {
         ...collectSeoDom(document, location.href),
         actions: getSeoActions(),
         url: location.href,
+        baseUrl: document.baseURI,
         urlLength: location.href.length,
         finalUrl: pageInfo.url || location.href,
         redirected: Boolean(pageInfo.url && pageInfo.url !== location.href),
@@ -142,13 +145,18 @@ export const scanSeo = async () => {
             withoutText: [...document.links].filter((link) => !link.textContent.trim() && !link.querySelector('img[alt]')).length
         },
         wordCount: (document.body?.innerText || '').trim().split(/\s+/).filter(Boolean).length,
-        htmlSize: document.documentElement.outerHTML.length
+        htmlSize: document.documentElement.outerHTML.length,
+        pageWeight: collectPageWeight(document)
     }
 }
 
 /** Регистрирует обработчик сообщений 'seo:scan' */
 const registerSeoHandler = () => {
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+        if (message?.type === 'seo:context') {
+            sendResponse({ ok: true, data: { documentId, url: location.href, actions: getSeoActions() } })
+            return false
+        }
         if (message?.type === 'seo:heading') {
             try { sendResponse({ ok: true, data: focusHeading(message.payload || {}) }) }
             catch (error) { sendResponse({ ok: false, error: error.message }) }

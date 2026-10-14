@@ -5,6 +5,8 @@ import { syncSiteIcons, getSiteIconStatus, cancelSiteIcons, clearSiteIcons } fro
 import { findAccessesByUrl, findProjectByUrl, getAdminUrl } from '../utils/projectUtils.js'
 import { apiAuthorizationError, classifyApiAuthorization } from './apiAuthorization.js'
 import { registerPopupSession } from './popupSession.js'
+import { POPUP_STATE_KEY } from '../utils/popupState.js'
+import { POPUP_EXPIRY_ALARM, SEO_SESSION_KEY } from '../utils/seoSessionState.js'
 import {
     base64ToBytes,
     bytesToBase64,
@@ -430,6 +432,8 @@ const clearAllData = async () => {
         else resolve()
     }))
     await chrome.alarms.clear(PROJECTS_ALARM)
+    await chrome.alarms.clear(POPUP_EXPIRY_ALARM)
+    await chrome.storage.session.remove([POPUP_STATE_KEY, SEO_SESSION_KEY])
     await sessionRemove(UNLOCKED_KEY)
     await sessionRemove(PENDING_AUTH_SESSIONS_KEY)
 }
@@ -916,19 +920,23 @@ const getServiceField = async ({ id, field }) => {
     return service[field]
 }
 
-const refreshAll = async ({ interactive = false, onlyIfDue = false } = {}) => {
+const refreshAll = async ({ interactive = false, onlyIfDue = false, scope = 'all' } = {}) => {
+    if (!['all', 'projects', 'accesses'].includes(scope)) throw new Error('Неизвестный вид загрузки')
     const { projectsUrl, accessUrl } = await readApiSettingsRaw()
     if (!projectsUrl && !accessUrl) throw new Error('Сначала сохраните адрес API проектов или доступов')
+    if (scope === 'projects' && !projectsUrl) throw new Error('Сначала сохраните адрес API проектов')
+    if (scope === 'accesses' && !accessUrl) throw new Error('Сначала сохраните адрес API доступов')
+    const includeAccesses = scope !== 'projects'
     const protectedMode = Boolean((await getSecurityConfig())?.enabled)
     const locked = protectedMode && !(await getUnlockedKey({ required: false }))
-    if (interactive && accessUrl && locked) await getUnlockedKey()
+    if (interactive && includeAccesses && accessUrl && locked) await getUnlockedKey()
     let data = await getStoredData()
     const snapshot = data.lastSuccessfulData
     const due = (type, url) => !onlyIfDue || snapshot[`${type}Url`] !== url ||
         !Number.isFinite(snapshot[`${type}UpdatedAt`]) || snapshot[`${type}UpdatedAt`] <= 0 ||
         Date.now() - snapshot[`${type}UpdatedAt`] >= PROJECTS_REFRESH_PERIOD_MINUTES * 60000
-    const loadProjects = Boolean(projectsUrl) && due('projects', projectsUrl)
-    const loadAccesses = Boolean(accessUrl) && !locked && due('accesses', accessUrl)
+    const loadProjects = scope !== 'accesses' && Boolean(projectsUrl) && due('projects', projectsUrl)
+    const loadAccesses = includeAccesses && Boolean(accessUrl) && !locked && due('accesses', accessUrl)
     if (!loadProjects && !loadAccesses) return { ...data, refreshed: { projects: false, accesses: false } }
     const [projectsResult, accessesResult] = await Promise.allSettled([
         loadProjects ? requestRows(projectsUrl, 'проектов') : Promise.resolve(null),
@@ -960,7 +968,7 @@ const refreshAll = async ({ interactive = false, onlyIfDue = false } = {}) => {
             await logError(type, error)
         }
     }
-    if (accessUrl && locked) errors.push('Доступы: обновление пропущено, хранилище заблокировано')
+    if (includeAccesses && accessUrl && locked) errors.push('Доступы: обновление пропущено, хранилище заблокировано')
     const nextData = { ...data, projectApiStatus, accessApiStatus, accessAuthRequired, refreshErrors: errors }
     await storageSet(DATA_KEY, nextData)
     return { ...nextData, refreshed }
@@ -1023,7 +1031,7 @@ const handlers = {
     'data:accesses:refresh': ({ url }) => refreshAccesses(url, { interactive: true }).then(toPublicData),
     'data:projects:authorize': () => openApiAuthorization('projects'),
     'data:accesses:authorize': () => openApiAuthorization('accesses'),
-    'data:all:refresh': () => refreshAll({ interactive: true }).then(toPublicData),
+    'data:all:refresh': ({ scope }) => refreshAll({ interactive: true, scope }).then(toPublicData),
     'data:errors:get': () => storageGet(ERRORS_KEY, []),
     'data:errors:clear': () => storageSet(ERRORS_KEY, []).then(() => ({ cleared: true })),
     'data:clear': () => clearAllData().then(() => ({ cleared: true })),
