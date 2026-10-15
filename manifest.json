@@ -45,17 +45,11 @@
     "idle"
   ],
   "host_permissions": [
-    "https://script.google.com/*",
-    "https://*.googleusercontent.com/*",
-    "https://accounts.google.com/*",
-    "https://support.5th.ru/*"
+    "http://*/*",
+    "https://*/*"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   },
-  "optional_host_permissions": [
-    "http://*/*",
-    "https://*/*"
-  ],
   "minimum_chrome_version": "130"
 }

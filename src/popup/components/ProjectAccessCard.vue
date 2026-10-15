@@ -3,7 +3,6 @@ import { ref } from 'vue'
 import { ensureUnlocked } from '../unlockStore'
 import { getProjectAccessField, getProjectAccessText, startAdminAuth } from '../data/projectData'
 import { getAdminUrl } from '../../utils/projectUtils'
-import { requestOrigins } from '../../utils/hostPermissions.js'
 import CredentialCard from './CredentialCard.vue'
 import Button from './ui/Button.vue'
 
@@ -22,10 +21,7 @@ const copy = field => run(field, async () => {
         : getProjectAccessField(props.project.url, props.access.id, field))
     await navigator.clipboard.writeText(value)
 }, `${{ login: 'Логин', password: 'Пароль', text: 'Доступ' }[field]} скопирован`)
-const login = () => run('login-admin', async () => {
-    await requestOrigins([getAdminUrl(props.project)])
-    await ensureUnlocked(() => startAdminAuth(props.project.url, props.access.id))
-})
+const login = () => run('login-admin', () => ensureUnlocked(() => startAdminAuth(props.project.url, props.access.id), { refreshAfterUnlock: false }))
 </script>
 <template>
     <CredentialCard ref="card" :title="access.login || `Доступ ${index + 1}`" :menu-label="`Действия: ${access.login || index + 1}`" :message="message" :error="error">

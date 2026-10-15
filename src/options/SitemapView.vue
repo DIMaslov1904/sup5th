@@ -2,7 +2,6 @@
 import { computed, onUnmounted, ref } from 'vue'
 import { fetchSeo, downloadText } from '../utils/seoClient.js'
 import { collectSitemap, sitemapRoots } from '../utils/sitemap.js'
-import { requestOrigins } from '../utils/hostPermissions.js'
 import Button from '../popup/components/ui/Button.vue'
 import Input from '../popup/components/ui/Input.vue'
 import Message from '../popup/components/ui/Message.vue'
@@ -13,12 +12,9 @@ let controller
 const pages = computed(() => (result.value?.pages || []).filter(item => item.url.toLowerCase().includes(search.value.toLowerCase())))
 const load = async () => {
     if (loading.value) return
-    const previousErrors = (result.value?.errors || []).map(error => error.url)
     loading.value = true; message.value = ''; result.value = null; progress.value = { files: 0, urls: 0 }; visible.value = 200
     controller = new AbortController()
     try {
-        const knownUrls = [props.tab?.url, root.value.trim() ? new URL(root.value.trim(), props.tab.url).href : null, ...previousErrors].filter(Boolean)
-        await requestOrigins(knownUrls)
         if (!props.tab?.url || !/^https?:/.test(props.tab.url)) throw new Error('Откройте сайт и запустите sitemap из расширения')
         let roots
         if (root.value.trim()) roots = [new URL(root.value.trim(), props.tab.url).href]

@@ -9,7 +9,6 @@ let auditController
 const stopAudit = () => { cancelled = true; auditController?.abort() }
 onUnmounted(stopAudit)
 import { classifyLinkCheck, withoutFragment } from '../utils/linkCheckStatus.js'
-import { requestOrigins } from '../utils/hostPermissions.js'
 import Button from '../popup/components/ui/Button.vue'
 import Card from '../popup/components/ui/Card.vue'
 import Message from '../popup/components/ui/Message.vue'
@@ -65,7 +64,6 @@ const runAudit = async () => {
     robotsRules.value = []
 
     try {
-        await requestOrigins([props.tab?.url].filter(Boolean))
         const tab = await getActiveSiteTab()
         if (!tab?.id || !tab?.url || !/^https?:/.test(tab.url)) {
             throw new Error('Откройте проверяемый сайт в активной вкладке')

@@ -5,7 +5,6 @@ import { buildHeadingTree } from '../../utils/headingTree.js'
 import HeadingTree from './HeadingTree.vue'
 import { evaluateRobotsFile } from '../../utils/seoRules.js'
 import { classifyLinkCheck, withoutFragment } from '../../utils/linkCheckStatus.js'
-import { requestOrigins } from '../../utils/hostPermissions.js'
 import Preloader from './ui/Preloader.vue'
 import Button from './ui/Button.vue'
 import Card from './ui/Card.vue'
@@ -107,7 +106,6 @@ const checkLinks = async () => {
     checking.value = true; cancelled = false; error.value = ''; checkProgress.value = 0
     const urls = [...new Set(links.value.filter(item => /^https?:/.test(item.url)).map(item => item.url))]
     try {
-        await requestOrigins(urls)
         for (let i = 0; i < urls.length && !cancelled; i += 5) {
             const batch = await Promise.all(urls.slice(i, i + 5).map(async url => {
                 let info = await fetchSeo(url, 'HEAD'); if (!info.ok && [0, 405, 501].includes(info.status)) info = await fetchSeo(url)

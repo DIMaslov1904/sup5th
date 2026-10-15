@@ -2,7 +2,6 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { loadApiSettings, saveApiSettings, loadProjectData, refreshAll, loadErrorLog, clearErrorLog, clearAllData, authorizeProjectsApi, authorizeAccessApi, enableHelloProtection, unlockCredentialVaultWithHello, lockCredentialVault, disableCredentialProtection } from '../data/projectData.js'
 import { getBiometricCapabilities, enableBiometricProtectionFlow, unlockWithBiometricFlow } from '../../utils/biometricHello.js'
-import { requestOrigins } from '../../utils/hostPermissions.js'
 import { securityStatus, refreshJob, refreshSecurityStatus } from '../backgroundState.js'
 import { ensureUnlocked } from '../unlockStore.js'
 import Button from '../components/ui/Button.vue'
@@ -60,13 +59,11 @@ const run = async (name, action, success = '') => {
 }
 const save = type => run('save', async () => {
     const field = type === 'projects' ? 'projectsUrl' : 'accessUrl'
-    await requestOrigins([settings.value[field]])
     const result = await saveApiSettings({ [field]: settings.value[field] })
     savedSettings.value = result
     settings.value[field] = result[field]
 }, 'Адрес API сохранён')
 const loadData = scope => run('load', async () => {
-    await requestOrigins([scope !== 'accesses' && savedSettings.value.projectsUrl, scope !== 'projects' && savedSettings.value.accessUrl].filter(Boolean))
     const action = () => refreshAll({ scope })
     data.value = scope !== 'projects' && savedSettings.value.accessUrl ? await ensureUnlocked(action, { refreshAfterUnlock: false }) : await action()
     errors.value = await loadErrorLog()

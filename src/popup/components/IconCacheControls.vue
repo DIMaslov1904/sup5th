@@ -1,14 +1,10 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
 import { cancelSiteIcons, loadIconStatus, refreshSiteIcons } from '../data/projectData'
-import { loadProjectData, loadServices } from '../data/projectData'
-import { requestOrigins } from '../../utils/hostPermissions.js'
-import { siteHref } from '../../utils/siteAddress.js'
 import Button from './ui/Button.vue'
 
 const status = ref({ active: false, total: 0, completed: 0, failed: 0, cached: 0, bytes: 0 })
-const busy = ref(false), error = ref(''), largeWarning = ref(false), catalogueReady = ref(false)
-let catalogueUrls = []
+const busy = ref(false), error = ref(''), largeWarning = ref(false)
 const load = async () => {
     try { status.value = await loadIconStatus(); if (status.value.largeWarning) largeWarning.value = true } catch (reason) { error.value = reason.message }
 }
@@ -18,9 +14,8 @@ const run = async action => {
     try { await action(); await load() } catch (reason) { error.value = reason.message }
     finally { busy.value = false }
 }
-const refresh = () => run(async () => { await requestOrigins(catalogueUrls); await refreshSiteIcons() })
+const refresh = () => run(refreshSiteIcons)
 onMounted(() => {
-    Promise.all([loadProjectData(), loadServices()]).then(([data, services]) => { catalogueUrls = [...data.lastSuccessfulData.projects, ...services].map(item => siteHref(item.siteUrl || item.url)).filter(Boolean); catalogueReady.value = true }).catch(reason => { error.value = reason.message })
  chrome.runtime.onMessage.addListener(changed); load() })
 onUnmounted(() => chrome.runtime.onMessage.removeListener(changed))
 </script>
@@ -28,7 +23,7 @@ onUnmounted(() => chrome.runtime.onMessage.removeListener(changed))
 <template>
     <div class="grid gap-2">
         <div class="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" size="sm" :disabled="busy || status.active || !catalogueReady" @click="refresh">Обновить иконки</Button>
+            <Button variant="secondary" size="sm" :disabled="busy || status.active" @click="refresh">Обновить иконки</Button>
             <Button v-if="status.active" variant="ghost" size="sm" :disabled="busy" @click="run(cancelSiteIcons)">Отменить</Button>
             <span v-if="status.active" role="status" class="text-xs text-ui-muted">Иконки: {{ status.completed }} / {{ status.total }}</span>
             <span v-else class="text-xs text-ui-muted/70">В кеше: {{ status.cached }} · {{ (status.bytes / 1024 / 1024).toFixed(1) }} МБ</span>
