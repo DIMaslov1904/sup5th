@@ -15,6 +15,7 @@ watch(open, async visible => {
     input.value?.$el?.focus()
 })
 const go = async () => {
+    if (loading.value) return
     const number = ticket.value.trim().replace(/^0+/, '')
     if (!/^\d+$/.test(number)) { error.value = 'Введите положительный целый номер тикета'; input.value?.$el?.focus(); return }
     loading.value = true; error.value = ''
@@ -24,6 +25,11 @@ const go = async () => {
     } catch (reason) { error.value = reason.message || 'Не удалось открыть тикет' }
     finally { loading.value = false }
 }
+const pasteTicket = event => {
+    if (loading.value) return
+    ticket.value = (event.clipboardData?.getData('text/plain') || '').replace(/\D/g, '')
+    return go()
+}
 </script>
 
 <template>
@@ -31,8 +37,9 @@ const go = async () => {
         <form class="grid gap-4" @submit.prevent="go">
             <div class="grid gap-2">
                 <label for="ticket-number" class="text-xs text-ui-muted">Номер тикета</label>
-                <Input id="ticket-number" ref="input" v-model="ticket" type="text" inputmode="numeric" autocomplete="off" maxlength="18" placeholder="Например, 12345" autofocus
+                <Input id="ticket-number" ref="input" v-model="ticket" type="text" inputmode="numeric" autocomplete="off" placeholder="Например, 12345" autofocus :disabled="loading"
                     :aria-invalid="Boolean(error)" :aria-describedby="error ? 'ticket-error' : undefined"
+                    @paste.prevent="pasteTicket"
                     />
                 <Message v-if="error" id="ticket-error" type="error">{{ error }}</Message>
             </div>
