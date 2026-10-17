@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import Message from './ui/Message.vue'
+import Notification from './ui/Notification.vue'
 import ActionMenu from './ui/ActionMenu.vue'
 
 defineProps({ title: String, menuLabel: String, message: String, error: Boolean })
@@ -17,6 +17,6 @@ defineExpose({ close })
                 <ActionMenu ref="menu" :label="menuLabel"><slot name="menu" /></ActionMenu>
             </div>
         </div>
-        <Message v-if="message" :type="error ? 'error' : 'success'" class="mt-2">{{ message }}</Message>
+        <Notification v-if="message" :type="error ? 'error' : 'success'" :text="message" />
     </article>
 </template>

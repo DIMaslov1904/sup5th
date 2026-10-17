@@ -5,6 +5,7 @@ import { collectSitemap, sitemapRoots } from '../utils/sitemap.js'
 import Button from '../popup/components/ui/Button.vue'
 import Input from '../popup/components/ui/Input.vue'
 import Message from '../popup/components/ui/Message.vue'
+import Notification from '../popup/components/ui/Notification.vue'
 
 const props = defineProps({ tab: Object })
 const result = ref(null), loading = ref(false), message = ref(''), search = ref(''), root = ref(''), progress = ref({ files: 0, urls: 0 }), visible = ref(200)
@@ -40,7 +41,7 @@ const exportXml = () => {
         <p class="text-[13px] text-ui-muted">Объединяет карты из robots.txt и вложенных sitemap-index. Можно указать свой начальный файл.</p>
         <div class="flex flex-wrap gap-2"><Input v-model="root" :disabled="loading" placeholder="Автоматически из robots.txt или /sitemap.xml" class="min-w-64 flex-1"/><Button :loading="loading" @click="load">Загрузить sitemap</Button><Button v-if="loading" variant="secondary" @click="controller.abort()">Остановить</Button></div>
         <p v-if="loading" role="status" class="text-[13px] text-ui-accent">Файлов: {{ progress.files }} · URL: {{ progress.urls }}</p>
-        <Message v-if="message" type="error">{{ message }}</Message>
+        <Notification v-if="message" :text="message" />
         <template v-if="result">
             <div class="flex flex-wrap items-center gap-3 text-[13px]"><span>URL: {{ result.pages.length }}</span><span>Файлов: {{ result.files.length }}</span><span>Дубли: {{ result.duplicates }}</span><span :class="result.complete ? 'text-ui-success' : 'text-ui-warning'">{{ result.complete ? 'Все обнаруженные файлы обработаны' : 'Частичный результат' }}</span><Button size="sm" variant="secondary" :disabled="!result.pages.length" @click="exportXml">Скачать общий XML</Button></div>
             <Message v-if="result.limited" type="error">Достигнут лимит: 200 файлов или 50 000 URL. Результат неполный.</Message>

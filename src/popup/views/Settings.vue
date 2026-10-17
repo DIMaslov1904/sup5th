@@ -8,6 +8,7 @@ import Button from '../components/ui/Button.vue'
 import Input from '../components/ui/Input.vue'
 import Card from '../components/ui/Card.vue'
 import Message from '../components/ui/Message.vue'
+import Notification from '../components/ui/Notification.vue'
 import Tabs from '../components/ui/Tabs.vue'
 import Preloader from '../components/ui/Preloader.vue'
 import IconCacheControls from '../components/IconCacheControls.vue'
@@ -126,7 +127,7 @@ const reset = () => {
                 <Card title="Журнал ошибок"><p v-if="!errors.length" class="text-xs text-ui-muted">Ошибок загрузки нет.</p><ul v-else class="grid gap-3 text-xs"><li v-for="(error,index) in errors" :key="index"><span class="text-ui-muted">{{ date(error.createdAt) }}</span> · {{ error.message }}</li></ul><Button size="sm" variant="secondary" class="mt-3" :disabled="Boolean(busy) || !errors.length" @click="run('errors',async () => { await clearErrorLog(); errors = [] })">Очистить журнал</Button></Card>
                 <Button variant="danger" size="sm" :disabled="Boolean(busy)" @click="reset">Сбросить все данные</Button>
             </template>
-            <Message v-if="message.text" :type="message.type" class="whitespace-pre-line">{{ message.text }}</Message>
+            <Notification v-if="message.text" :type="message.type" :text="message.text" />
         </template>
         <p class="mt-auto text-right text-[11px] text-ui-muted/70">Версия {{ version }}</p>
     </section>

@@ -10,6 +10,12 @@ import Projects from './views/Projects.vue'
 import Settings from './views/Settings.vue'
 import { connectBackgroundState } from './backgroundState.js'
 import Preloader from './components/ui/Preloader.vue'
+import NotificationHost from './components/ui/NotificationHost.vue'
+import Notification from './components/ui/Notification.vue'
+import Button from './components/ui/Button.vue'
+import { useSetupState } from './setupState.js'
+const Welcome = defineAsyncComponent(() => import('./views/Welcome.vue'))
+const { settings: setupSettings, ready: setupReady, step: setupStep, error: setupError, retry: retrySetup } = useSetupState()
 const Tools = defineAsyncComponent(() => import('./views/Tools.vue'))
 const SeoPanel = defineAsyncComponent(() => import('./components/SeoPanel.vue'))
 const seoTab = ref(null), seoTabReady = ref(false)
@@ -88,14 +94,17 @@ onUnmounted(() => {
 })
 </script>
 <template>
-  <Layout v-if="stateReady" v-model="view" v-model:search="search" @search="openCatalogue" @ticket="ticketOpen = true">
+  <Welcome v-if="setupReady && setupStep !== 'done'" :step="setupStep" :settings="setupSettings" @completed="openCatalogue" />
+  <Layout v-else-if="stateReady && setupReady" v-model="view" v-model:search="search" @search="openCatalogue" @ticket="ticketOpen = true">
     <Site v-if="view === 'site'" />
     <section v-if="view === 'seo'" class="px-3"><SeoPanel v-if="seoTabReady" :tab="seoTab" :session="seoSession" auto-scan /></section>
     <Projects v-if="view === 'projects'" v-model:search="search" v-model:selected-project-url="selectedProjectUrl" v-model:selected-service-id="selectedServiceId" />
     <Settings v-if="view === 'settings'" />
     <Tools v-if="view === 'tools'" />
   </Layout>
-  <Preloader v-else label="Загрузка расширения…" />
+  <div v-else><Preloader label="Загрузка расширения…" /><Button v-if="setupError" class="mx-4" @click="retrySetup">Повторить загрузку</Button></div>
+  <Notification v-if="setupError" :text="setupError" />
   <UnlockModal />
   <TicketModal v-model:open="ticketOpen" />
+  <NotificationHost />
 </template>

@@ -11,7 +11,7 @@ onUnmounted(stopAudit)
 import { classifyLinkCheck, withoutFragment } from '../utils/linkCheckStatus.js'
 import Button from '../popup/components/ui/Button.vue'
 import Card from '../popup/components/ui/Card.vue'
-import Message from '../popup/components/ui/Message.vue'
+import Notification from '../popup/components/ui/Notification.vue'
 
 const state = ref('idle') // idle | scanning | checking-links | done | error
 const progress = ref({ current: 0, total: 0 })
@@ -180,7 +180,7 @@ const openTab = (url) => chrome.tabs.create({ url })
 
             <p class="text-xs text-ui-muted/70">Проверяется выборка до 51 страницы без cookies. Процент — доля выполненных технических проверок, а не оценка поисковых позиций. Длины метатегов — ориентиры.</p>
             <Button v-if="state === 'scanning' || state === 'checking-links'" variant="secondary" size="sm" @click="stopAudit">Остановить аудит</Button>
-            <Message v-if="message" type="error">{{ message }}</Message>
+            <Notification v-if="message" :text="message" />
 
             <div v-if="state === 'checking-links'" class="ui-panel text-xs">
                 Проверено страниц: {{ progress.current }} из {{ progress.total }}

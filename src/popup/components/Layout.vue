@@ -6,10 +6,23 @@ import { securityStatus, refreshSecurityStatus, refreshJob } from '../background
 import { lockCredentialVault } from '../data/projectData.js'
 import { ensureUnlocked } from '../unlockStore.js'
 import { ref } from 'vue'
+import { openTicket, searchTicketNumber } from '../../utils/ticketNavigation.js'
+import Notification from './ui/Notification.vue'
 const modelItemMenu = defineModel()
 const search = defineModel('search', { type: String, default: '' })
 const emit = defineEmits(['search', 'ticket'])
 const locking = ref(false), lockError = ref('')
+const openingTicket = ref(false), ticketError = ref('')
+const pasteSearch = async event => {
+    const number = searchTicketNumber(event.clipboardData?.getData('text/plain'))
+    if (!number) return
+    event.preventDefault()
+    if (openingTicket.value) return
+    openingTicket.value = true; ticketError.value = ''
+    try { await openTicket(number) }
+    catch (reason) { ticketError.value = reason.message || 'Не удалось открыть тикет' }
+    finally { openingTicket.value = false }
+}
 const toggleLock = async () => {
     if (!securityStatus.value.enabled) { modelItemMenu.value = 'settings'; return }
     locking.value = true; lockError.value = ''
@@ -39,7 +52,7 @@ const toggleLock = async () => {
                 </svg>
                 <Input v-model="search" type="search" aria-label="Поиск сервисов и проектов" placeholder="Поиск проектов и сервисов" autocomplete="off"
                     class="pr-2 pl-8 text-xs"
-                    @click="emit('search')" @keydown.enter.prevent="emit('search')" />
+                    @click="emit('search')" @keydown.enter.prevent="emit('search')" @paste="pasteSearch" />
             </label>
             <Button variant="ghost" class="px-2 text-xs" @click="emit('ticket')">Тикет</Button>
             <IconButton :label="!securityStatus.enabled ? 'Защита выключена — настройки' : securityStatus.unlocked ? 'Заблокировать хранилище' : 'Разблокировать хранилище'" :disabled="locking || !securityStatus.ready" :class="securityStatus.enabled ? securityStatus.unlocked ? 'text-ui-success' : 'text-ui-warning' : 'text-ui-muted'" @click="toggleLock"><svg class="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path :d="securityStatus.enabled && !securityStatus.unlocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M16 10V6a4 4 0 0 0-8 0'"/><path d="M12 14v3"/></svg></IconButton>
@@ -51,7 +64,8 @@ const toggleLock = async () => {
         </nav>
         <div class="app-scroll flex min-h-0 flex-1 flex-col overflow-y-auto pt-16 pb-6">
             <p v-if="refreshJob.running" role="status" class="mx-4 mb-3 flex items-center gap-2 text-xs text-ui-accent"><span class="ui-loading" aria-hidden="true"></span>Загрузка данных: {{ refreshJob.completed }} / {{ refreshJob.total }}</p>
-            <p v-if="lockError" role="alert" class="mx-4 mb-3 text-xs text-ui-danger">{{ lockError }}</p>
+            <Notification v-if="lockError" :text="lockError" />
+            <Notification v-if="ticketError" :text="ticketError" />
             <slot />
         </div>
     </div>

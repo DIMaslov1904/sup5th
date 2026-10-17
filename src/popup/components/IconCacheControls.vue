@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { cancelSiteIcons, loadIconStatus, refreshSiteIcons } from '../data/projectData'
 import Button from './ui/Button.vue'
+import Notification from './ui/Notification.vue'
 
 const status = ref({ active: false, total: 0, completed: 0, failed: 0, cached: 0, bytes: 0 })
 const busy = ref(false), error = ref(''), largeWarning = ref(false)
@@ -29,8 +30,8 @@ onUnmounted(() => chrome.runtime.onMessage.removeListener(changed))
             <span v-else class="text-xs text-ui-muted/70">В кеше: {{ status.cached }} · {{ (status.bytes / 1024 / 1024).toFixed(1) }} МБ</span>
         </div>
         <progress v-if="status.active" :value="status.completed" :max="status.total || 1" aria-label="Загрузка иконок" class="h-1 w-full accent-sky-400" />
-        <p v-if="largeWarning" role="alert" class="text-xs text-ui-warning">Кеш иконок превысил 50 МБ. Это уведомление показывается один раз; загрузка продолжается.</p>
+        <Notification v-if="largeWarning" type="warning" text="Кеш иконок превысил 50 МБ. Это уведомление показывается один раз; загрузка продолжается." />
         <p v-if="status.failed" class="text-xs text-ui-warning">Не удалось обновить: {{ status.failed }}. Для них сохраняется прежняя иконка или инициалы.</p>
-        <p v-if="error" class="text-xs text-ui-danger">{{ error }}</p>
+        <Notification v-if="error" :text="error" />
     </div>
 </template>

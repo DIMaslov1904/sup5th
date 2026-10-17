@@ -11,6 +11,7 @@ import SiteIcon from '../components/SiteIcon.vue'
 import ProjectDetails from '../components/ProjectDetails.vue'
 import Button from '../components/ui/Button.vue'
 import Message from '../components/ui/Message.vue'
+import Notification from '../components/ui/Notification.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
 const projects = ref([]), services = ref([]), copying = ref(''), loaded = ref(false), connected = ref(false)
@@ -107,6 +108,6 @@ onUnmounted(() => { alive = false; revision++; chrome.storage.onChanged.removeLi
         <ProjectDetails v-else-if="selectedProject" :key="selectedProject.url" :project="selectedProject">
             <template #leading><Button variant="ghost" size="sm" aria-label="Назад к списку" title="Назад к списку" @click="back">←</Button></template>
         </ProjectDetails>
-        <Message v-if="message.text" :type="message.type" class="mt-3">{{ message.text }}</Message>
+        <Notification v-if="message.text" :type="message.type" :text="message.text" />
     </section>
 </template>

@@ -4,6 +4,7 @@ import Modal from './ui/Modal.vue'
 import Input from './ui/Input.vue'
 import Button from './ui/Button.vue'
 import Message from './ui/Message.vue'
+import { openTicket, ticketDigits } from '../../utils/ticketNavigation.js'
 
 const open = defineModel('open', { type: Boolean, default: false })
 const input = ref(null)
@@ -20,14 +21,14 @@ const go = async () => {
     if (!/^\d+$/.test(number)) { error.value = 'Введите положительный целый номер тикета'; input.value?.$el?.focus(); return }
     loading.value = true; error.value = ''
     try {
-        await chrome.tabs.create({ url: `https://support.5th.ru/published/index.php?app=ST#/requests/search/${number}/` })
+        await openTicket(number)
         open.value = false
     } catch (reason) { error.value = reason.message || 'Не удалось открыть тикет' }
     finally { loading.value = false }
 }
 const pasteTicket = event => {
     if (loading.value) return
-    ticket.value = (event.clipboardData?.getData('text/plain') || '').replace(/\D/g, '')
+    ticket.value = ticketDigits(event.clipboardData?.getData('text/plain'))
     return go()
 }
 </script>

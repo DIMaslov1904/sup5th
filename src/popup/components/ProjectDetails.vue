@@ -7,7 +7,7 @@ import { displayUrl } from '../../utils/displayUrl.js'
 import SiteIcon from './SiteIcon.vue'
 import ProjectAccessCard from './ProjectAccessCard.vue'
 import FtpAccessCard from './FtpAccessCard.vue'
-import Message from './ui/Message.vue'
+import Notification from './ui/Notification.vue'
 
 const props = defineProps({ project: { type: Object, required: true } })
 const accesses = ref([]), loading = ref(false), error = ref('')
@@ -63,6 +63,6 @@ onUnmounted(() => { revision++; chrome.storage.onChanged.removeListener(changed)
             <h2 class="text-[13px] font-semibold">FTP доступы</h2>
             <FtpAccessCard v-for="item in ftpAccesses" :key="item.access.id" :access="item.access" :project-url="project.url" :index="item.index" />
         </section>
-        <Message v-if="error" type="error">{{ error }}</Message>
+        <Notification v-if="error" :text="error" />
     </div>
 </template>

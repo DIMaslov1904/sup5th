@@ -5,7 +5,7 @@ import Button from '../components/ui/Button.vue'
 import Input from '../components/ui/Input.vue'
 import Select from '../components/ui/Select.vue'
 import Card from '../components/ui/Card.vue'
-import Message from '../components/ui/Message.vue'
+import Notification from '../components/ui/Notification.vue'
 const selected = ref(''), password = ref(''), error = ref(''), copied = ref(false)
 const options = reactive({ length: 20, alphabet: 'latin', lower: true, upper: true, digits: true, special: true, separators: true })
 const generate = () => {
@@ -29,7 +29,7 @@ onMounted(generate)
                 <div class="grid grid-cols-2 gap-3 text-xs"><label class="flex items-center gap-2"><input v-model="options.lower" type="checkbox" class="accent-ui-accent" />Строчные буквы</label><label class="flex items-center gap-2"><input v-model="options.upper" type="checkbox" class="accent-ui-accent" />Прописные буквы</label><label class="flex items-center gap-2"><input v-model="options.digits" type="checkbox" class="accent-ui-accent" />Цифры</label><label class="flex items-center gap-2"><input v-model="options.special" type="checkbox" class="accent-ui-accent" />Спецсимволы</label></div>
                 <label class="flex items-center gap-2 text-xs"><input v-model="options.separators" type="checkbox" class="accent-ui-accent" />Разделители</label>
             </div></Card>
-            <Message v-if="error" type="error">{{ error }}</Message>
+            <Notification v-if="error" :text="error" />
         </template>
     </section>
 </template>

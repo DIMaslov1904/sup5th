@@ -5,6 +5,7 @@ const SeoAudit = defineAsyncComponent(() => import('./SeoAudit.vue'))
 const SitemapView = defineAsyncComponent(() => import('./SitemapView.vue'))
 const SeoPanel = defineAsyncComponent(() => import('../popup/components/SeoPanel.vue'))
 import Message from '../popup/components/ui/Message.vue'
+import NotificationHost from '../popup/components/ui/NotificationHost.vue'
 import Tabs from '../popup/components/ui/Tabs.vue'
 
 const params = new URLSearchParams(location.search)
@@ -37,4 +38,5 @@ const select = name => { section.value = name; params.set('tool', name); history
             </template>
         </div>
     </main>
+    <NotificationHost />
 </template>

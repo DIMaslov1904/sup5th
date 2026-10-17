@@ -9,6 +9,7 @@ import Preloader from './ui/Preloader.vue'
 import Button from './ui/Button.vue'
 import Card from './ui/Card.vue'
 import Message from './ui/Message.vue'
+import Notification from './ui/Notification.vue'
 import Tabs from './ui/Tabs.vue'
 import Input from './ui/Input.vue'
 import Select from './ui/Select.vue'
@@ -166,8 +167,8 @@ const tools = computed(() => {
 </script>
 <template>
     <div class="grid gap-3 text-ui-text">
-        <Message v-if="error" type="error">{{ error }}</Message>
-        <Message v-if="notification" type="warning">{{ notification }}</Message>
+        <Notification v-if="error" :text="error" />
+        <Notification v-if="notification" type="warning" :text="notification" />
         <Preloader v-if="loading" label="Получаем данные страницы…" />
         <div v-if="report" class="grid min-w-0 gap-3">
         <Tabs v-model="section" :items="tabs" label="Разделы SEO" wrap @update:model-value="selectSection" />
