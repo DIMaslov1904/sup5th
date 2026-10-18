@@ -13,6 +13,7 @@ import Notification from '../components/ui/Notification.vue'
 import Tabs from '../components/ui/Tabs.vue'
 import Preloader from '../components/ui/Preloader.vue'
 import IconCacheControls from '../components/IconCacheControls.vue'
+import BiometricProviderHelp from '../components/BiometricProviderHelp.vue'
 import { useApiAutosave } from '../useApiAutosave.js'
 
 const section = ref('connection'), settings = ref({ projectsUrl: '', accessUrl: '' }), data = ref(null), errors = ref([])
@@ -119,10 +120,11 @@ const reset = () => {
             <Card v-if="section === 'security'" title="Защита паролей">
                 <div class="grid gap-3">
                     <p class="text-xs text-ui-muted">{{ securityStatus.enabled ? (securityStatus.unlocked ? 'Хранилище разблокировано.' : 'Хранилище заблокировано.') : 'Защита выключена. Пароли хранятся локально без шифрования.' }}</p>
-                    <Button v-if="!securityStatus.enabled" :disabled="Boolean(busy) || !caps.helloAvailable" variant="secondary" @click="enable">Включить биометрию устройства</Button>
+                    <p v-if="securityStatus.keySource === 'credential-id'" class="text-xs text-ui-muted">Ключ доступа: {{ securityStatus.passkeyName }} · локальный режим совместимости.</p>
+                    <Button v-if="!securityStatus.enabled" :disabled="Boolean(busy) || !caps.available" variant="secondary" @click="enable">Включить биометрию устройства</Button>
                     <template v-else><Button v-if="!securityStatus.unlocked" :disabled="Boolean(busy)" @click="unlock">Разблокировать</Button><template v-else><Button variant="secondary" :disabled="Boolean(busy)" @click="lock">Заблокировать</Button><Button variant="danger" :disabled="Boolean(busy)" @click="disable">Отключить защиту</Button></template></template>
-                    <p v-if="!caps.helloAvailable" class="text-xs text-ui-warning">Системный аутентификатор недоступен. Для Windows настройте Windows Hello.</p>
-                    <p v-else-if="!caps.prf" class="text-xs text-ui-warning">Поддержка PRF не подтверждена. При включении проверим её на устройстве.</p>
+                    <p v-if="!caps.available" class="text-xs text-ui-warning">WebAuthn недоступен в этом браузере.</p>
+                    <BiometricProviderHelp v-if="!securityStatus.enabled" />
                     <p class="text-xs text-ui-muted">Автоблокировка: 10 минут без ввода на устройстве, блокировка экрана или завершение сессии браузера.</p>
                 </div>
             </Card>

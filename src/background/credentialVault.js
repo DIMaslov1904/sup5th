@@ -25,13 +25,23 @@ export const getSecurityStatus = async () => {
 }
 export const enableHelloProtection = payload => mutateStorage(async () => {
     if ((await getSecurityConfig())?.enabled) throw new Error('Защита уже включена')
-    const { rawVaultKey, credentialId, prfSalt, wrappedKey } = payload
-    if (typeof rawVaultKey !== 'string' || base64ToBytes(rawVaultKey).length !== 32 || !credentialId ||
-        base64ToBytes(prfSalt || '').length !== 32 || !wrappedKey?.iv || !wrappedKey?.ciphertext) throw new Error('Некорректные параметры биометрии')
+    const { rawVaultKey, credentialId, prfSalt, wrappedKey, transports, keySource = 'prf', credentialIdHash, keySalt, passkeyName } = payload
+    const compatible = keySource === 'credential-id'
+    if (!['prf', 'credential-id'].includes(keySource) || typeof rawVaultKey !== 'string' ||
+        base64ToBytes(rawVaultKey).length !== 32 || !wrappedKey?.iv || !wrappedKey?.ciphertext ||
+        (compatible ? (credentialId !== undefined || prfSalt !== undefined ||
+            !/^[A-Za-z0-9_-]{43}$/.test(credentialIdHash || '') || typeof keySalt !== 'string' || base64ToBytes(keySalt).length !== 32 ||
+            typeof passkeyName !== 'string' || !passkeyName || passkeyName.length > 100)
+            : (!credentialId || base64ToBytes(prfSalt || '').length !== 32))) throw new Error('Некорректные параметры биометрии')
+    if (transports !== undefined && (!Array.isArray(transports) || transports.length > 8 ||
+        transports.some(value => typeof value !== 'string' || value.length > 32))) throw new Error('Некорректные транспорты passkey')
     const data = await getStoredData(), services = await storageGet(SERVICES_KEY, [])
     const key = await importAesKey(base64ToBytes(rawVaultKey))
     const vault = { accesses: data.lastSuccessfulData.accesses.map(accessSecret), services: services.map(({ id, password }) => ({ id, password })) }
-    const config = { enabled: true, mode: 'hello', credentialId, prfSalt, wrappedKey, createdAt: Date.now() }
+    const identity = compatible
+        ? { keySource, credentialIdHash, keySalt, passkeyName }
+        : { credentialId, prfSalt, ...(transports !== undefined ? { transports } : {}) }
+    const config = { enabled: true, mode: 'hello', ...identity, wrappedKey, createdAt: Date.now() }
     await sessionRemove(AUTH_SESSIONS_KEY)
     await storageSetMany({
         [DATA_KEY]: { ...data, lastSuccessfulData: { ...data.lastSuccessfulData, accesses: data.lastSuccessfulData.accesses.map(publicAccess) } },

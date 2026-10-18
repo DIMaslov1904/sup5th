@@ -55,7 +55,7 @@ export const ensureUnlocked = async (action, options) => {
     return action()
 }
 
-// Разблокировка Windows Hello (WebAuthn + PRF)
+// Разблокировка через провайдер passkey: PRF или локальный режим совместимости.
 export const runHelloUnlock = async () => {
     if (unlockState.loading || !settle) return
     const request = settle
@@ -68,6 +68,11 @@ export const runHelloUnlock = async () => {
             credentialId: status.credentialId,
             prfSalt: status.prfSalt,
             wrappedKey: status.wrappedKey,
+            transports: status.transports,
+            keySource: status.keySource,
+            credentialIdHash: status.credentialIdHash,
+            keySalt: status.keySalt,
+            passkeyName: status.passkeyName,
             signal: request.controller.signal
         })
         if (!isActive(request)) return

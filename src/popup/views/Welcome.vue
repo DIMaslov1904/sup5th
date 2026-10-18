@@ -9,6 +9,7 @@ import Input from '../components/ui/Input.vue'
 import Card from '../components/ui/Card.vue'
 import Message from '../components/ui/Message.vue'
 import Notification from '../components/ui/Notification.vue'
+import BiometricProviderHelp from '../components/BiometricProviderHelp.vue'
 
 const props = defineProps({ step: { type: String, required: true }, settings: { type: Object, required: true } })
 const emit = defineEmits(['completed'])
@@ -70,8 +71,9 @@ onMounted(async () => {
                 <p class="text-xs text-ui-muted">Биометрия защищает сохранённые пароли. Настройку можно пропустить и вернуться к ней позже в разделе «Защита».</p>
                 <Message v-if="securityStatus.enabled" type="success">Биометрическая защита уже включена.</Message>
                 <template v-else>
-                    <Button :loading="busy" :disabled="!capabilities?.helloAvailable" @click="enable">Настроить биометрию</Button>
-                    <p v-if="capabilities && !capabilities.helloAvailable" class="text-xs text-ui-muted">Биометрия устройства сейчас недоступна. Этот шаг можно пропустить.</p>
+                    <Button :loading="busy" :disabled="!capabilities?.available" @click="enable">Настроить биометрию</Button>
+                    <p v-if="capabilities && !capabilities.available" class="text-xs text-ui-muted">WebAuthn сейчас недоступен. Этот шаг можно пропустить.</p>
+                    <BiometricProviderHelp />
                 </template>
                 <Button variant="ghost" :disabled="busy" @click="run(() => advance('accesses'))">{{ securityStatus.enabled ? 'Далее' : 'Пропустить' }}</Button>
             </div>
