@@ -39,7 +39,7 @@ onUnmounted(() => { revision++; chrome.storage.onChanged.removeListener(changed)
             <SiteIcon :url="project.siteUrl || project.url" :name="project.name" large />
             <div class="min-w-0 flex-1">
                 <h1 :title="project.name || displayUrl(project.url)" class="ui-title line-clamp-2 wrap-anywhere">{{ project.name || displayUrl(project.url) }}</h1>
-                <a :href="href(project.siteUrl || project.url)" :title="displayUrl(project.url)" target="_blank" rel="noreferrer" class="inline-block truncate text-xs text-ui-muted hover:text-white">{{ displayUrl(project.url) }}</a>
+                <a :href="href(project.siteUrl || project.url)" :title="displayUrl(project.url)" target="_blank" rel="noreferrer" class="inline-block truncate text-xs text-ui-muted hover:text-ui-accent">{{ displayUrl(project.url) }}</a>
             </div>
         </header>
         <div class="grid grid-cols-4 gap-2">

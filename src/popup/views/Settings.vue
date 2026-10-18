@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { loadApiSettings, saveApiSettings, loadProjectData, refreshAll, loadErrorLog, clearErrorLog, clearAllData, authorizeProjectsApi, authorizeAccessApi, enableHelloProtection, unlockCredentialVaultWithHello, lockCredentialVault, disableCredentialProtection } from '../data/projectData.js'
+import { loadApiSettings, loadProjectData, refreshAll, loadErrorLog, clearErrorLog, clearAllData, authorizeProjectsApi, authorizeAccessApi, enableHelloProtection, unlockCredentialVaultWithHello, lockCredentialVault, disableCredentialProtection } from '../data/projectData.js'
 import { getBiometricCapabilities, enableBiometricProtectionFlow, unlockWithBiometricFlow } from '../../utils/biometricHello.js'
 import { securityStatus, refreshJob, refreshSecurityStatus, activeSupportTicket } from '../backgroundState.js'
 import { resetActiveSupportTicket } from '../data/projectData.js'
@@ -13,6 +13,7 @@ import Notification from '../components/ui/Notification.vue'
 import Tabs from '../components/ui/Tabs.vue'
 import Preloader from '../components/ui/Preloader.vue'
 import IconCacheControls from '../components/IconCacheControls.vue'
+import { useApiAutosave } from '../useApiAutosave.js'
 
 const section = ref('connection'), settings = ref({ projectsUrl: '', accessUrl: '' }), data = ref(null), errors = ref([])
 const savedSettings = ref({ projectsUrl: '', accessUrl: '' })
@@ -46,6 +47,8 @@ const load = async () => {
 }
 const changed = (changes, area) => { if (area === 'local' && (changes.projectData || changes.apiErrorLog || changes.apiSettings)) load().catch(showError) }
 const showError = error => { if (alive) { message.value = { type: 'error', text: error.message }; loaded.value = true } }
+const autosave = useApiAutosave(settings, savedSettings, showError)
+const saveLabels = { pending: 'Ожидание сохранения…', saving: 'Сохранение…', saved: 'Сохранено' }
 onMounted(() => {
     chrome.storage.onChanged.addListener(changed)
     load().catch(showError)
@@ -59,19 +62,18 @@ const run = async (name, action, success = '') => {
     catch (error) { showError(error) }
     finally { if (alive) busy.value = '' }
 }
-const save = type => run('save', async () => {
-    const field = type === 'projects' ? 'projectsUrl' : 'accessUrl'
-    const result = await saveApiSettings({ [field]: settings.value[field] })
-    savedSettings.value = result
-    settings.value[field] = result[field]
-}, 'Адрес API сохранён')
 const loadData = scope => run('load', async () => {
+    const saved = scope === 'all' ? await autosave.flushAll() : await autosave.flush(scope === 'projects' ? 'projectsUrl' : 'accessUrl')
+    if (!saved) throw new Error('Проверьте адреса API в разделе «Подключение»')
     const action = () => refreshAll({ scope })
     data.value = scope !== 'projects' && savedSettings.value.accessUrl ? await ensureUnlocked(action, { refreshAfterUnlock: false }) : await action()
     errors.value = await loadErrorLog()
     if (data.value.refreshErrors.length) throw new Error(data.value.refreshErrors.join('\n'))
 }, 'Данные обновлены')
-const authorize = type => run('authorize', () => type === 'projects' ? authorizeProjectsApi() : authorizeAccessApi())
+const authorize = type => run('authorize', async () => {
+    if (!await autosave.flush(type === 'projects' ? 'projectsUrl' : 'accessUrl')) return
+    return type === 'projects' ? authorizeProjectsApi() : authorizeAccessApi()
+})
 const enable = () => run('security', async () => { await enableHelloProtection(await enableBiometricProtectionFlow()); await refreshSecurityStatus() }, 'Биометрическая защита включена')
 const unlock = () => run('security', async () => {
     const { key } = await unlockWithBiometricFlow(securityStatus.value)
@@ -84,7 +86,7 @@ const disable = () => {
 }
 const reset = () => {
     if (!confirm('Удалить настройки, доступы, кеш иконок и результаты расширения? Текущая загрузка будет отменена.')) return
-    run('reset', async () => { await clearAllData(); loaded.value = false; await load(); await refreshSecurityStatus() }, 'Данные удалены')
+    run('reset', async () => { await autosave.cancel(); await clearAllData(); loaded.value = false; await load(); await refreshSecurityStatus() }, 'Данные удалены')
 }
 </script>
 <template>
@@ -94,9 +96,10 @@ const reset = () => {
         <template v-else>
             <template v-if="section === 'connection'">
                 <Card v-for="[type,title,field] in [['projects','Проекты','projectsUrl'],['accesses','Личные доступы и сервисы','accessUrl']]" :key="type" :title="title">
-                    <form class="flex gap-2" @submit.prevent="save(type)"><Input v-model="settings[field]" :aria-label="`URL API: ${title}`" placeholder="URL веб-приложения Apps Script" :disabled="Boolean(busy)" /><Button type="submit" variant="secondary" :disabled="Boolean(busy)">Сохранить</Button></form>
+                    <Input :model-value="settings[field]" :aria-label="`URL API: ${title}`" :aria-invalid="Boolean(autosave.states[field].error)" :aria-describedby="autosave.states[field].status !== 'idle' ? `api-${field}-status` : undefined" placeholder="URL веб-приложения Apps Script" :disabled="Boolean(busy)" @update:model-value="value => autosave.update(field, value)" @blur="autosave.flush(field)" @keydown.enter.prevent="autosave.flush(field)" />
+                    <p v-if="autosave.states[field].status !== 'idle'" :id="`api-${field}-status`" role="status" aria-live="polite" class="mt-2 text-xs" :class="autosave.states[field].error ? 'text-ui-danger' : 'text-ui-muted'">{{ autosave.states[field].error || saveLabels[autosave.states[field].status] }}</p>
                     <p v-if="type === 'projects'" class="mt-2 text-xs text-ui-muted">Адрес из таблицы «База знаний 5th».</p>
-                    <p v-else class="mt-2 text-xs text-ui-muted">Как получить адрес API — <a :href="optionsUrl" target="_blank" rel="noreferrer" class="hover:text-ui-accent text-white/70 underline decoration-sky-300/40 underline-offset-2">инструкция</a></p>
+                    <p v-else class="mt-2 text-xs text-ui-muted">Как получить адрес API — <a :href="optionsUrl" target="_blank" rel="noreferrer" class="ui-link underline decoration-ui-accent/40">инструкция</a></p>
                     <Message v-if="data?.[type === 'projects' ? 'projectApiStatus' : 'accessApiStatus']" type="warning" class="mt-2">{{ data[type === 'projects' ? 'projectApiStatus' : 'accessApiStatus'] === 'access_denied' ? 'Доступ к таблице ограничен. Обратитесь к владельцу.' : 'Войдите в Google и подтвердите доступ, затем повторите загрузку.' }}</Message>
                     <Button v-if="needsAuthorization(type)" size="sm" variant="ghost" class="mt-2" :disabled="Boolean(busy)" @click="authorize(type)">Открыть API / авторизацию</Button>
                 </Card>

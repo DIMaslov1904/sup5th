@@ -16,6 +16,9 @@ import Select from './ui/Select.vue'
 import PropertyList from './ui/PropertyList.vue'
 import OpenGraphPreview from './OpenGraphPreview.vue'
 import { pageWeightRows } from '../../utils/pageWeightDisplay.js'
+import { useColorScheme } from '../useColorScheme.js'
+import { yandexCounterUrl } from '../../utils/yandexCounter.js'
+const theme = useColorScheme()
 
 const props = defineProps({ tab: Object, autoScan: { type: Boolean, default: true }, session: Object })
 const notification = ref(''), serverIp = ref(''), serverIpLoading = ref(false)
@@ -144,7 +147,7 @@ const overview = computed(() => report.value ? [
     ['Язык',report.value.lang || 'Не указан'], ['Canonical',report.value.canonical || 'Не указан'], ['Viewport',report.value.viewport ? 'Есть' : 'Нет'],
     ['Редирект',report.value.redirected ? report.value.finalUrl : 'Нет'], ['TTFB повторного запроса',report.value.response.ttfb == null ? 'Не измерен' : report.value.response.ttfb + ' мс']
 ].map(([label,value]) => ({ label, value })).concat(pageWeightRows(report.value.pageWeight)) : [])
-const yandexCounter = computed(() => report.value ? `https://webmaster.yandex.ru/sqicounter?theme=dark&host=${encodeURIComponent(new URL(report.value.url).hostname)}` : '')
+const yandexCounter = computed(() => report.value ? yandexCounterUrl(report.value.url, theme.value) : '')
 const tools = computed(() => {
     if (!report.value) return []
     const url = encodeURIComponent(report.value.url), host = encodeURIComponent(new URL(report.value.url).hostname), title = encodeURIComponent('"' + report.value.title + '"')
@@ -239,7 +242,7 @@ const tools = computed(() => {
                     <details v-for="[key,label] in [['top','Частые слова'],['bigrams','Биграммы'],['withoutAnchors','Без анкоров'],['anchors','Анкоры'],['imageText','Alt и title изображений']]" :key="key" class="mt-3 text-xs"><summary class="cursor-pointer text-ui-accent">{{ label }}</summary><p v-for="row in (Array.isArray(report.statistics[key]) ? report.statistics[key] : report.statistics[key].top)" :key="row.word">{{ row.word }} — {{ row.count }} ({{ row.density }}%)</p></details>
                 </Card>
             </template>
-            <div v-if="section === 'tools'" class="grid gap-2"><a v-for="[label,url] in tools" :key="label" :href="url" target="_blank" rel="noreferrer" class="ui-panel text-xs text-ui-accent hover:bg-white/5">{{ label }} ↗</a></div>
+            <div v-if="section === 'tools'" class="grid gap-2"><a v-for="[label,url] in tools" :key="label" :href="url" target="_blank" rel="noreferrer" class="ui-panel text-xs text-ui-accent hover:bg-ui-raised">{{ label }} ↗</a></div>
         </div>
         </div>
         <div class="flex gap-2"><Button size="sm" variant="secondary" :disabled="!tab?.id || loading || checking" @click="scan">Обновить</Button><Button size="sm" variant="ghost" :disabled="!tab?.id" @click="openSeoApp(tab.id)">Аудит ↗</Button></div>

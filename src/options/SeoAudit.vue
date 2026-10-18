@@ -185,7 +185,7 @@ const openTab = (url) => chrome.tabs.create({ url })
             <div v-if="state === 'checking-links'" class="ui-panel text-xs">
                 Проверено страниц: {{ progress.current }} из {{ progress.total }}
                 <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-ui-raised">
-                    <div class="h-full bg-sky-600 transition-all" :style="{ width: `${progress.total ? Math.round(progress.current / progress.total * 100) : 0}%` }"></div>
+                    <div class="h-full bg-ui-primary transition-all" :style="{ width: `${progress.total ? Math.round(progress.current / progress.total * 100) : 0}%` }"></div>
                 </div>
             </div>
 
@@ -193,7 +193,7 @@ const openTab = (url) => chrome.tabs.create({ url })
                 <Card class="p-5!">
                     <div class="flex min-w-0 items-center gap-6">
                         <div class="relative grid h-24 w-24 shrink-0 place-items-center rounded-full border-4"
-                            :class="score.percent >= 80 ? 'border-emerald-500' : score.percent >= 50 ? 'border-amber-400' : 'border-red-400'">
+                            :class="score.percent >= 80 ? 'border-ui-success' : score.percent >= 50 ? 'border-ui-warning' : 'border-ui-danger'">
                             <span class="text-2xl font-bold">{{ score.percent }}%</span>
                         </div>
                         <div class="min-w-0 flex-1">
@@ -210,7 +210,7 @@ const openTab = (url) => chrome.tabs.create({ url })
                         <li v-for="(item, index) in checks" :key="index"
                             class="grid min-w-0 grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start gap-3 rounded-control border border-ui-border/70 bg-ui-field/40 px-3 py-2">
                             <span class="flex min-w-0 items-start gap-2 text-xs">
-                                <span class="shrink-0" :class="item.ok ? 'text-emerald-400' : 'text-ui-warning'" aria-hidden="true">{{ item.ok === null ? '?' : item.ok ? '✓' : '✕' }}</span>
+                                <span class="shrink-0" :class="item.ok ? 'text-ui-success' : 'text-ui-warning'" aria-hidden="true">{{ item.ok === null ? '?' : item.ok ? '✓' : '✕' }}</span>
                                 <span class="min-w-0 wrap-anywhere">{{ item.label }}</span>
                             </span>
                             <span v-if="item.hint" class="min-w-0 truncate text-right text-[11px] text-ui-muted/70" :title="item.hint">{{ item.hint }}</span>
@@ -220,9 +220,9 @@ const openTab = (url) => chrome.tabs.create({ url })
 
                 <Card v-if="linkChecks.length" title="Проверка внутренних ссылок">
                     <div class="mb-2 flex flex-wrap gap-2 text-[11px]">
-                        <span class="rounded bg-emerald-700/20 px-2 py-0.5 text-ui-success">ОК: {{ linkChecks.filter(l => l.ok).length }}</span>
-                        <span class="rounded bg-red-400/20 px-2 py-0.5 text-ui-danger">Битые 404/410: {{ linkChecks.filter(l => l.outcome === 'broken').length }}</span>
-                        <span class="rounded bg-amber-400/20 px-2 py-0.5 text-ui-warning">Редирект: {{ linkChecks.filter(l => l.redirected).length }}</span>
+                        <span class="rounded bg-ui-success/15 px-2 py-0.5 text-ui-success">ОК: {{ linkChecks.filter(l => l.ok).length }}</span>
+                        <span class="rounded bg-ui-danger/15 px-2 py-0.5 text-ui-danger">Битые 404/410: {{ linkChecks.filter(l => l.outcome === 'broken').length }}</span>
+                        <span class="rounded bg-ui-warning/15 px-2 py-0.5 text-ui-warning">Редирект: {{ linkChecks.filter(l => l.redirected).length }}</span>
                     </div>
                     <p class="mb-2 text-xs text-ui-muted">Выборка: {{ linkChecks.length }} страниц. Не удалось подтвердить: {{ uncertainCount }}.</p>
                     <ul class="grid min-w-0 grid-cols-1 max-h-72 gap-1 overflow-y-auto pr-1">
@@ -230,7 +230,7 @@ const openTab = (url) => chrome.tabs.create({ url })
                             class="flex min-w-0 items-center justify-between gap-3 rounded px-2 py-1 text-xs odd:bg-ui-field/40">
                             <a :href="link.url" :title="link.url" target="_blank" rel="noreferrer" class="min-w-0 flex-1 truncate text-ui-muted hover:text-ui-accent">{{ link.url }}</a>
                             <span class="shrink-0"
-                                :class="link.ok ? 'text-emerald-400' : 'text-ui-warning'">{{ link.label }}</span>
+                                :class="link.ok ? 'text-ui-success' : 'text-ui-warning'">{{ link.label }}</span>
                         </li>
                     </ul>
                 </Card>
@@ -256,13 +256,13 @@ const openTab = (url) => chrome.tabs.create({ url })
                     <dl class="grid gap-1.5 text-xs">
                         <div class="flex min-w-0 justify-between gap-3"><dt class="shrink-0 text-ui-muted">Файл</dt><dd :title="sitemapInfo.url" class="min-w-0 flex-1 truncate text-right">{{ sitemapInfo.url }}</dd></div>
                         <div class="flex justify-between gap-3"><dt class="text-ui-muted">Доступен</dt>
-                            <dd :class="sitemapInfo.exists ? 'text-emerald-400' : 'text-red-400'">{{ sitemapInfo.exists ? `Да (HTTP ${sitemapInfo.status})` : 'Нет' }}</dd></div>
+                            <dd :class="sitemapInfo.exists ? 'text-ui-success' : 'text-ui-danger'">{{ sitemapInfo.exists ? `Да (HTTP ${sitemapInfo.status})` : 'Нет' }}</dd></div>
                         <div class="flex justify-between gap-3"><dt class="text-ui-muted">URL в sitemap</dt><dd>{{ sitemapInfo.count }}</dd></div>
                         <div class="flex justify-between gap-3"><dt class="text-ui-muted">Текущая страница есть</dt>
-                            <dd :class="sitemapInfo.containsCurrent ? 'text-emerald-400' : 'text-ui-warning'">{{ sitemapInfo.containsCurrent ? 'Да' : sitemapInfo.complete ? 'Нет' : 'Неизвестно: карта обработана частично' }}</dd></div>
+                            <dd :class="sitemapInfo.containsCurrent ? 'text-ui-success' : 'text-ui-warning'">{{ sitemapInfo.containsCurrent ? 'Да' : sitemapInfo.complete ? 'Нет' : 'Неизвестно: карта обработана частично' }}</dd></div>
                         <p v-if="!sitemapInfo.complete" class="text-ui-warning">Обработаны не все sitemap. Выводы по карте неполные.</p><p v-for="error in sitemapInfo.errors" :key="error.url" class="break-all text-ui-warning">{{ error.url }} — {{ error.message }}</p>
                         <div class="flex justify-between gap-3"><dt class="text-ui-muted">Дубли в sitemap</dt>
-                            <dd :class="sitemapInfo.duplicates ? 'text-ui-warning' : 'text-emerald-400'">{{ sitemapInfo.duplicates }}</dd></div>
+                            <dd :class="sitemapInfo.duplicates ? 'text-ui-warning' : 'text-ui-success'">{{ sitemapInfo.duplicates }}</dd></div>
                     </dl>
                 </Card>
 
@@ -271,7 +271,7 @@ const openTab = (url) => chrome.tabs.create({ url })
                         <li v-for="(rule, index) in robotsRules" :key="index"
                             class="flex items-center justify-between rounded bg-ui-field/40 px-3 py-1.5">
                             <span :title="`${rule.directive.toUpperCase()}: ${rule.value || '/'}`" class="min-w-0 flex-1 truncate">{{ rule.directive.toUpperCase() }}: {{ rule.value || '/' }}</span>
-                            <span class="shrink-0" :class="rule.blocked ? 'text-red-400' : 'text-emerald-400'">{{ rule.blocked ? 'запрещено' : 'разрешено' }}</span>
+                            <span class="shrink-0" :class="rule.blocked ? 'text-ui-danger' : 'text-ui-success'">{{ rule.blocked ? 'запрещено' : 'разрешено' }}</span>
                         </li>
                     </ul>
                 </Card>

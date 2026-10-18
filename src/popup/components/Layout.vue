@@ -55,7 +55,7 @@ const toggleLock = async () => {
                 class="ui-icon-button w-auto px-2 text-xs font-semibold">SEO</button>
             <IconButton label="Инструменты" @click="modelItemMenu = 'tools'"><svg class="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 6.5a5 5 0 0 0-6.1 6.1L3 18a2.1 2.1 0 0 0 3 3l5.4-5.4a5 5 0 0 0 6.1-6.1l-3 3-3-3Z"/></svg></IconButton>
             <label class="relative min-w-0 flex-1">
-                <svg class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+                <svg class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-ui-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
                     <circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" />
                 </svg>
                 <Input v-model="search" type="search" aria-label="Поиск сервисов и проектов" placeholder="Поиск проектов и сервисов" autocomplete="off"
