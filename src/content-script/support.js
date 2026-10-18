@@ -17,10 +17,9 @@ const styles = `
 .sup5th-support-modal__close::before,.sup5th-support-modal__close::after{content:"";position:absolute;top:15px;left:7px;width:18px;height:1px;background:#111;transform:rotate(45deg)}
 .sup5th-support-modal__close::after{transform:rotate(-45deg)}
 .sup5th-support-modal__iframe{display:block;width:90vw;height:90dvh;margin:-40px -48px -48px;border:0}
-.sup5th-duration{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;font:13px Arial,sans-serif;color:#334155}
-.sup5th-duration__title{font-weight:600}
+.sup5th-duration{display:grid;gap:8px;margin-top:8px;padding:8px 10px;border:1px solid #aaa;background:#fff;grid-template-columns:64px auto}
+.sup5th-duration__title{grid-column:1/-1;font-weight:600}
 .sup5th-duration__input{box-sizing:border-box;width:64px;padding:5px 6px;border:1px solid #cbd5e1;border-radius:4px;font:inherit}
-.sup5th-duration__summary{flex-basis:100%;color:#64748b;font-size:12px}
 .sup5th-duration__error{flex-basis:100%;color:#b91c1c;font-size:12px;font-weight:600}
 .ui-button.edit-time-taskt:hover{border-color:#84bdde;background-image:url("images/ui-bg_glass_75_c6e9fe_1x400.png");color:#111;box-shadow:inset 0 1px 0 #fff,inset 0 -1px 0 #f2faff}
 `
@@ -138,7 +137,6 @@ const enhanceTimeFields = (targetDoc) => {
     ensureStyles(targetDoc)
     attachTimeDelegation(targetDoc)
     const timeInputs = [...targetDoc.querySelectorAll('input[name*="time"], input[id*="time"]')]
-        .filter((input) => input instanceof HTMLInputElement)
     // Поля могут появляться динамически — делегирование focusin/focusout
     // перехватит их в любом случае, поэтому молча возвращаемся.
     if (!timeInputs.length) return
@@ -149,7 +147,6 @@ const enhanceTimeFields = (targetDoc) => {
     let updatingFields = false
     let hoursInput = null
     let minutesInput = null
-    let summary = null
     let error = null
 
     const renderDates = () => {
@@ -172,9 +169,6 @@ const enhanceTimeFields = (targetDoc) => {
                 hoursInput.value = String(Math.floor(totalMinutes / 60))
                 minutesInput.value = String(totalMinutes % 60)
             }
-            if (summary) summary.textContent = `Продолжительность: ${formatDuration((end.getTime() - start.getTime()) / 60000)}`
-        } else if (summary) {
-            summary.textContent = ''
         }
     }
 
@@ -269,9 +263,6 @@ const enhanceTimeFields = (targetDoc) => {
 
     const minutesLabel = targetDoc.createElement('span')
     minutesLabel.textContent = 'мин'
-
-    summary = targetDoc.createElement('span')
-    summary.className = 'sup5th-duration__summary'
     error = targetDoc.createElement('span')
     error.className = 'sup5th-duration__error'
 
@@ -285,7 +276,7 @@ const enhanceTimeFields = (targetDoc) => {
 
     hoursInput.addEventListener('input', updateDuration)
     minutesInput.addEventListener('input', updateDuration)
-    duration.append(title, hoursInput, hoursLabel, minutesInput, minutesLabel, summary, error)
+    duration.append(title, hoursInput, hoursLabel, minutesInput, minutesLabel, error)
 
     endInput.insertAdjacentElement('afterend', duration)
     renderDates()
