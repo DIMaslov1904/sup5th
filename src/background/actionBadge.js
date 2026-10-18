@@ -46,7 +46,12 @@ const defaultIconPaths = () => Object.fromEntries(ICON_SIZES.map((size) => [size
 
 export const setTicketTimerBadge = async (tabId, ticket) => {
     const elapsed = formatTicketElapsed(ticket.startedAt)
-    await chrome.action.setBadgeBackgroundColor({ tabId, color: '#2563eb' })
+    let color = '#2563eb'
+    if (Number.isInteger(tabId)) {
+        const [tab, data] = await Promise.all([chrome.tabs.get(tabId), getStoredData()])
+        if (findProjectByUrl(data.lastSuccessfulData.projects, tab?.url)) color = '#22c55e'
+    }
+    await chrome.action.setBadgeBackgroundColor({ tabId, color })
     await chrome.action.setBadgeTextColor({ tabId, color: '#ffffff' })
     await chrome.action.setBadgeText({ tabId, text: elapsed })
     await chrome.action.setTitle({ tabId, title: `Тикет №${ticket.ticketId} · ${elapsed}\nОтсчёт с ${new Date(ticket.startedAt).toLocaleString('ru-RU')}` })
