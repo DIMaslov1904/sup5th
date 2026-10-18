@@ -7,6 +7,7 @@ let doc = document
 let iframe = null
 let ticketId = null
 const observedRoots = new WeakSet()
+const enhancedTimePairs = new WeakSet()
 
 const styles = `
 .sup5th-support-modal{border:0;padding:0;border-radius:8px;max-width:none;max-height:none;opacity:0;transform:scale(.98);transition:transform .18s ease,opacity .18s ease}
@@ -97,7 +98,8 @@ const setField = (input, value) => {
 const toLocalValue = (parsed) => `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`
 
 const isTimeLikeInput = (input) => {
-    if (!(input instanceof HTMLInputElement)) return false
+    const InputElement = input?.ownerDocument?.defaultView?.HTMLInputElement
+    if (!InputElement || !(input instanceof InputElement)) return false
     const name = String(input.name || '').toLowerCase()
     const id = String(input.id || '').toLowerCase()
     if (/time/.test(name) || /time/.test(id)) return true
@@ -133,16 +135,9 @@ const attachTimeDelegation = (targetDoc) => {
     }, true)
 }
 
-const enhanceTimeFields = (targetDoc) => {
-    ensureStyles(targetDoc)
-    attachTimeDelegation(targetDoc)
-    const timeInputs = [...targetDoc.querySelectorAll('input[name*="time"], input[id*="time"]')]
-    // Поля могут появляться динамически — делегирование focusin/focusout
-    // перехватит их в любом случае, поэтому молча возвращаемся.
-    if (!timeInputs.length) return
-
-    const startInput = timeInputs.find((input) => /time_start|start_time/.test(input.name)) || null
-    const endInput = timeInputs.find((input) => /time_end|end_time/.test(input.name)) || null
+const enhanceTimePair = (targetDoc, startInput, endInput) => {
+    if (enhancedTimePairs.has(endInput)) return
+    enhancedTimePairs.add(endInput)
 
     let updatingFields = false
     let hoursInput = null
@@ -150,9 +145,9 @@ const enhanceTimeFields = (targetDoc) => {
     let error = null
 
     const renderDates = () => {
-        if (!startInput || !endInput) return
         const start = parseSupportDate(startInput.value)
         const end = parseSupportDate(endInput.value)
+        duration.style.display = start ? '' : 'none'
         const invalid = !start || !end || end < start
         startInput.style.border = invalid ? '1px solid #dc2626' : ''
         endInput.style.border = invalid ? '1px solid #dc2626' : ''
@@ -198,39 +193,15 @@ const enhanceTimeFields = (targetDoc) => {
         renderDates()
     }
 
-    // Замена полей даты: text <-> datetime-local при фокусе/блуре.
-    // Применяется ко ВСЕМ полям времени (как в старом расширении),
-    // чтобы календарь работал независимо от имён полей.
-    const restoreCalendarInput = (input) => {
-        if (input.dataset.sup5thTimeEnhanced) return
-        input.dataset.sup5thTimeEnhanced = 'true'
-        input.addEventListener('focus', () => {
-            const parsed = parseSupportDate(input.value)
-            input.type = 'datetime-local'
-            input.step = '1'
-            input.value = parsed ? `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}` : ''
-        })
-        input.addEventListener('input', () => {
+    ;[startInput, endInput].forEach((input) => {
+        const onDateChange = () => {
             if (updatingFields) return
             renderDates()
-        })
-        input.addEventListener('change', () => {
-            if (updatingFields) return
-            renderDates()
-        })
-        input.addEventListener('blur', () => {
-            const parsed = parseSupportDate(input.value)
-            input.type = 'text'
-            if (parsed) input.value = formatSupportDate(parsed)
-            renderDates()
-        })
-    }
-
-    timeInputs.forEach(restoreCalendarInput)
-
-    // Блок «Время выполнения» добавляем только если есть пара начало/конец
-    if (!startInput || !endInput) return
-    if (targetDoc.querySelector('.sup5th-duration')) return
+        }
+        input.addEventListener('input', onDateChange)
+        input.addEventListener('change', onDateChange)
+        input.addEventListener('focusout', onDateChange)
+    })
 
     const duration = targetDoc.createElement('div')
     duration.className = 'sup5th-duration'
@@ -280,6 +251,19 @@ const enhanceTimeFields = (targetDoc) => {
 
     endInput.insertAdjacentElement('afterend', duration)
     renderDates()
+}
+
+const enhanceTimeFields = (targetDoc) => {
+    ensureStyles(targetDoc)
+    attachTimeDelegation(targetDoc)
+    const timeInputs = [...targetDoc.querySelectorAll('input[name*="time"]')]
+    timeInputs.forEach((startInput) => {
+        if (!/time_start|start_time/.test(startInput.name)) return
+        const endName = startInput.name.replace('time_start', 'time_end').replace('start_time', 'end_time')
+        const scope = startInput.closest('tr') || startInput.form || targetDoc
+        const endInput = timeInputs.find((input) => input.name === endName && scope.contains(input))
+        if (endInput) enhanceTimePair(targetDoc, startInput, endInput)
+    })
 }
 
 // Наблюдение за динамическим появлением полей времени внутри iframe
