@@ -1,4 +1,5 @@
 <script setup>
+import { extensionApi } from '../../platform/extensionApi.js'
 import { onMounted, ref } from 'vue'
 import { loadProjectData } from '../data/projectData'
 import { findProjectByUrl } from '../../utils/projectUtils'
@@ -10,7 +11,7 @@ const project = ref(null), loaded = ref(false), error = ref('')
 onMounted(async () => {
     try {
         const [tabs, data] = await Promise.all([
-            chrome.tabs.query({ active: true, currentWindow: true }),
+            extensionApi.tabs.query({ active: true, currentWindow: true }),
             loadProjectData()
         ])
         const tab = tabs[0]

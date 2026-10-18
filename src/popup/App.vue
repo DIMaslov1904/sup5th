@@ -1,4 +1,5 @@
 <script setup>
+import { extensionApi } from '../platform/extensionApi.js'
 import { defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { POPUP_PORT_NAME } from '../utils/popupState.js'
 import { createSeoSessionClient } from './seoSessionClient.js'
@@ -49,23 +50,23 @@ watch(view, (value) => {
   const revision = ++tabRevision
   seoTabReady.value = false
   seoTab.value = null
-  if (value === 'seo') chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+  if (value === 'seo') extensionApi.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
     if (revision !== tabRevision) return
     seoTab.value = tab || null
     seoTabReady.value = true
-  })
+  }).catch(() => { if (revision === tabRevision) seoTabReady.value = true })
 }, { flush: 'sync' })
 watch([view, selectedProjectUrl, selectedServiceId, seoTab], saveUiState, { flush: 'sync' })
 
 onMounted(() => {
   disconnectState = connectBackgroundState()
-  statePort = chrome.runtime.connect({ name: POPUP_PORT_NAME })
+  statePort = extensionApi.runtime.connect({ name: POPUP_PORT_NAME })
   seoSession.value = createSeoSessionClient(statePort)
   statePort.onMessage.addListener(async (message) => {
     if (message?.type !== 'restore') return
     let restoredView = message.state.view
     if (restoredView === 'seo') {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      const [tab] = await extensionApi.tabs.query({ active: true, currentWindow: true })
       if (tab?.id !== message.state.seoTabId || tab?.url !== message.state.seoUrl) restoredView = 'site'
     }
     view.value = restoredView
@@ -79,7 +80,7 @@ onMounted(() => {
     seoSession.value?.dispose()
     statePort = null
     // Read lastError if the extension is reloaded while the popup is open.
-    if (chrome.runtime.lastError) console.warn('[popup] session disconnected', chrome.runtime.lastError.message)
+    if (extensionApi.runtime.lastError) console.warn('[popup] session disconnected', extensionApi.runtime.lastError.message)
     stateReady.value = true
   })
   // MV3 workers need messages, not just an open port, to stay alive.

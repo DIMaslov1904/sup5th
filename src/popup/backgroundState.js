@@ -1,3 +1,4 @@
+import { extensionApi } from '../platform/extensionApi.js'
 import { ref } from 'vue'
 import { getCredentialSecurityStatus, loadRefreshJob, loadActiveSupportTicket } from './data/projectData.js'
 import { SUPPORT_TRACKING_KEY } from '../utils/supportTimer.js'
@@ -27,7 +28,7 @@ export const connectBackgroundState = () => {
         }
     }
     const listener = (changes, area) => update(changes, area).catch(console.error)
-    chrome.storage.onChanged.addListener(listener)
+    extensionApi.storage.onChanged.addListener(listener)
     update().catch(console.error)
-    return () => { disposed = true; chrome.storage.onChanged.removeListener(listener) }
+    return () => { disposed = true; extensionApi.storage.onChanged.removeListener(listener) }
 }

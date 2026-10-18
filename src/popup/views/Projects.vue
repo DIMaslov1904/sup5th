@@ -1,7 +1,8 @@
 <script setup>
+import { extensionApi } from '../../platform/extensionApi.js'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { getServiceField, loadServices, loadProjectData, loadApiSettings } from '../data/projectData'
-import { ensureUnlocked } from '../unlockStore'
+import { ensureUnlocked, BIOMETRIC_ACTION_HANDLED } from '../unlockStore'
 import { searchCatalogue } from '../../utils/catalogue.js'
 import { displayUrl } from '../../utils/displayUrl.js'
 import { siteHref } from '../../utils/siteAddress.js'
@@ -35,9 +36,9 @@ const openItem = item => {
 const copyService = async field => {
     copying.value = field
     try {
-        const value = await ensureUnlocked(() => getServiceField(selectedService.value.id, field))
+        const value = await ensureUnlocked(() => getServiceField(selectedService.value.id, field), { intent: { type: 'service-copy', id: selectedService.value.id, field } })
         services.value = await loadServices()
-        await navigator.clipboard.writeText(value)
+        if (value !== BIOMETRIC_ACTION_HANDLED) await navigator.clipboard.writeText(value)
         message.value = { type: 'success', text: (field === 'login' ? 'Логин' : 'Пароль') + ' скопирован' }
     } catch (reason) { message.value = { type: 'error', text: reason.message } }
     finally { copying.value = '' }
@@ -58,8 +59,8 @@ const load = async () => {
     finally { if (alive) loaded.value = true }
 }
 const changed = (changes, area) => { if (area === 'local' && (changes.projectData || changes.services || changes.apiSettings)) load() }
-onMounted(() => { chrome.storage.onChanged.addListener(changed); load() })
-onUnmounted(() => { alive = false; revision++; chrome.storage.onChanged.removeListener(changed) })
+onMounted(() => { extensionApi.storage.onChanged.addListener(changed); load() })
+onUnmounted(() => { alive = false; revision++; extensionApi.storage.onChanged.removeListener(changed) })
 </script>
 <template>
     <section class="min-w-0 w-full px-4 text-ui-text">

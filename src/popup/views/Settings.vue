@@ -1,10 +1,12 @@
 <script setup>
+import { extensionApi } from '../../platform/extensionApi.js'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { loadApiSettings, loadProjectData, refreshAll, loadErrorLog, clearErrorLog, clearAllData, authorizeProjectsApi, authorizeAccessApi, enableHelloProtection, unlockCredentialVaultWithHello, lockCredentialVault, disableCredentialProtection } from '../data/projectData.js'
-import { getBiometricCapabilities, enableBiometricProtectionFlow, unlockWithBiometricFlow } from '../../utils/biometricHello.js'
+import { loadApiSettings, loadProjectData, refreshAll, loadErrorLog, clearErrorLog, clearAllData, authorizeProjectsApi, authorizeAccessApi, lockCredentialVault, disableCredentialProtection } from '../data/projectData.js'
+import { getBiometricCapabilities } from '../../utils/biometricHello.js'
+import { enableCredentialProtection, unlockCredentialProtection } from '../biometricActions.js'
 import { securityStatus, refreshJob, refreshSecurityStatus, activeSupportTicket } from '../backgroundState.js'
 import { resetActiveSupportTicket } from '../data/projectData.js'
-import { ensureUnlocked } from '../unlockStore.js'
+import { ensureUnlocked, BIOMETRIC_ACTION_HANDLED } from '../unlockStore.js'
 import Button from '../components/ui/Button.vue'
 import Input from '../components/ui/Input.vue'
 import Card from '../components/ui/Card.vue'
@@ -20,8 +22,8 @@ const section = ref('connection'), settings = ref({ projectsUrl: '', accessUrl: 
 const savedSettings = ref({ projectsUrl: '', accessUrl: '' })
 const loaded = ref(false), busy = ref(''), message = ref({ type: 'info', text: '' }), caps = ref({ helloAvailable: false, prf: false })
 const sections = [['connection','Подключение'],['data','Загрузка'],['security','Защита'],['maintenance','Обслуживание']]
-const version = chrome.runtime.getManifest().version
-const optionsUrl = chrome.runtime.getURL('src/options/index.html')
+const version = extensionApi.runtime.getManifest().version
+const optionsUrl = extensionApi.runtime.getURL('src/options/index.html')
 const snapshot = computed(() => data.value?.lastSuccessfulData)
 const needsAuthorization = type => {
     const url = savedSettings.value[type === 'projects' ? 'projectsUrl' : 'accessUrl']
@@ -51,11 +53,11 @@ const showError = error => { if (alive) { message.value = { type: 'error', text:
 const autosave = useApiAutosave(settings, savedSettings, showError)
 const saveLabels = { pending: 'Ожидание сохранения…', saving: 'Сохранение…', saved: 'Сохранено' }
 onMounted(() => {
-    chrome.storage.onChanged.addListener(changed)
+    extensionApi.storage.onChanged.addListener(changed)
     load().catch(showError)
     getBiometricCapabilities().then(value => { if (alive) caps.value = value }).catch(showError)
 })
-onUnmounted(() => { alive = false; revision++; chrome.storage.onChanged.removeListener(changed) })
+onUnmounted(() => { alive = false; revision++; extensionApi.storage.onChanged.removeListener(changed) })
 const run = async (name, action, success = '') => {
     if (busy.value) return
     busy.value = name; message.value.text = ''
@@ -67,7 +69,8 @@ const loadData = scope => run('load', async () => {
     const saved = scope === 'all' ? await autosave.flushAll() : await autosave.flush(scope === 'projects' ? 'projectsUrl' : 'accessUrl')
     if (!saved) throw new Error('Проверьте адреса API в разделе «Подключение»')
     const action = () => refreshAll({ scope })
-    data.value = scope !== 'projects' && savedSettings.value.accessUrl ? await ensureUnlocked(action, { refreshAfterUnlock: false }) : await action()
+    const result = scope !== 'projects' && savedSettings.value.accessUrl ? await ensureUnlocked(action, { refreshAfterUnlock: false, intent: { type: 'refresh', scope } }) : await action()
+    data.value = result === BIOMETRIC_ACTION_HANDLED ? await loadProjectData() : result
     errors.value = await loadErrorLog()
     if (data.value.refreshErrors.length) throw new Error(data.value.refreshErrors.join('\n'))
 }, 'Данные обновлены')
@@ -75,10 +78,9 @@ const authorize = type => run('authorize', async () => {
     if (!await autosave.flush(type === 'projects' ? 'projectsUrl' : 'accessUrl')) return
     return type === 'projects' ? authorizeProjectsApi() : authorizeAccessApi()
 })
-const enable = () => run('security', async () => { await enableHelloProtection(await enableBiometricProtectionFlow()); await refreshSecurityStatus() }, 'Биометрическая защита включена')
+const enable = () => run('security', async () => { await enableCredentialProtection(); await refreshSecurityStatus() }, 'Биометрическая защита включена')
 const unlock = () => run('security', async () => {
-    const { key } = await unlockWithBiometricFlow(securityStatus.value)
-    await unlockCredentialVaultWithHello(key); await refreshSecurityStatus()
+    await unlockCredentialProtection(securityStatus.value); await refreshSecurityStatus()
 }, 'Хранилище разблокировано')
 const lock = () => run('security', async () => { await lockCredentialVault(); await refreshSecurityStatus() })
 const disable = () => {
@@ -123,7 +125,7 @@ const reset = () => {
                     <p v-if="securityStatus.keySource === 'credential-id'" class="text-xs text-ui-muted">Ключ доступа: {{ securityStatus.passkeyName }} · локальный режим совместимости.</p>
                     <Button v-if="!securityStatus.enabled" :disabled="Boolean(busy) || !caps.available" variant="secondary" @click="enable">Включить биометрию устройства</Button>
                     <template v-else><Button v-if="!securityStatus.unlocked" :disabled="Boolean(busy)" @click="unlock">Разблокировать</Button><template v-else><Button variant="secondary" :disabled="Boolean(busy)" @click="lock">Заблокировать</Button><Button variant="danger" :disabled="Boolean(busy)" @click="disable">Отключить защиту</Button></template></template>
-                    <p v-if="!caps.available" class="text-xs text-ui-warning">WebAuthn недоступен в этом браузере.</p>
+                    <p v-if="!caps.available" class="text-xs text-ui-warning">{{ caps.unavailableReason || 'WebAuthn недоступен в этом браузере.' }}</p>
                     <BiometricProviderHelp v-if="!securityStatus.enabled" />
                     <p class="text-xs text-ui-muted">Автоблокировка: 10 минут без ввода на устройстве, блокировка экрана или завершение сессии браузера.</p>
                 </div>

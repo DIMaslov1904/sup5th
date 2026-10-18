@@ -44,7 +44,7 @@ const toggleLock = async () => {
 </script>
 <template>
     <div
-        class="ui-background flex h-full min-h-screen w-full flex-col overflow-hidden text-ui-text">
+        class="ui-background flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden text-ui-text">
         <nav id="menu" aria-label="Основная навигация" class="fixed inset-x-3 top-2 z-10 flex items-center gap-1 rounded-panel border border-ui-border bg-ui-panel/95 p-1 shadow-lg backdrop-blur-sm">
             <IconButton label="Сайт" @click="modelItemMenu = 'site'">
                 <svg class="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

@@ -1,4 +1,5 @@
 <script setup>
+import { extensionApi } from '../../platform/extensionApi.js'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { iconRepository } from '../../icons/iconRepository.js'
 import { iconInitials, iconOrigin } from '../../icons/iconPolicy.js'
@@ -33,8 +34,8 @@ const changed = message => {
     if (message.type === 'icons:changed' && (message.cleared || message.origin === origin.value)) load()
 }
 watch(origin, load)
-onMounted(() => { chrome.runtime.onMessage.addListener(changed); load() })
-onUnmounted(() => { disposed = true; revision++; chrome.runtime.onMessage.removeListener(changed); revoke() })
+onMounted(() => { extensionApi.runtime.onMessage.addListener(changed); load() })
+onUnmounted(() => { disposed = true; revision++; extensionApi.runtime.onMessage.removeListener(changed); revoke() })
 </script>
 
 <template>

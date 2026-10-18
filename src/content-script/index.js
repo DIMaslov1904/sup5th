@@ -1,3 +1,4 @@
+import { extensionApi } from '../platform/extensionApi.js'
 const visible = input => input.getClientRects().length > 0 && !input.disabled && !input.readOnly && getComputedStyle(input).visibility !== 'hidden'
 const setValue = (input, value) => {
     Object.getOwnPropertyDescriptor(input.ownerDocument.defaultView.HTMLInputElement.prototype, 'value').set.call(input, value)
@@ -17,18 +18,18 @@ const findLoginForm = () => {
 const start = async () => {
     if (window.top !== window || globalThis.__sup5thAuthInstalled) return
     globalThis.__sup5thAuthInstalled = true
-    const context = await chrome.runtime.sendMessage({ type: 'auth:context' })
+    const context = await extensionApi.runtime.sendMessage({ type: 'auth:context' })
     if (!context?.ok || !context.data) return
     let observer, timer, cancelled = false, busy = false
-    const stop = () => { cancelled = true; observer?.disconnect(); clearTimeout(timer); chrome.runtime.onMessage.removeListener(receive) }
+    const stop = () => { cancelled = true; observer?.disconnect(); clearTimeout(timer); extensionApi.runtime.onMessage.removeListener(receive) }
     const receive = message => { if (message.type === 'auth:cancel') stop() }
-    chrome.runtime.onMessage.addListener(receive)
+    extensionApi.runtime.onMessage.addListener(receive)
     const attempt = async () => {
         if (cancelled || busy) return
         const fields = findLoginForm()
         if (!fields) return
         busy = true
-        const response = await chrome.runtime.sendMessage({ type: 'auth:consume' }), auth = response?.ok ? response.data : null
+        const response = await extensionApi.runtime.sendMessage({ type: 'auth:consume' }), auth = response?.ok ? response.data : null
         if (cancelled || !auth || Date.now() - auth.createdAt > 300000) { stop(); return }
         setValue(fields.login, auth.login); setValue(fields.password, auth.password); stop()
         if (auth.cms === 'Tilda') return

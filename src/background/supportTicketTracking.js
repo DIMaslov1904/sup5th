@@ -1,3 +1,4 @@
+import { extensionApi } from '../platform/extensionApi.js'
 import { mutateStorage, storageGet, storageSet } from './storageRepository.js'
 import { SUPPORT_TRACKING_KEY, SUPPORT_TIMER_ALARM, activeTicketFrom } from '../utils/supportTimer.js'
 import { setTicketTimerBadge, updateBadgeForTab } from './actionBadge.js'
@@ -36,14 +37,14 @@ export const resetActiveSupportTicket = () => mutateStorage(async () => {
 const refreshTimer = async () => {
     const active = await getActiveSupportTicket()
     if (active) {
-        if (!await chrome.alarms.get(SUPPORT_TIMER_ALARM)) await chrome.alarms.create(SUPPORT_TIMER_ALARM, { periodInMinutes: 1 })
-    } else await chrome.alarms.clear(SUPPORT_TIMER_ALARM)
+        if (!await extensionApi.alarms.get(SUPPORT_TIMER_ALARM)) await extensionApi.alarms.create(SUPPORT_TIMER_ALARM, { periodInMinutes: 1 })
+    } else await extensionApi.alarms.clear(SUPPORT_TIMER_ALARM)
     if (active) await setTicketTimerBadge(undefined, active)
     else {
-        await chrome.action.setBadgeText({ text: '' })
-        await chrome.action.setTitle({ title: chrome.runtime.getManifest().name })
+        await extensionApi.action.setBadgeText({ text: '' })
+        await extensionApi.action.setTitle({ title: extensionApi.runtime.getManifest().name })
     }
-    const tabs = await chrome.tabs.query({})
+    const tabs = await extensionApi.tabs.query({})
     await Promise.allSettled(tabs.filter(tab => Number.isInteger(tab.id)).map(tab => active ? setTicketTimerBadge(tab.id, active) : updateBadgeForTab(tab.id)))
 }
 
@@ -53,8 +54,8 @@ export const registerSupportTicketTracking = ready => {
         pending = pending.then(refreshTimer).catch(error => console.error('[support] timer badge', error))
         return pending
     }
-    chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === SUPPORT_TIMER_ALARM) refresh() })
-    chrome.storage.onChanged.addListener((changes, area) => {
+    extensionApi.alarms.onAlarm.addListener(alarm => { if (alarm.name === SUPPORT_TIMER_ALARM) refresh() })
+    extensionApi.storage.onChanged.addListener((changes, area) => {
         if (area === 'local' && changes[SUPPORT_TRACKING_KEY]) refresh()
     })
     ready.then(refresh).catch(console.error)

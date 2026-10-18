@@ -1,3 +1,4 @@
+import { extensionApi } from '../platform/extensionApi.js'
 import { applyWorkDefaults, readSupportWorkState, workLogText } from './supportWorkState.js'
 
 const observedDocuments = new WeakSet()
@@ -29,7 +30,7 @@ export const startSupportWorkTracking = targetDoc => {
         if (confirmedStart) pendingStart = null
         const payload = { ...state, confirmedStart, observedAt: Date.now() }
         sending = sending.then(async () => {
-            const response = await chrome.runtime.sendMessage({ type: 'support:ticket:observe', payload })
+            const response = await extensionApi.runtime.sendMessage({ type: 'support:ticket:observe', payload })
             if (!response?.ok) throw new Error(response?.error || 'Не удалось сохранить состояние тикета')
         }).catch(error => {
             lastSignature = ''

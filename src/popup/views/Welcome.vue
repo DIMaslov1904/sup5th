@@ -1,9 +1,11 @@
 <script setup>
+import { extensionApi } from '../../platform/extensionApi.js'
 import { computed, onMounted, ref } from 'vue'
-import { saveApiSettings, refreshAll, enableHelloProtection, authorizeProjectsApi, authorizeAccessApi } from '../data/projectData.js'
-import { enableBiometricProtectionFlow, getBiometricCapabilities } from '../../utils/biometricHello.js'
+import { saveApiSettings, refreshAll, authorizeProjectsApi, authorizeAccessApi } from '../data/projectData.js'
+import { getBiometricCapabilities } from '../../utils/biometricHello.js'
+import { enableCredentialProtection } from '../biometricActions.js'
 import { securityStatus, refreshSecurityStatus, refreshJob } from '../backgroundState.js'
-import { ensureUnlocked } from '../unlockStore.js'
+import { ensureUnlocked, BIOMETRIC_ACTION_HANDLED } from '../unlockStore.js'
 import Button from '../components/ui/Button.vue'
 import Input from '../components/ui/Input.vue'
 import Card from '../components/ui/Card.vue'
@@ -16,7 +18,7 @@ const emit = defineEmits(['completed'])
 const projectsUrl = ref(props.settings.projectsUrl || ''), accessUrl = ref(props.settings.accessUrl || '')
 const busy = ref(false), error = ref(''), apiFailed = ref(false), capabilities = ref(null)
 const stepNumber = computed(() => ['projects', 'security', 'accesses'].indexOf(props.step) + 1)
-const optionsUrl = chrome.runtime.getURL('src/options/index.html')
+const optionsUrl = extensionApi.runtime.getURL('src/options/index.html')
 const run = async action => {
     if (busy.value) return
     busy.value = true; error.value = ''
@@ -36,13 +38,13 @@ const connect = scope => run(async () => {
     await saveApiSettings({ [field]: value, setupStep: props.step })
     try {
         const load = () => refreshAll({ scope })
-        const result = scope === 'accesses' ? await ensureUnlocked(load, { refreshAfterUnlock: false }) : await load()
-        if (result.refreshErrors?.length) throw new Error(result.refreshErrors.join('\n'))
+        const result = scope === 'accesses' ? await ensureUnlocked(load, { refreshAfterUnlock: false, intent: { type: 'refresh', scope, setupStep: 'done' } }) : await load()
+        if (result !== BIOMETRIC_ACTION_HANDLED && result.refreshErrors?.length) throw new Error(result.refreshErrors.join('\n'))
     } catch (reason) { apiFailed.value = true; throw reason }
     await advance(scope === 'projects' ? 'security' : 'done')
 })
 const enable = () => run(async () => {
-    await enableHelloProtection(await enableBiometricProtectionFlow())
+    await enableCredentialProtection({ advanceSetup: true })
     await refreshSecurityStatus()
     await advance('accesses')
 })
@@ -72,7 +74,7 @@ onMounted(async () => {
                 <Message v-if="securityStatus.enabled" type="success">Биометрическая защита уже включена.</Message>
                 <template v-else>
                     <Button :loading="busy" :disabled="!capabilities?.available" @click="enable">Настроить биометрию</Button>
-                    <p v-if="capabilities && !capabilities.available" class="text-xs text-ui-muted">WebAuthn сейчас недоступен. Этот шаг можно пропустить.</p>
+                    <p v-if="capabilities && !capabilities.available" class="text-xs text-ui-muted">{{ capabilities.unavailableReason || 'WebAuthn сейчас недоступен. Этот шаг можно пропустить.' }}</p>
                     <BiometricProviderHelp />
                 </template>
                 <Button variant="ghost" :disabled="busy" @click="run(() => advance('accesses'))">{{ securityStatus.enabled ? 'Далее' : 'Пропустить' }}</Button>

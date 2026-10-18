@@ -1,3 +1,4 @@
+import { extensionApi } from '../platform/extensionApi.js'
 import { DATA_KEY, SERVICES_KEY, VAULT_KEY, ERRORS_KEY, storageGet, storageSet, storageSetMany, sessionGet, sessionSet, mutateStorage, getStoredData, currentGeneration, assertGeneration } from './storageRepository.js'
 import { readApiSettings } from './apiSettings.js'
 import { normalizeProject, normalizeAccessData } from './catalogueData.js'
@@ -126,6 +127,6 @@ export const refreshAll = ({ scope = 'all', onlyIfDue = false } = {}) => {
 }
 export const scheduleRefresh = async () => {
     const settings = await readApiSettings()
-    if (!settings.projectsUrl && !settings.accessUrl) return chrome.alarms.clear(PROJECTS_ALARM)
-    if (!await chrome.alarms.get(PROJECTS_ALARM)) await chrome.alarms.create(PROJECTS_ALARM, { delayInMinutes: REFRESH_PERIOD / 60000, periodInMinutes: REFRESH_PERIOD / 60000 })
+    if (!settings.projectsUrl && !settings.accessUrl) return extensionApi.alarms.clear(PROJECTS_ALARM)
+    if (!await extensionApi.alarms.get(PROJECTS_ALARM)) await extensionApi.alarms.create(PROJECTS_ALARM, { delayInMinutes: REFRESH_PERIOD / 60000, periodInMinutes: REFRESH_PERIOD / 60000 })
 }

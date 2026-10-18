@@ -7,7 +7,11 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "dev:firefox": "vite --mode firefox",
+    "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.firefox.json && tsc -p tsconfig.webextensions.json",
+    "build": "npm run typecheck && vite build",
+    "build:firefox": "npm run typecheck && vite build --mode firefox",
+    "lint:firefox": "addons-linter --self-hosted dist-firefox"
   },
   "dependencies": {
     "punycode": "^2.3.1",
@@ -16,9 +20,16 @@
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.7.1",
     "@tailwindcss/vite": "^4.3.3",
+    "@types/chrome": "^0.3.5",
+    "@types/firefox-webext-browser": "^143.0.1",
+    "@types/node": "^24.19.2",
+    "@types/webextension-polyfill": "^0.12.6",
     "@vitejs/plugin-vue": "^6.0.9",
+    "addons-linter": "^10.14.0",
     "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
     "vite": "^8.3.0",
-    "vite-plugin-zip-pack": "^1.2.4"
+    "vite-plugin-zip-pack": "^1.2.4",
+    "vue-tsc": "^3.3.13"
   }
 }

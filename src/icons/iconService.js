@@ -1,3 +1,4 @@
+import { extensionApi } from '../platform/extensionApi.js'
 import { iconRepository } from './iconRepository.js'
 import { catalogueOrigins, ICON_CACHE_WARNING } from './iconPolicy.js'
 import { createIconQueue } from './iconQueue.js'
@@ -6,10 +7,10 @@ import { closeIconDecoder } from './iconDecoder.js'
 import { hasOrigin } from '../utils/hostPermissions.js'
 
 const alarm = 'site-icons-resume'
-const broadcast = data => chrome.runtime.sendMessage({ type: 'icons:changed', ...data }).catch(() => {})
+const broadcast = data => extensionApi.runtime.sendMessage({ type: 'icons:changed', ...data }).catch(() => {})
 const schedule = async active => {
-    if (!active) { await chrome.alarms.clear(alarm); return }
-    if (!await chrome.alarms.get(alarm)) await chrome.alarms.create(alarm, { periodInMinutes: 0.5 })
+    if (!active) { await extensionApi.alarms.clear(alarm); return }
+    if (!await extensionApi.alarms.get(alarm)) await extensionApi.alarms.create(alarm, { periodInMinutes: 0.5 })
 }
 const queue = createIconQueue({ repository: iconRepository, fetchIcon: createIconFetcher(iconRepository), schedule, notify: broadcast })
 let work
@@ -48,6 +49,6 @@ export const clearSiteIcons = async () => {
     await iconRepository.clear()
     await broadcast({ cleared: true })
 }
-chrome.alarms.onAlarm.addListener(event => { if (event.name === alarm) resumeSiteIcons() })
-chrome.runtime.onStartup.addListener(resumeSiteIcons)
-chrome.runtime.onInstalled.addListener(resumeSiteIcons)
+extensionApi.alarms.onAlarm.addListener(event => { if (event.name === alarm) resumeSiteIcons() })
+extensionApi.runtime.onStartup.addListener(resumeSiteIcons)
+extensionApi.runtime.onInstalled.addListener(resumeSiteIcons)

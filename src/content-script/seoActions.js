@@ -1,3 +1,4 @@
+import { extensionApi } from '../platform/extensionApi.js'
 const state = { headings: false, external: false, noindex: false, alt: false, downloads: false, css: false }
 const sheets = new Map()
 let style, overlays, observer, scheduled = false
@@ -51,7 +52,7 @@ const render = () => {
                 link.addEventListener('click', async event => {
                     event.preventDefault(); event.stopPropagation()
                     try {
-                        const response = await chrome.runtime.sendMessage({ type: 'seo:downloadImage', payload: { url } })
+                        const response = await extensionApi.runtime.sendMessage({ type: 'seo:downloadImage', payload: { url } })
                         if (!response?.ok) throw new Error(response?.error || 'Не удалось скачать изображение')
                         link.textContent = 'Скачивается…'
                     } catch (error) { link.textContent = 'Ошибка скачивания'; link.title = error.message }

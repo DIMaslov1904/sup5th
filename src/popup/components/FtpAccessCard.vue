@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { ensureUnlocked } from '../unlockStore'
+import { ensureUnlocked, BIOMETRIC_ACTION_HANDLED } from '../unlockStore'
 import { getProjectAccessField } from '../data/projectData'
 import { getSshCommand } from '../../utils/ssh.js'
 import CredentialCard from './CredentialCard.vue'
@@ -15,8 +15,8 @@ const copy = async field => {
             if (field !== 'ssh') return getProjectAccessField(props.projectUrl, props.access.id, field)
             const [host, login] = await Promise.all(['ftpUrl', 'ftpLogin'].map(name => getProjectAccessField(props.projectUrl, props.access.id, name)))
             return getSshCommand(login, host)
-        })
-        await navigator.clipboard.writeText(value)
+        }, { intent: { type: 'project-copy', url: props.projectUrl, accessId: props.access.id, field } })
+        if (value !== BIOMETRIC_ACTION_HANDLED) await navigator.clipboard.writeText(value)
         error.value = false
         message.value = `${{ ftpUrl: 'Host', ftpLogin: 'Логин', ftpPassword: 'Пароль', ssh: 'SSH-команда' }[field]} скопирован${field === 'ssh' ? 'а' : ''}`
     } catch (reason) { error.value = true; message.value = reason.message }

@@ -1,4 +1,5 @@
 <script setup>
+import { extensionApi } from '../../platform/extensionApi.js'
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { loadProjectDetails } from '../data/projectData'
 import { getAdminUrl, getCmsIconPath, getTicketUrl } from '../../utils/projectUtils'
@@ -29,8 +30,8 @@ const reload = async (url = props.project.url) => {
 }
 watch(() => props.project.url, reload, { immediate: true })
 const changed = changes => { if (changes.projectData || changes.credentialSecurity || changes.unlockedCredentialVaultKey) reload() }
-onMounted(() => chrome.storage.onChanged.addListener(changed))
-onUnmounted(() => { revision++; chrome.storage.onChanged.removeListener(changed) })
+onMounted(() => extensionApi.storage.onChanged.addListener(changed))
+onUnmounted(() => { revision++; extensionApi.storage.onChanged.removeListener(changed) })
 </script>
 <template>
     <div class="grid min-w-0 grid-cols-1 gap-4 text-ui-text">

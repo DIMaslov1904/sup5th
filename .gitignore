@@ -104,6 +104,8 @@ dist
 .tern-port
 
 dist/
+dist-firefox/
+web-ext-artifacts/
 release/
 
 dev-*

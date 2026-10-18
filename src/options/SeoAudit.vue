@@ -1,4 +1,5 @@
 <script setup>
+import { extensionApi } from '../platform/extensionApi.js'
 import { computed, onUnmounted, ref } from 'vue'
 import { sendSeoToTab, fetchSeo } from '../utils/seoClient.js'
 import { collectSitemap, sitemapRoots } from '../utils/sitemap.js'
@@ -33,8 +34,8 @@ const score = computed(() => {
 
 const fetchBg = fetchSeo
 const getActiveSiteTab = async () => {
-    if (props.tab?.id) return chrome.tabs.get(props.tab.id)
-    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
+    if (props.tab?.id) return extensionApi.tabs.get(props.tab.id)
+    const [tab] = await extensionApi.tabs.query({ active: true, lastFocusedWindow: true })
     return tab?.url && /^https?:/.test(tab.url) ? tab : null
 }
 const parseTitle = text => parseMetaHtml(text).title
@@ -161,7 +162,7 @@ const buildChecks = (data, results) => {
     checks.value = list
 }
 
-const openTab = (url) => chrome.tabs.create({ url })
+const openTab = (url) => extensionApi.tabs.create({ url })
 </script>
 
 <template>

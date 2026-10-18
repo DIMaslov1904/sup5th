@@ -1,3 +1,5 @@
+import { extensionApi } from '../platform/extensionApi.js'
+import { injectExtensionScript } from '../platform/scriptInjection.js'
 import authScript from '../content-script/index.js?script&iife'
 import { AUTH_SESSIONS_KEY, SERVICES_KEY, getStoredData, storageGet, sessionGet, sessionSet, mutateStorage, currentGeneration, assertGeneration } from './storageRepository.js'
 import { getSecurityConfig, getUnlockedKey, readCredentialVault, vaultRevision, assertVaultRevision } from './credentialVault.js'
@@ -62,7 +64,7 @@ export const startAdminAuth = async payload => {
     const adminUrl = getAdminUrl(project)
     if (!adminUrl) throw new Error('Адрес админки не указан')
     if (!await hasOrigin(adminUrl)) throw new Error('Предоставьте доступ к сайту для автозаполнения')
-    const parsed = new URL(adminUrl), tab = await chrome.tabs.create({ url: 'about:blank' })
+    const parsed = new URL(adminUrl), tab = await extensionApi.tabs.create({ url: 'about:blank' })
     try {
         await mutateStorage(async () => {
             assertGeneration(generation); assertVaultRevision(expected)
@@ -72,12 +74,12 @@ export const startAdminAuth = async payload => {
                 targetPath: parsed.pathname.replace(/[^/]*$/, '') || '/', createdAt: Date.now(), expiresAt: Date.now() + 300000 }
             await sessionSet(AUTH_SESSIONS_KEY, sessions)
         })
-        await chrome.tabs.update(tab.id, { url: adminUrl })
-    } catch (error) { await chrome.tabs.remove(tab.id).catch(() => {}); throw error }
+        await extensionApi.tabs.update(tab.id, { url: adminUrl })
+    } catch (error) { await extensionApi.tabs.remove(tab.id).catch(() => {}); throw error }
     return { started: true }
 }
 const matchingSession = async sender => {
-    if (sender.id !== chrome.runtime.id || !Number.isInteger(sender.tab?.id) || sender.frameId !== 0) return null
+    if (sender.id !== extensionApi.runtime.id || !Number.isInteger(sender.tab?.id) || sender.frameId !== 0) return null
     const sessions = await sessionGet(AUTH_SESSIONS_KEY, {}), auth = sessions[sender.tab.id]
     if (!auth) return null
     const url = new URL(sender.url)
@@ -99,7 +101,7 @@ export const consumePendingAdminAuth = (_payload, sender) => mutateStorage(async
 export const injectAuthForTab = async (tabId, url) => {
     const auth = (await sessionGet(AUTH_SESSIONS_KEY, {}))[tabId]
     if (!auth || auth.expiresAt <= Date.now() || !url?.startsWith(auth.targetOrigin + '/')) return
-    await chrome.scripting.executeScript({ target: { tabId }, files: [authScript] })
+    await injectExtensionScript(tabId, authScript)
 }
 export const forgetAuthTab = tabId => mutateStorage(async () => {
     const sessions = await sessionGet(AUTH_SESSIONS_KEY, {})

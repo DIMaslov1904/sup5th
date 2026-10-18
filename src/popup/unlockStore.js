@@ -2,6 +2,9 @@
 // ensureUnlocked(action) — если хранилище заблокировано, показывает модалку
 // через системный аутентификатор и выполняет action после разблокировки.
 import { reactive } from 'vue'
+import { isFirefox } from '../platform/extensionApi.js'
+import { runBiometricPage } from '../utils/biometricPage.js'
+export { BIOMETRIC_ACTION_HANDLED } from '../utils/biometricPage.js'
 import {
     getCredentialSecurityStatus,
     unlockCredentialVaultWithHello
@@ -51,6 +54,10 @@ export const cancelUnlock = () => {
 export const ensureUnlocked = async (action, options) => {
     const status = await getCredentialSecurityStatus(false, false)
     if (!status.enabled || status.unlocked) return action()
+    if (isFirefox) {
+        const result = await runBiometricPage('unlock', options)
+        return options?.intent ? result : action()
+    }
     await showUnlock('hello', options)
     return action()
 }

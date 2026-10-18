@@ -1,4 +1,5 @@
 <script setup>
+import { extensionApi } from '../platform/extensionApi.js'
 import { defineAsyncComponent, onMounted, ref } from 'vue'
 import Instruction from './Instruction.vue'
 const SeoAudit = defineAsyncComponent(() => import('./SeoAudit.vue'))
@@ -9,13 +10,13 @@ import NotificationHost from '../popup/components/ui/NotificationHost.vue'
 import Tabs from '../popup/components/ui/Tabs.vue'
 
 const params = new URLSearchParams(location.search)
-const homeUrl = chrome.runtime.getURL('src/options/index.html')
+const homeUrl = extensionApi.runtime.getURL('src/options/index.html')
 const section = ref(['seo', 'sitemap', 'overview'].includes(params.get('tool')) ? params.get('tool') : 'instruction')
 const tab = ref(null), error = ref(''), ready = ref(false)
 onMounted(async () => {
     try {
         const id = Number(params.get('tabId'))
-        if (Number.isInteger(id) && id > 0) tab.value = await chrome.tabs.get(id)
+        if (Number.isInteger(id) && id > 0) tab.value = await extensionApi.tabs.get(id)
         if (!tab.value?.url || !/^https?:/.test(tab.value.url)) tab.value = null
     } catch { error.value = 'Исходная вкладка закрыта. Откройте инструменты заново из проверяемого сайта.' }
     finally { ready.value = true }

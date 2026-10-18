@@ -1,3 +1,5 @@
+import { extensionApi } from '../platform/extensionApi.js'
+import { trustedLocal } from '../platform/trustedStorage.js'
 import { base64ToBytes, bytesToBase64, importAesKey, openJson, sealJson } from './credentialCrypto.js'
 import { publicAccess, publicService, accessSecret } from './credentialRecords.js'
 export { publicAccess, publicService, accessSecret } from './credentialRecords.js'
@@ -65,7 +67,7 @@ export const lockCredentialVault = async () => {
     await mutateStorage(async () => {
         const sessions = await sessionGet(AUTH_SESSIONS_KEY, {})
         await sessionRemove([UNLOCKED_KEY, AUTH_SESSIONS_KEY])
-        await Promise.allSettled(Object.keys(sessions).map(id => chrome.tabs.sendMessage(Number(id), { type: 'auth:cancel' })))
+        await Promise.allSettled(Object.keys(sessions).map(id => extensionApi.tabs.sendMessage(Number(id), { type: 'auth:cancel' })))
     })
     return getSecurityStatus()
 }
@@ -84,17 +86,17 @@ export const disableCredentialProtection = () => mutateStorage(async () => {
     const restoredServices = services.map(record => restore(record, serviceSecrets))
     assertVaultRevision(expected)
     await storageSetMany({ [DATA_KEY]: { ...data, lastSuccessfulData: { ...data.lastSuccessfulData, accesses } }, [SERVICES_KEY]: restoredServices })
-    await chrome.storage.local.remove([SECURITY_KEY, VAULT_KEY])
+    await trustedLocal.remove([SECURITY_KEY, VAULT_KEY])
     await sessionRemove([UNLOCKED_KEY, AUTH_SESSIONS_KEY])
     return getSecurityStatus()
 })
 
 export const registerVaultIdleLock = () => {
-    chrome.idle.setDetectionInterval(600)
-    chrome.idle.onStateChanged.addListener(state => {
+    extensionApi.idle.setDetectionInterval(600)
+    extensionApi.idle.onStateChanged.addListener(state => {
         if (state !== 'active') lockCredentialVault().catch(error => console.error('[vault] idle lock', error))
     })
-    chrome.idle.queryState(600).then(state => {
+    extensionApi.idle.queryState(600).then(state => {
         if (state !== 'active') return lockCredentialVault()
     }).catch(error => console.error('[vault] idle state', error))
 }

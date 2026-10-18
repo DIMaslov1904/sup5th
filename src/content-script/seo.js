@@ -1,3 +1,4 @@
+import { extensionApi } from '../platform/extensionApi.js'
 import { collectSeoDom } from '../utils/seoDom.js'
 import { evaluateRobotsFile, collectIndexingRules } from '../utils/seoRules.js'
 import { getSeoActions, setSeoAction } from './seoActions.js'
@@ -20,27 +21,15 @@ const getHeadings = (level) => [...document.querySelectorAll(`h${level}`)]
     .filter(Boolean)
 
 // Запрос выполняется в background (нет ограничений CSP страницы)
-const fetchViaBackground = (url, options = {}) => new Promise((resolve) => {
-    chrome.runtime.sendMessage(
-        { type: 'seo:fetch', payload: { url, method: options.method || 'GET' } },
-        (response) => {
-            const error = chrome.runtime.lastError
-            if (error || !response?.ok) {
-                resolve({ ok: false, status: 0, url: '', headers: {}, text: '', ttfb: null })
-                return
-            }
-            const data = response.data || {}
-            resolve({
-                ok: Boolean(data.ok),
-                status: data.status || 0,
-                url: data.url || '',
-                headers: data.headers || {},
-                text: data.text || '',
-                ttfb: data.ttfb ?? null
-            })
-        }
-    )
-})
+const fetchViaBackground = async (url, options = {}) => {
+    const failed = { ok: false, status: 0, url: '', headers: {}, text: '', ttfb: null }
+    try {
+        const response = await extensionApi.runtime.sendMessage({ type: 'seo:fetch', payload: { url, method: options.method || 'GET' } })
+        if (!response?.ok) return failed
+        const data = response.data || {}
+        return { ok: Boolean(data.ok), status: data.status || 0, url: data.url || '', headers: data.headers || {}, text: data.text || '', ttfb: data.ttfb ?? null }
+    } catch { return failed }
+}
 
 const fetchPageInfo = fetchViaBackground
 
@@ -154,7 +143,7 @@ export const scanSeo = async () => {
 
 /** Регистрирует обработчик сообщений 'seo:scan' */
 const registerSeoHandler = () => {
-    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    extensionApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         if (message?.type === 'seo:context') {
             sendResponse({ ok: true, data: { documentId, url: location.href, actions: getSeoActions() } })
             return false

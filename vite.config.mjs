@@ -5,35 +5,43 @@ import tailwindcss from "@tailwindcss/vite"
 import vue from "@vitejs/plugin-vue"
 import { defineConfig } from "vite"
 import zipPack from "vite-plugin-zip-pack"
-import manifest from "./manifest.config.mjs"
+import { createManifest } from "./manifest.config.mjs"
 
 const rootDir = dirname(fileURLToPath(import.meta.url))
 
-export default defineConfig({
-  plugins: [
-    vue(),
-    tailwindcss(),
-    crx({ manifest }),
-    zipPack({
-      inDir: 'dist',
-      outDir: 'release',
-      outFileName: `sup5th-v${manifest.version}.zip`
-    })
-  ],
-  resolve: {
-    alias: {
-      "@": resolve(rootDir, "src")
-    }
-  },
-  build: {
-    rolldownOptions: {
-      input: { 'src/offscreen/index': resolve(rootDir, 'src/offscreen/index.html') }
+export default defineConfig(({ mode }) => {
+  const browser = mode === 'firefox' ? 'firefox' : 'chrome'
+  const manifest = createManifest(browser)
+  const outDir = browser === 'firefox' ? 'dist-firefox' : 'dist'
+  return {
+    plugins: [
+      vue(),
+      tailwindcss(),
+      crx({ manifest, browser }),
+      zipPack({
+        inDir: outDir,
+        outDir: 'release',
+        outFileName: browser === 'firefox' ? `sup5th-firefox-v${manifest.version}.zip` : `sup5th-v${manifest.version}.zip`
+      })
+    ],
+    resolve: {
+      alias: {
+        "@": resolve(rootDir, "src")
+      }
     },
-    modulePreload: false
-  },
-  server: {
-    watch: {
-      usePolling: true
+    build: {
+      outDir,
+      rolldownOptions: {
+        input: browser === 'chrome'
+          ? { 'src/offscreen/index': resolve(rootDir, 'src/offscreen/index.html') }
+          : { 'src/biometric/index': resolve(rootDir, 'src/biometric/index.html') }
+      },
+      modulePreload: false
+    },
+    server: {
+      watch: {
+        usePolling: true
+      }
     }
   }
 })

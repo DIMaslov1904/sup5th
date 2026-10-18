@@ -1,3 +1,4 @@
+import { extensionApi, isFirefox } from '../platform/extensionApi.js'
 // WebAuthn: PRF и локальный режим совместимости для macOS без PRF.
 // В режиме совместимости credential ID служит ключевым материалом и не сохраняется.
 //
@@ -20,7 +21,9 @@ export const getBiometricPlatform = () => {
     return /mac/i.test(platform) ? 'mac' : /win/i.test(platform) ? 'windows' : 'other'
 }
 
-export const biometricProviderHint = () => getBiometricPlatform() === 'mac'
+export const biometricProviderHint = () => isFirefox
+    ? 'Выберите доступный в Firefox провайдер passkey с поддержкой PRF. Проверка может использовать биометрию или системный PIN.'
+    : getBiometricPlatform() === 'mac'
     ? 'На Mac при создании ключа нажмите «Другой способ» → «Связка ключей iCloud» или выберите Google Password Manager. Вариант «Ваш профиль Chrome» может не поддерживать PRF.'
     : 'Выберите настроенный на устройстве провайдер passkey с поддержкой PRF. Проверка может использовать биометрию или системный PIN.'
 
@@ -78,6 +81,7 @@ export const getBiometricCapabilities = async () => {
         helloAvailable: await isBiometricAvailable(),
         available: typeof PublicKeyCredential !== 'undefined' &&
             typeof navigator.credentials?.create === 'function' && typeof navigator.credentials?.get === 'function',
+        unavailableReason: '',
         platform: getBiometricPlatform(),
         // В Chrome возможности расширений WebAuthn именуются как "extension:prf"
         prf: typeof caps?.['extension:prf'] === 'boolean' ? caps['extension:prf'] : null,
@@ -86,7 +90,7 @@ export const getBiometricCapabilities = async () => {
     }
 }
 
-const getRpId = () => (typeof chrome !== 'undefined' && chrome.runtime?.id) ? chrome.runtime.id : location.hostname
+const getRpId = () => (typeof extensionApi !== 'undefined' && extensionApi.runtime?.id) ? extensionApi.runtime.id : location.hostname
 
 // Метки PRF неизменны для совместимости с существующими хранилищами Windows.
 const deriveKek = async (secret, salt = HKDF_SALT, info = HKDF_INFO) => {
@@ -138,7 +142,7 @@ const getBiometricSecret = async ({ credentialId, salt, transports = ['internal'
     const options = {
         signal,
         publicKey: {
-            rpId: getRpId(),
+            ...(isFirefox ? {} : { rpId: getRpId() }),
             challenge: randomBytes(32),
             timeout: 120000,
             userVerification: 'required',
@@ -177,7 +181,7 @@ const getCompatibilityKek = async ({ credentialIdHash, keySalt, passkeyName, sig
     const credential = await navigator.credentials.get({
         signal,
         publicKey: {
-            rpId: getRpId(), challenge: randomBytes(32), timeout: 120000,
+            ...(isFirefox ? {} : { rpId: getRpId() }), challenge: randomBytes(32), timeout: 120000,
             userVerification: 'required', allowCredentials: []
         }
     })
@@ -206,7 +210,7 @@ const registerBiometricPasskey = async ({ signal } = {}) => {
     const options = {
         signal,
         publicKey: {
-            rp: { id: getRpId(), name: RP_NAME },
+            rp: { ...(isFirefox ? {} : { id: getRpId() }), name: RP_NAME },
             user: {
                 id: randomBytes(16),
                 name: passkeyName,

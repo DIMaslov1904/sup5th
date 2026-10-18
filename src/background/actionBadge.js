@@ -1,3 +1,4 @@
+import { extensionApi } from '../platform/extensionApi.js'
 import {getStoredData, storageGet} from './storageRepository.js'
 import {findProjectByUrl} from '../utils/projectUtils.js'
 import { SUPPORT_TRACKING_KEY, activeTicketFrom, formatTicketElapsed } from '../utils/supportTimer.js'
@@ -5,7 +6,7 @@ const ICON_SIZES = [16, 32]
 const PROJECT_ICONS = new Map() // size -> ImageData
 
 const loadIconBitmap = async (size) => {
-    const url = chrome.runtime.getURL(`src/assets/icons/icon_${size}.png`)
+    const url = extensionApi.runtime.getURL(`src/assets/icons/icon_${size}.png`)
     const response = await fetch(url)
     if (!response.ok) throw new Error(`Не удалось загрузить иконку ${size}`)
     return createImageBitmap(await response.blob())
@@ -48,33 +49,33 @@ export const setTicketTimerBadge = async (tabId, ticket) => {
     const elapsed = formatTicketElapsed(ticket.startedAt)
     let color = '#2563eb'
     if (Number.isInteger(tabId)) {
-        const [tab, data] = await Promise.all([chrome.tabs.get(tabId), getStoredData()])
+        const [tab, data] = await Promise.all([extensionApi.tabs.get(tabId), getStoredData()])
         if (findProjectByUrl(data.lastSuccessfulData.projects, tab?.url)) color = '#22c55e'
     }
-    await chrome.action.setBadgeBackgroundColor({ tabId, color })
-    await chrome.action.setBadgeTextColor({ tabId, color: '#ffffff' })
-    await chrome.action.setBadgeText({ tabId, text: elapsed })
-    await chrome.action.setTitle({ tabId, title: `Тикет №${ticket.ticketId} · ${elapsed}\nОтсчёт с ${new Date(ticket.startedAt).toLocaleString('ru-RU')}` })
+    await extensionApi.action.setBadgeBackgroundColor({ tabId, color })
+    await extensionApi.action.setBadgeTextColor({ tabId, color: '#ffffff' })
+    await extensionApi.action.setBadgeText({ tabId, text: elapsed })
+    await extensionApi.action.setTitle({ tabId, title: `Тикет №${ticket.ticketId} · ${elapsed}\nОтсчёт с ${new Date(ticket.startedAt).toLocaleString('ru-RU')}` })
 }
 
 const setProjectBadge = async (tabId) => {
     try {
         const imageData = {}
         for (const [size, data] of await getProjectIconData()) imageData[size] = data
-        await chrome.action.setIcon({ tabId, imageData })
-        await chrome.action.setBadgeText({ tabId, text: '' })
+        await extensionApi.action.setIcon({ tabId, imageData })
+        await extensionApi.action.setBadgeText({ tabId, text: '' })
     } catch (error) {
         // Fallback: если кастомная иконка недоступна — зелёный badge
         console.warn('[background] custom icon failed, fallback to badge', error)
-        await chrome.action.setBadgeBackgroundColor({ tabId, color: '#22c55e' })
-        await chrome.action.setBadgeText({ tabId, text: '✓' })
+        await extensionApi.action.setBadgeBackgroundColor({ tabId, color: '#22c55e' })
+        await extensionApi.action.setBadgeText({ tabId, text: '✓' })
     }
 }
 
 const clearProjectBadge = async (tabId) => {
     try {
-        await chrome.action.setIcon({ tabId, path: defaultIconPaths() })
-        await chrome.action.setBadgeText({ tabId, text: '' })
+        await extensionApi.action.setIcon({ tabId, path: defaultIconPaths() })
+        await extensionApi.action.setBadgeText({ tabId, text: '' })
     } catch (error) {
         console.warn('[background] reset icon failed', error)
     }
@@ -82,7 +83,7 @@ const clearProjectBadge = async (tabId) => {
 
 export const updateBadgeForTab = async (tabId) => {
     try {
-        const tab = await chrome.tabs.get(tabId)
+        const tab = await extensionApi.tabs.get(tabId)
         if (!tab?.url || !/^https?:/.test(tab.url)) {
             await clearProjectBadge(tabId)
             return
@@ -97,14 +98,14 @@ export const updateBadgeForTab = async (tabId) => {
         try {
             const active = activeTicketFrom(await storageGet(SUPPORT_TRACKING_KEY))
             if (active) await setTicketTimerBadge(tabId, active)
-            else await chrome.action.setTitle({ tabId, title: chrome.runtime.getManifest().name })
+            else await extensionApi.action.setTitle({ tabId, title: extensionApi.runtime.getManifest().name })
         } catch { /* Вкладка закрыта. */ }
     }
 }
 
 export const updateActiveTabIcon = async () => {
     try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+        const [tab] = await extensionApi.tabs.query({ active: true, currentWindow: true })
         if (tab?.id) await updateBadgeForTab(tab.id)
     } catch { }
 }

@@ -1,4 +1,5 @@
 <script setup>
+import { extensionApi } from '../../platform/extensionApi.js'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { cancelSiteIcons, loadIconStatus, refreshSiteIcons } from '../data/projectData'
 import Button from './ui/Button.vue'
@@ -17,8 +18,8 @@ const run = async action => {
 }
 const refresh = () => run(refreshSiteIcons)
 onMounted(() => {
- chrome.runtime.onMessage.addListener(changed); load() })
-onUnmounted(() => chrome.runtime.onMessage.removeListener(changed))
+ extensionApi.runtime.onMessage.addListener(changed); load() })
+onUnmounted(() => extensionApi.runtime.onMessage.removeListener(changed))
 </script>
 
 <template>

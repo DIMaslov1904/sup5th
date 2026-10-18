@@ -1,3 +1,4 @@
+import { extensionApi } from '../platform/extensionApi.js'
 const addresses = new Map()
 const rememberAddress = details => {
     if (!details.ip) return
@@ -7,8 +8,8 @@ const rememberAddress = details => {
     } catch { /* Ignore non-HTTP resources. */ }
 }
 const filter = { urls: ['http://*/*', 'https://*/*'], types: ['main_frame', 'xmlhttprequest', 'other'] }
-chrome.webRequest.onResponseStarted.addListener(rememberAddress, filter)
-chrome.webRequest.onCompleted.addListener(rememberAddress, filter)
+extensionApi.webRequest.onResponseStarted.addListener(rememberAddress, filter)
+extensionApi.webRequest.onCompleted.addListener(rememberAddress, filter)
 
 export const getServerAddress = async ({ url }) => {
     let parsed

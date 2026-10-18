@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { ensureUnlocked } from '../unlockStore'
+import { ensureUnlocked, BIOMETRIC_ACTION_HANDLED } from '../unlockStore'
 import { getProjectAccessField, getProjectAccessText, startAdminAuth } from '../data/projectData'
 import { getAdminUrl } from '../../utils/projectUtils'
 import CredentialCard from './CredentialCard.vue'
@@ -18,10 +18,10 @@ const run = async (kind, action, success = '') => {
 const copy = field => run(field, async () => {
     const value = await ensureUnlocked(() => field === 'text'
         ? getProjectAccessText(props.project.url, props.access.id)
-        : getProjectAccessField(props.project.url, props.access.id, field))
-    await navigator.clipboard.writeText(value)
+        : getProjectAccessField(props.project.url, props.access.id, field), { intent: { type: 'project-copy', url: props.project.url, accessId: props.access.id, field } })
+    if (value !== BIOMETRIC_ACTION_HANDLED) await navigator.clipboard.writeText(value)
 }, `${{ login: 'Логин', password: 'Пароль', text: 'Доступ' }[field]} скопирован`)
-const login = () => run('login-admin', () => ensureUnlocked(() => startAdminAuth(props.project.url, props.access.id), { refreshAfterUnlock: false }))
+const login = () => run('login-admin', () => ensureUnlocked(() => startAdminAuth(props.project.url, props.access.id), { refreshAfterUnlock: false, intent: { type: 'auth', url: props.project.url, accessId: props.access.id } }))
 </script>
 <template>
     <CredentialCard ref="card" :title="access.login || `Доступ ${index + 1}`" :menu-label="`Действия: ${access.login || index + 1}`" :message="message" :error="error">
