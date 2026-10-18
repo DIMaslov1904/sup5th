@@ -2,7 +2,7 @@
 import IconButton from './ui/IconButton.vue'
 import Input from './ui/Input.vue'
 import Button from './ui/Button.vue'
-import { securityStatus, refreshSecurityStatus, refreshJob } from '../backgroundState.js'
+import { securityStatus, refreshSecurityStatus, refreshJob, activeSupportTicket } from '../backgroundState.js'
 import { lockCredentialVault } from '../data/projectData.js'
 import { ensureUnlocked } from '../unlockStore.js'
 import { ref } from 'vue'
@@ -13,6 +13,14 @@ const search = defineModel('search', { type: String, default: '' })
 const emit = defineEmits(['search', 'ticket'])
 const locking = ref(false), lockError = ref('')
 const openingTicket = ref(false), ticketError = ref('')
+const openCurrentTicket = async () => {
+    if (!activeSupportTicket.value) { emit('ticket'); return }
+    if (openingTicket.value) return
+    openingTicket.value = true; ticketError.value = ''
+    try { await openTicket(activeSupportTicket.value.ticketId) }
+    catch (reason) { ticketError.value = reason.message || 'Не удалось открыть тикет' }
+    finally { openingTicket.value = false }
+}
 const pasteSearch = async event => {
     const number = searchTicketNumber(event.clipboardData?.getData('text/plain'))
     if (!number) return
@@ -54,7 +62,9 @@ const toggleLock = async () => {
                     class="pr-2 pl-8 text-xs"
                     @click="emit('search')" @keydown.enter.prevent="emit('search')" @paste="pasteSearch" />
             </label>
-            <Button variant="ghost" class="px-2 text-xs" @click="emit('ticket')">Тикет</Button>
+            <Button variant="ghost" class="px-2 text-xs tabular-nums" :disabled="openingTicket"
+                :title="activeSupportTicket ? `Отсчёт с ${new Date(activeSupportTicket.startedAt).toLocaleString('ru-RU')}` : 'Перейти к тикету'"
+                @click="openCurrentTicket">{{ activeSupportTicket ? activeSupportTicket.ticketId : 'Тикет' }}</Button>
             <IconButton :label="!securityStatus.enabled ? 'Защита выключена — настройки' : securityStatus.unlocked ? 'Заблокировать хранилище' : 'Разблокировать хранилище'" :disabled="locking || !securityStatus.ready" :class="securityStatus.enabled ? securityStatus.unlocked ? 'text-ui-success' : 'text-ui-warning' : 'text-ui-muted'" @click="toggleLock"><svg class="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path :d="securityStatus.enabled && !securityStatus.unlocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M16 10V6a4 4 0 0 0-8 0'"/><path d="M12 14v3"/></svg></IconButton>
             <IconButton label="Настройки" @click="modelItemMenu = 'settings'">
                 <svg class="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

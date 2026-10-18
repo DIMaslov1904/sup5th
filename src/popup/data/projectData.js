@@ -26,6 +26,8 @@ const callBackground = (type, payload = {}) => new Promise((resolve, reject) => 
 })
 
 export const loadApiSettings = () => callBackground('data:settings:get')
+export const loadActiveSupportTicket = () => callBackground('support:ticket:get')
+export const resetActiveSupportTicket = () => callBackground('support:ticket:reset')
 
 // Patch-сохранение: передаются только изменённые поля ({ projectsUrl } и/или { accessUrl })
 export const saveApiSettings = (patch) =>

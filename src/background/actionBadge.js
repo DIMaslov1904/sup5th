@@ -1,5 +1,6 @@
-import {getStoredData} from './storageRepository.js'
+import {getStoredData, storageGet} from './storageRepository.js'
 import {findProjectByUrl} from '../utils/projectUtils.js'
+import { SUPPORT_TRACKING_KEY, activeTicketFrom, formatTicketElapsed } from '../utils/supportTimer.js'
 const ICON_SIZES = [16, 32]
 const PROJECT_ICONS = new Map() // size -> ImageData
 
@@ -43,6 +44,14 @@ const getProjectIconData = async () => {
 
 const defaultIconPaths = () => Object.fromEntries(ICON_SIZES.map((size) => [size, `src/assets/icons/icon_${size}.png`]))
 
+export const setTicketTimerBadge = async (tabId, ticket) => {
+    const elapsed = formatTicketElapsed(ticket.startedAt)
+    await chrome.action.setBadgeBackgroundColor({ tabId, color: '#2563eb' })
+    await chrome.action.setBadgeTextColor({ tabId, color: '#ffffff' })
+    await chrome.action.setBadgeText({ tabId, text: elapsed })
+    await chrome.action.setTitle({ tabId, title: `Тикет №${ticket.ticketId} · ${elapsed}\nОтсчёт с ${new Date(ticket.startedAt).toLocaleString('ru-RU')}` })
+}
+
 const setProjectBadge = async (tabId) => {
     try {
         const imageData = {}
@@ -79,6 +88,12 @@ export const updateBadgeForTab = async (tabId) => {
         else await clearProjectBadge(tabId)
     } catch {
         // Вкладка закрыта или недоступна — игнорируем
+    } finally {
+        try {
+            const active = activeTicketFrom(await storageGet(SUPPORT_TRACKING_KEY))
+            if (active) await setTicketTimerBadge(tabId, active)
+            else await chrome.action.setTitle({ tabId, title: chrome.runtime.getManifest().name })
+        } catch { /* Вкладка закрыта. */ }
     }
 }
 

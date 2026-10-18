@@ -1,4 +1,5 @@
 import { startTicketCreation } from './supportTicket.js'
+import { startSupportWorkTracking } from './supportWorkTracking.js'
 
 startTicketCreation()
 
@@ -380,6 +381,7 @@ const waitForElement = (selector, targetDoc) => new Promise((resolve) => {
 
 const startObserverTicketWrapper = async () => {
     const ticketWrapper = await waitForElement('#ticket-wrapper', doc)
+    startSupportWorkTracking(doc)
     const observerRoot = ticketWrapper.parentElement || ticketWrapper
     if (observedRoots.has(observerRoot)) {
         ensureButtons()

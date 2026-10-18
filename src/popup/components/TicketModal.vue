@@ -5,6 +5,7 @@ import Input from './ui/Input.vue'
 import Button from './ui/Button.vue'
 import Message from './ui/Message.vue'
 import { openTicket, ticketDigits } from '../../utils/ticketNavigation.js'
+import { activeSupportTicket } from '../backgroundState.js'
 
 const open = defineModel('open', { type: Boolean, default: false })
 const input = ref(null)
@@ -35,6 +36,7 @@ const pasteTicket = event => {
 
 <template>
     <Modal v-model:open="open" title="Перейти к тикету">
+        <p v-if="activeSupportTicket" class="mb-4 text-xs text-ui-muted">В работе №{{ activeSupportTicket.ticketId }} · Отсчёт с {{ new Date(activeSupportTicket.startedAt).toLocaleString('ru-RU') }}</p>
         <form class="grid gap-4" @submit.prevent="go">
             <div class="grid gap-2">
                 <label for="ticket-number" class="text-xs text-ui-muted">Номер тикета</label>

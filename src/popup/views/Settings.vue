@@ -2,7 +2,8 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { loadApiSettings, saveApiSettings, loadProjectData, refreshAll, loadErrorLog, clearErrorLog, clearAllData, authorizeProjectsApi, authorizeAccessApi, enableHelloProtection, unlockCredentialVaultWithHello, lockCredentialVault, disableCredentialProtection } from '../data/projectData.js'
 import { getBiometricCapabilities, enableBiometricProtectionFlow, unlockWithBiometricFlow } from '../../utils/biometricHello.js'
-import { securityStatus, refreshJob, refreshSecurityStatus } from '../backgroundState.js'
+import { securityStatus, refreshJob, refreshSecurityStatus, activeSupportTicket } from '../backgroundState.js'
+import { resetActiveSupportTicket } from '../data/projectData.js'
 import { ensureUnlocked } from '../unlockStore.js'
 import Button from '../components/ui/Button.vue'
 import Input from '../components/ui/Input.vue'
@@ -123,6 +124,12 @@ const reset = () => {
                 </div>
             </Card>
             <template v-if="section === 'maintenance'">
+                <Card title="Текущий тикет">
+                    <p v-if="activeSupportTicket" class="text-xs text-ui-muted">№{{ activeSupportTicket.ticketId }} · Отсчёт с {{ date(activeSupportTicket.startedAt) }}</p>
+                    <p v-else class="text-xs text-ui-muted">Нет тикета в работе.</p>
+                    <Button size="sm" variant="secondary" class="mt-3" :disabled="Boolean(busy) || !activeSupportTicket"
+                        @click="run('ticket', resetActiveSupportTicket, 'Тикет сброшен')">Сбросить тикет</Button>
+                </Card>
                 <Card title="Иконки сайтов"><IconCacheControls /></Card>
                 <Card title="Журнал ошибок"><p v-if="!errors.length" class="text-xs text-ui-muted">Ошибок загрузки нет.</p><ul v-else class="grid gap-3 text-xs"><li v-for="(error,index) in errors" :key="index"><span class="text-ui-muted">{{ date(error.createdAt) }}</span> · {{ error.message }}</li></ul><Button size="sm" variant="secondary" class="mt-3" :disabled="Boolean(busy) || !errors.length" @click="run('errors',async () => { await clearErrorLog(); errors = [] })">Очистить журнал</Button></Card>
                 <Button variant="danger" size="sm" :disabled="Boolean(busy)" @click="reset">Сбросить все данные</Button>

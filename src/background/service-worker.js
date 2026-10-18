@@ -9,6 +9,7 @@ import { readApiSettings, saveApiSettings } from './apiSettings.js'
 import { refreshAll, getRefreshJob, cancelRefresh, scheduleRefresh, PROJECTS_ALARM, REFRESH_JOB_KEY } from './apiRefresh.js'
 import { toPublicData } from './catalogueData.js'
 import { updateActiveTabIcon, updateBadgeForTab } from './actionBadge.js'
+import { getActiveSupportTicket, observeSupportTicket, resetActiveSupportTicket, registerSupportTicketTracking } from './supportTicketTracking.js'
 import { startAdminAuth, authContext, consumePendingAdminAuth, injectAuthForTab, forgetAuthTab, copyProjectAccessText, getProjectDetails, getProjectAccessField, getServices, getServiceField } from './projectAccess.js'
 
 registerPopupSession()
@@ -18,6 +19,7 @@ const ready = storageReady.then(async reset => {
     const job = await getRefreshJob()
     if (job.running) await sessionSet(REFRESH_JOB_KEY, { ...job, running: false, state: 'interrupted', finishedAt: Date.now(), errors: ['Фоновый процесс был перезапущен. Повторите загрузку.'] })
 })
+registerSupportTicketTracking(ready)
 const syncCatalogueIcons = async options => {
     const [data, services] = await Promise.all([getStoredData(), storageGet(SERVICES_KEY, [])])
     return syncSiteIcons([...toPublicData(data).lastSuccessfulData.projects, ...services], options)
@@ -46,6 +48,8 @@ const authorize = async type => {
     await chrome.tabs.create({ url }); return { opened: true }
 }
 const handlers = {
+    'support:ticket:get': getActiveSupportTicket, 'support:ticket:reset': resetActiveSupportTicket,
+    'support:ticket:observe': observeSupportTicket,
     'seo:fetch': fetchSeoResource, 'seo:downloadImage': downloadSeoImage, 'seo:serverIp': getServerAddress,
     'icons:status': getSiteIconStatus, 'icons:refresh': () => syncCatalogueIcons({ force: true }), 'icons:cancel': cancelSiteIcons,
     'services:get': getServices, 'services:field': getServiceField,
@@ -69,7 +73,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!handler) return false
     const internal = sender.id === chrome.runtime.id && sender.url?.startsWith(chrome.runtime.getURL(''))
     const contentAllowed = ['auth:context', 'auth:consume', 'seo:fetch', 'seo:downloadImage'].includes(message.type)
-    if (!internal && (!contentAllowed || sender.id !== chrome.runtime.id || sender.frameId !== 0 || !/^https?:\/\//.test(sender.url || ''))) {
+    const supportAllowed = message.type === 'support:ticket:observe' && /^https:\/\/support\.5th\.ru\//.test(sender.url || '')
+    if (!internal && ((!contentAllowed && !supportAllowed) || sender.id !== chrome.runtime.id || sender.frameId !== 0 || !/^https?:\/\//.test(sender.url || ''))) {
         sendResponse({ ok: false, error: 'Операция доступна только в интерфейсе расширения' }); return false
     }
     ready.then(() => handler(message.payload || {}, sender)).then(data => sendResponse({ ok: true, data }))
