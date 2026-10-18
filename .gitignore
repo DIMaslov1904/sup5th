@@ -104,6 +104,6 @@ dist
 .tern-port
 
 dist/
-dist-zip/
+release/
 
 dev-*

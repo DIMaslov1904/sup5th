@@ -13,7 +13,9 @@ npm run build
 npm test
 ```
 
-Для установки распакованной сборки откройте `chrome://extensions`, включите режим разработчика и выберите `dist`. ZIP с версией из manifest создаётся в `dist-zip`.
+Для установки распакованной сборки откройте `chrome://extensions`, включите режим разработчика и выберите `dist`. ZIP `sup5th-v<версия>.zip` создаётся в `release`.
+
+Манифест формируется из `manifest.config.mjs`: версия (`version`), описание (`description`) и отображаемое название (`displayName`) задаются в `package.json`. Поле `name` в `package.json` остаётся техническим именем npm-пакета. Готовый `manifest.json` создаётся в `dist` при сборке.
 
 ## Интерфейс
 

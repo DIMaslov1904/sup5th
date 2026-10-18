@@ -1,9 +1,12 @@
-{
+import { defineManifest } from "@crxjs/vite-plugin"
+import pkg from "./package.json" with { type: "json" }
+
+export default defineManifest({
   "manifest_version": 3,
-  "name": "SUP 5th",
-  "short_name": "SUP5th",
-  "version": "4.0.2",
-  "description": "Ассистент 5th: проекты и доступы, SEO-анализ страниц и интеграция с тикетами поддержки",
+  "name": pkg.displayName,
+  "short_name": pkg.name,
+  "version": pkg.version,
+  "description": pkg.description,
   "homepage_url": "https://github.com/DIMaslov1904",
   "action": {
     "default_popup": "src/popup/index.html"
@@ -52,4 +55,4 @@
     "extension_pages": "script-src 'self'; object-src 'self'"
   },
   "minimum_chrome_version": "130"
-}
+})

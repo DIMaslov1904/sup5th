@@ -5,7 +5,7 @@ import tailwindcss from "@tailwindcss/vite"
 import vue from "@vitejs/plugin-vue"
 import { defineConfig } from "vite"
 import zipPack from "vite-plugin-zip-pack"
-import manifest from "./manifest.json" with { type: "json" }
+import manifest from "./manifest.config.mjs"
 
 const rootDir = dirname(fileURLToPath(import.meta.url))
 
@@ -16,7 +16,7 @@ export default defineConfig({
     crx({ manifest }),
     zipPack({
       inDir: 'dist',
-      outDir: 'dist-zip',
+      outDir: 'release',
       outFileName: `sup5th-v${manifest.version}.zip`
     })
   ],
