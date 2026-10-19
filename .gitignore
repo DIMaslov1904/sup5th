@@ -109,3 +109,6 @@ web-ext-artifacts/
 release/
 
 dev-*
+
+__pycache__/
+*.py[cod]

@@ -1,0 +1,38 @@
+{
+  "result": {
+    "access": [
+      [
+        "Демо: Example.com",
+        "https://example.com/",
+        "demo-editor\ndemo-viewer",
+        "DEMO-ONLY-editor-123!\nDEMO-ONLY-viewer-456!",
+        "sftp://files.demo.invalid",
+        "demo-files",
+        "DEMO-ONLY-files-789!"
+      ],
+      [
+        "Демо: Example.org",
+        "https://example.org/",
+        "demo-owner",
+        "DEMO-ONLY-owner-123!",
+        "",
+        "",
+        ""
+      ]
+    ],
+    "services": [
+      [
+        "Демо: сервис с доступом",
+        "https://example.com/",
+        "demo-service",
+        "DEMO-ONLY-service-123!"
+      ],
+      [
+        "Демо: сервис без пароля",
+        "https://example.org/",
+        "",
+        ""
+      ]
+    ]
+  }
+}

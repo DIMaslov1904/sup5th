@@ -2,9 +2,23 @@
 
 Manifest V3: каталог проектов и доступов, заполнение форм авторизации, SEO страницы, аудит ссылок, объединение sitemap и локальные инструменты.
 
+Открытый проект под [MIT](LICENSE). Исходный код, тестовые данные и релизы хранятся в одном репозитории.
+
+[Скачать сборку](https://github.com/DIMaslov1904/sup5th/releases) · [Тестирование](docs/TESTING.md) · [Выпуск версий](docs/RELEASING.md) · [Подготовка к Opera Add-ons](docs/OPERA-ADDONS.md) · [Данные и конфиденциальность](docs/PRIVACY.md)
+
+## Установка
+
+| Браузер | Пакет | Установка и обновления |
+| --- | --- | --- |
+| Opera Desktop | `sup5th-opera-v<версия>.zip` | До одобрения магазина: распаковать, открыть `opera://extensions`, включить режим разработчика и загрузить папку. Обновлять вручную. После публикации использовать Opera Add-ons. |
+| Chrome 130+ | `sup5th-chrome-v<версия>.zip` | Распаковать и загрузить в `chrome://extensions` в режиме разработчика. Обновлять вручную в той же папке. |
+| Firefox 140+ | `sup5th-firefox-v<версия>.xpi` | Подписанный Mozilla XPI устанавливается через `about:addons` и поддерживает автообновления. ZIP без подписи — только для временной установки и отправки Mozilla. |
+
+Архивы GitHub **Source code** содержат исходники; для установки выбирайте пакет нужного браузера из списка assets релиза. Chrome Web Store не используется. Публикация в Opera Add-ons ещё не выполнена.
+
 ## Запуск
 
-Node.js 24.13.1. Расширение рассчитано на Chrome 130+.
+Node.js 24.13.1. Сборка Chromium используется для Chrome и Opera; Firefox имеет отдельную сборку.
 
 ```bash
 npm ci
@@ -26,7 +40,7 @@ npm run lint:firefox
 
 Сборка находится в `dist-firefox`, архив — `release/sup5th-firefox-v<версия>.zip`. Для временной установки в Firefox откройте `about:debugging#/runtime/this-firefox`, нажмите «Загрузить временное дополнение» и выберите `dist-firefox/manifest.json`.
 
-Пакеты для установки публикуются отдельно в [DIMaslov1904/sup5th](https://github.com/DIMaslov1904/sup5th). В Firefox manifest включён постоянный `update_url`: `https://raw.githubusercontent.com/DIMaslov1904/sup5th/main/updates/firefox.json`. В канал автообновлений попадают только стабильные подписанные XPI; релизы Chrome обновляют собственный справочный JSON и не меняют канал Firefox. Порядок именования пакетов и выпуска описан в публичном репозитории.
+Пакеты публикуются в [Releases этого репозитория](https://github.com/DIMaslov1904/sup5th/releases). В Firefox manifest включён постоянный `update_url`: `https://raw.githubusercontent.com/DIMaslov1904/sup5th/main/updates/firefox.json`. В канал автообновлений попадают только стабильные подписанные XPI; ZIP для Chrome, Opera и неподписанный Firefox ZIP не меняют канал Firefox. [Порядок выпуска](docs/RELEASING.md).
 
 Цель первого этапа — Firefox Desktop 140+. Фон работает как непостоянная страница Manifest V3.
 
