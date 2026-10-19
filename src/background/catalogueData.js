@@ -1,4 +1,4 @@
-import {siteKey, siteHref, createAccessIndex} from '../utils/siteAddress.js'
+import {normalizeSiteRule, createAccessIndex} from '../utils/siteAddress.js'
 import {publicAccess} from './credentialRecords.js'
 const asText = (value) => (value == null ? '' : String(value).trim())
 
@@ -8,7 +8,7 @@ export const normalizeProject = (item) => {
         : item || {}
     return {
         name: asText(value.name || value.title || value.project),
-        url: siteKey(value.url || value.site || value.domain), siteUrl: siteHref(value.url || value.site || value.domain),
+        ...normalizeSiteRule(value.url || value.site || value.domain),
         urlAdmin: asText(value.urlAdmin || value.adminUrl),
         cms: asText(value.cms) || 'Нет',
         manual: asText(value.manual),
@@ -24,8 +24,7 @@ const normalizeAccess = (item) => {
     const logins = asText(value.login || value.username).split(/\r?\n/).map((entry) => entry.trim())
     const passwords = asText(value.password).split(/\r?\n/).map((entry) => entry.trim())
     const name = asText(value.name || value.title || value.project)
-    const url = siteKey(value.url || value.site || value.domain)
-    const siteUrl = siteHref(value.url || value.site || value.domain)
+    const site = normalizeSiteRule(value.url || value.site || value.domain)
     const ftpValue = value.ftp && typeof value.ftp === 'object' ? value.ftp : {}
     const ftp = {
         url: asText(ftpValue.url || value.ftpUrl),
@@ -36,15 +35,14 @@ const normalizeAccess = (item) => {
 
     const accesses = Array.from({ length: count }, (_, index) => ({
         name,
-        url,
-        siteUrl,
+        ...site,
         login: logins[index] || '',
         password: passwords[index] || ''
     })).filter((access) => access.login || access.password)
 
     // FTP/SSH belongs to the source row, not to each multiline site account.
     if (ftp.url || ftp.login || ftp.password) {
-        if (!accesses.length) accesses.push({ name, url, siteUrl, login: '', password: '' })
+        if (!accesses.length) accesses.push({ name, ...site, login: '', password: '' })
         accesses[0].ftp = ftp
     }
     return accesses
@@ -80,11 +78,14 @@ export const toPublicData = (data) => {
     const snapshot = data.lastSuccessfulData
     const findAccesses = createAccessIndex(snapshot.accesses)
     const projectsByUrl = new Map(snapshot.projects.filter((project) => project.url).map((project) => [project.url, project]))
+    const explicitProjectUrls = new Set(projectsByUrl.keys())
 
     for (const access of snapshot.accesses) {
-        if (!access.url) continue
+        if (!access.url || explicitProjectUrls.has(access.url)) continue
         if (!projectsByUrl.has(access.url)) {
-            projectsByUrl.set(access.url, { name: access.name, url: access.url, siteUrl: access.siteUrl, cms: 'Нет' })
+            projectsByUrl.set(access.url, { name: access.name, url: access.url, siteUrl: access.siteUrl, includeSubdomains: access.includeSubdomains !== false, cms: 'Нет' })
+        } else if (access.includeSubdomains !== false) {
+            projectsByUrl.get(access.url).includeSubdomains = true
         }
     }
 

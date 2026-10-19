@@ -2,7 +2,7 @@
 // identities retain an ID only when the full record still matches exactly.
 export const assignLocalIds = (records, previous, identity) => {
     const oldGroups = Map.groupBy(previous, identity), newGroups = Map.groupBy(records, identity)
-    const fingerprint = record => JSON.stringify([record.url, record.siteUrl, record.name, record.login, record.password || '',
+    const fingerprint = record => JSON.stringify([record.url, record.siteUrl, record.includeSubdomains !== false, record.name, record.login, record.password || '',
         record.ftp ? [record.ftp.url, record.ftp.login, record.ftp.password] : null])
     const used = new Set()
     return records.map(record => {

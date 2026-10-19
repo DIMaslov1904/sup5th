@@ -11,7 +11,7 @@ export const findProjectByUrl = (projects, value) => {
         try { candidate = parseSiteAddress(project.url) } catch { continue }
         if (candidate.port !== target.port) continue
         if (candidate.hostname === target.hostname) return project
-        if (target.hostname.endsWith('.' + candidate.hostname) && candidate.hostname.length > length) { match = project; length = candidate.hostname.length }
+        if (project.includeSubdomains !== false && target.hostname.endsWith('.' + candidate.hostname) && candidate.hostname.length > length) { match = project; length = candidate.hostname.length }
     }
     return match
 }

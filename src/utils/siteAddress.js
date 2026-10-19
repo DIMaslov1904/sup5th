@@ -9,6 +9,14 @@ export const parseSiteAddress = value => {
 export const siteKey = value => { try { return parseSiteAddress(value).host.toLowerCase() } catch { return '' } }
 export const siteHref = value => { try { return parseSiteAddress(value).href } catch { return '' } }
 
+// The leading ! is catalogue syntax, never part of a navigable URL.
+export const normalizeSiteRule = value => {
+    const text = String(value || '').trim()
+    const includeSubdomains = !text.startsWith('!')
+    const address = includeSubdomains ? text : text.slice(1).trim()
+    return { url: siteKey(address), siteUrl: siteHref(address), includeSubdomains }
+}
+
 export const createAccessIndex = accesses => {
     const records = new Map()
     for (const access of accesses) {
@@ -24,7 +32,8 @@ export const createAccessIndex = accesses => {
         let hostname = parsed.hostname
         while (hostname) {
             const found = records.get(hostname + suffix)
-            if (found) return found
+            const matches = hostname === parsed.hostname ? found : found?.filter(access => access.includeSubdomains !== false)
+            if (matches?.length) return matches
             if (hostname.startsWith('[') || !hostname.includes('.')) break
             hostname = hostname.slice(hostname.indexOf('.') + 1)
         }
