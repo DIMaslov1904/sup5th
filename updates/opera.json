@@ -1,1 +1,6 @@
-{}
+{
+  "version": "4.0.3",
+  "download_url": "https://github.com/DIMaslov1904/sup5th/releases/download/v4.0.3/sup5th-opera-v4.0.3.zip",
+  "sha256": "cea630c59a245f85527a459df1fe36e0961a9444d920b18286a40805dd507957",
+  "minimum_chrome_version": "130"
+}
