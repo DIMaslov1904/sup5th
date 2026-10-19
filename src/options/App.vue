@@ -28,7 +28,7 @@ const select = name => { section.value = name; params.set('tool', name); history
         <div class="mx-auto max-w-5xl px-5 py-6">
             <header class="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-ui-border/70 pb-4">
                 <a :href="homeUrl" class="font-semibold tracking-wide text-ui-accent">SUP 5th</a>
-                <Tabs v-model="section" :items="[['instruction','Инструкция'],['overview','SEO страницы'],['seo','Детальный аудит'],['sitemap','Единый sitemap']]" label="Инструменты расширения" @update:model-value="select" />
+                <Tabs v-model="section" :items="[['instruction','Инструкции'],['overview','SEO страницы'],['seo','Детальный аудит'],['sitemap','Единый sitemap']]" label="Инструменты расширения" @update:model-value="select" />
             </header>
             <Instruction v-if="section === 'instruction'" />
             <template v-else-if="ready">

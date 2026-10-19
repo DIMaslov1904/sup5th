@@ -1,5 +1,4 @@
 <script setup>
-import { extensionApi } from '../../platform/extensionApi.js'
 import { computed, onMounted, ref } from 'vue'
 import { saveApiSettings, refreshAll, authorizeProjectsApi, authorizeAccessApi } from '../data/projectData.js'
 import { getBiometricCapabilities } from '../../utils/biometricHello.js'
@@ -12,13 +11,13 @@ import Card from '../components/ui/Card.vue'
 import Message from '../components/ui/Message.vue'
 import Notification from '../components/ui/Notification.vue'
 import BiometricProviderHelp from '../components/BiometricProviderHelp.vue'
+import CopyAccessApiCode from '../components/CopyAccessApiCode.vue'
 
 const props = defineProps({ step: { type: String, required: true }, settings: { type: Object, required: true } })
 const emit = defineEmits(['completed'])
 const projectsUrl = ref(props.settings.projectsUrl || ''), accessUrl = ref(props.settings.accessUrl || '')
 const busy = ref(false), error = ref(''), apiFailed = ref(false), capabilities = ref(null)
 const stepNumber = computed(() => ['projects', 'security', 'accesses'].indexOf(props.step) + 1)
-const optionsUrl = extensionApi.runtime.getURL('src/options/index.html')
 const run = async action => {
     if (busy.value) return
     busy.value = true; error.value = ''
@@ -85,7 +84,7 @@ onMounted(async () => {
             <form class="grid gap-3" @submit.prevent="connect('accesses')">
                 <label for="setup-accesses" class="text-xs text-ui-muted">API личных доступов и сервисов</label>
                 <Input id="setup-accesses" v-model="accessUrl" type="url" required placeholder="https://script.google.com/macros/s/…/exec" :disabled="busy" />
-                <p class="text-xs text-ui-muted">Как получить адрес API — <a :href="optionsUrl" target="_blank" rel="noreferrer" class="ui-link">инструкция</a></p>
+                <CopyAccessApiCode />
                 <Button type="submit" :loading="busy" :disabled="refreshJob.running">Подключить и завершить</Button>
                 <Button variant="ghost" :disabled="busy" @click="run(() => advance('done'))">Пропустить и завершить</Button>
             </form>

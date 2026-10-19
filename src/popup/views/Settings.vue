@@ -17,13 +17,13 @@ import Preloader from '../components/ui/Preloader.vue'
 import IconCacheControls from '../components/IconCacheControls.vue'
 import BiometricProviderHelp from '../components/BiometricProviderHelp.vue'
 import { useApiAutosave } from '../useApiAutosave.js'
+import CopyAccessApiCode from '../components/CopyAccessApiCode.vue'
 
 const section = ref('connection'), settings = ref({ projectsUrl: '', accessUrl: '' }), data = ref(null), errors = ref([])
 const savedSettings = ref({ projectsUrl: '', accessUrl: '' })
 const loaded = ref(false), busy = ref(''), message = ref({ type: 'info', text: '' }), caps = ref({ helloAvailable: false, prf: false })
 const sections = [['connection','Подключение'],['data','Загрузка'],['security','Защита'],['maintenance','Обслуживание']]
 const version = extensionApi.runtime.getManifest().version
-const optionsUrl = extensionApi.runtime.getURL('src/options/index.html')
 const snapshot = computed(() => data.value?.lastSuccessfulData)
 const needsAuthorization = type => {
     const url = savedSettings.value[type === 'projects' ? 'projectsUrl' : 'accessUrl']
@@ -102,7 +102,7 @@ const reset = () => {
                     <Input :model-value="settings[field]" :aria-label="`URL API: ${title}`" :aria-invalid="Boolean(autosave.states[field].error)" :aria-describedby="autosave.states[field].status !== 'idle' ? `api-${field}-status` : undefined" placeholder="URL веб-приложения Apps Script" :disabled="Boolean(busy)" @update:model-value="value => autosave.update(field, value)" @blur="autosave.flush(field)" @keydown.enter.prevent="autosave.flush(field)" />
                     <p v-if="autosave.states[field].status !== 'idle'" :id="`api-${field}-status`" role="status" aria-live="polite" class="mt-2 text-xs" :class="autosave.states[field].error ? 'text-ui-danger' : 'text-ui-muted'">{{ autosave.states[field].error || saveLabels[autosave.states[field].status] }}</p>
                     <p v-if="type === 'projects'" class="mt-2 text-xs text-ui-muted">Адрес из таблицы «База знаний 5th».</p>
-                    <p v-else class="mt-2 text-xs text-ui-muted">Как получить адрес API — <a :href="optionsUrl" target="_blank" rel="noreferrer" class="ui-link underline decoration-ui-accent/40">инструкция</a></p>
+                    <CopyAccessApiCode v-else class="mt-2" />
                     <Message v-if="data?.[type === 'projects' ? 'projectApiStatus' : 'accessApiStatus']" type="warning" class="mt-2">{{ data[type === 'projects' ? 'projectApiStatus' : 'accessApiStatus'] === 'access_denied' ? 'Доступ к таблице ограничен. Обратитесь к владельцу.' : 'Войдите в Google и подтвердите доступ, затем повторите загрузку.' }}</Message>
                     <Button v-if="needsAuthorization(type)" size="sm" variant="ghost" class="mt-2" :disabled="Boolean(busy)" @click="authorize(type)">Открыть API / авторизацию</Button>
                 </Card>
