@@ -2,6 +2,12 @@
   <div
     class="w-full text-ui-text text-[13px] leading-relaxed">
     <div class="max-w-3xl">
+      <section class="mb-6 grid gap-2">
+        <h2 class="ui-title">Тестовые данные</h2>
+        <p>Для проверки без Google-аккаунта вставьте эти URL в настройки API. Используйте отдельный профиль браузера: загрузка примеров заменит ваш текущий каталог. Все логины и пароли вымышленные.</p>
+        <p>API проектов: <a class="break-all text-ui-accent" href="https://raw.githubusercontent.com/DIMaslov1904/sup5th/main/examples/projects.json" target="_blank" rel="noreferrer">https://raw.githubusercontent.com/DIMaslov1904/sup5th/main/examples/projects.json</a></p>
+        <p>API доступов: <a class="break-all text-ui-accent" href="https://raw.githubusercontent.com/DIMaslov1904/sup5th/main/examples/accesses.json" target="_blank" rel="noreferrer">https://raw.githubusercontent.com/DIMaslov1904/sup5th/main/examples/accesses.json</a></p>
+      </section>
       <h1 class="ui-title mb-4">Инструкция по созданию api в гугл таблице</h1>
       <ol>
         <li>Переходим в Вашу таблицу доступов</li>
@@ -46,6 +52,11 @@
           Вставляем в поле <b class="bg-ui-raised px-2 rounded">API получения личных доступов</b>
         </li>
       </ol>
+      <section class="mt-6 grid gap-2">
+        <h2 class="ui-title">Фоновая работа</h2>
+        <p>Расширение раз в неделю обновляет данные из настроенных API и загружает иконки сайтов. На support.5th.ru локально учитывает время работы с тикетом; при бездействии блокирует защищённые доступы. SEO-проверки запускаются при открытии SEO, счётчик Яндекса — по кнопке «Получить» с передачей домена сайта.</p>
+      </section>
+      <p class="mt-6"><a class="text-ui-accent" :href="noticesUrl" target="_blank" rel="noreferrer">Лицензии сторонних библиотек</a></p>
     </div>
   </div>
 </template>
@@ -53,6 +64,9 @@
 <script setup>
 import { ref } from "vue";
 import Button from '../popup/components/ui/Button.vue'
+import { extensionApi } from '../platform/extensionApi.js'
+
+const noticesUrl = extensionApi.runtime.getURL('THIRD-PARTY-NOTICES.txt')
 
 defineEmits(["return"]);
 

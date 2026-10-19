@@ -16,9 +16,7 @@ import Select from './ui/Select.vue'
 import PropertyList from './ui/PropertyList.vue'
 import OpenGraphPreview from './OpenGraphPreview.vue'
 import { pageWeightRows } from '../../utils/pageWeightDisplay.js'
-import { useColorScheme } from '../useColorScheme.js'
-import { yandexCounterUrl } from '../../utils/yandexCounter.js'
-const theme = useColorScheme()
+import YandexCounter from './YandexCounter.vue'
 
 const props = defineProps({ tab: Object, autoScan: { type: Boolean, default: true }, session: Object })
 const notification = ref(''), serverIp = ref(''), serverIpLoading = ref(false)
@@ -147,7 +145,6 @@ const overview = computed(() => report.value ? [
     ['Язык',report.value.lang || 'Не указан'], ['Canonical',report.value.canonical || 'Не указан'], ['Viewport',report.value.viewport ? 'Есть' : 'Нет'],
     ['Редирект',report.value.redirected ? report.value.finalUrl : 'Нет'], ['TTFB повторного запроса',report.value.response.ttfb == null ? 'Не измерен' : report.value.response.ttfb + ' мс']
 ].map(([label,value]) => ({ label, value })).concat(pageWeightRows(report.value.pageWeight)) : [])
-const yandexCounter = computed(() => report.value ? yandexCounterUrl(report.value.url, theme.value) : '')
 const tools = computed(() => {
     if (!report.value) return []
     const url = encodeURIComponent(report.value.url), host = encodeURIComponent(new URL(report.value.url).hostname), title = encodeURIComponent('"' + report.value.title + '"')
@@ -179,7 +176,7 @@ const tools = computed(() => {
             <template v-if="section === 'overview'">
                 <Card title="Метаданные страницы">
                     <PropertyList :items="overview" />
-                    <div class="mt-3 grid gap-1 text-xs"><span class="text-ui-muted/70">Яндекс ИКС</span><img :src="yandexCounter" alt="Яндекс ИКС" class="rounded-lg" /></div>
+                    <YandexCounter :key="`${tab?.id}:${report.url}:${report.scannedAt}`" :page-url="report.url" />
                 </Card>
                 <Message v-if="report.titles.length !== 1 || report.canonicals.length > 1 || report.metaTags.some(item => !item.inHead)" type="error">Проверьте количество Title/Canonical и расположение метатегов: есть дубли или теги вне head.</Message>
                 <details class="ui-panel text-xs"><summary class="cursor-pointer">Все метатеги ({{ report.metaTags.length }})</summary><PropertyList :items="allMeta" class="mt-3" /></details>

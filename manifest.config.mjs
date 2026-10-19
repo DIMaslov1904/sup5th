@@ -9,7 +9,7 @@ const manifest = {
   "short_name": pkg.name,
   "version": pkg.version,
   "description": pkg.description,
-  "homepage_url": "https://github.com/DIMaslov1904",
+  "homepage_url": "https://github.com/DIMaslov1904/sup5th",
   "action": {
     "default_popup": "src/popup/index.html"
   },

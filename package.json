@@ -2,7 +2,7 @@
   "name": "sup5th",
   "displayName": "SUP 5th",
   "description": "Ассистент 5th: проекты и доступы, SEO-анализ страниц и интеграция с тикетами поддержки",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "type": "module",
   "private": true,
   "scripts": {
@@ -31,5 +31,6 @@
     "vite": "^8.3.0",
     "vite-plugin-zip-pack": "^1.2.4",
     "vue-tsc": "^3.3.13"
-  }
+  },
+  "license": "MIT"
 }
