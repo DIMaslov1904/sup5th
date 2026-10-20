@@ -12,8 +12,7 @@ for (const browser of ['chromium', 'firefox']) {
     if (!existsSync(source)) throw new Error(`Missing build: ${source}`)
 }
 writeFileSync('release/NOTES.md', `SUP 5th ${version}\n\n` +
-    '- Chromium: один ZIP для Chrome, Opera, Edge и других браузеров на Chromium. Установка из распакованной папки.\n' +
-    '- Firefox: неподписанный ZIP для проверки и отправки Mozilla. Подписанный XPI добавляется отдельно.\n\n' +
-    'Проверка обновлений: Настройки → Обновления. Подписанный XPI Firefox добавляется к этому релизу вручную.\n\n' +
+    '- Chromium: для браузеров на Chromium. Установка из распакованной папки.\n' +
+    '- Firefox: подписанное расширение для Firefox.\n\n' +
     '[Установка](https://github.com/DIMaslov1904/sup5th#readme)\n')
 console.log(`Prepared packages for ${tag}`)
