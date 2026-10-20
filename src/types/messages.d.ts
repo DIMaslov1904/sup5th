@@ -2,6 +2,8 @@ import type { ActiveSupportTicket, ApiSettings } from './extension.js'
 
 // Responses without a model stay unknown until their modules are typed.
 export interface PopupResults {
+    'updates:status': import('../updates/checker.js').UpdateStatus
+    'updates:check': import('../updates/checker.js').UpdateStatus
     'data:settings:get': ApiSettings
     'data:settings:set': ApiSettings
     'support:ticket:get': ActiveSupportTicket | null

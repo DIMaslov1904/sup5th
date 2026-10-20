@@ -1,9 +1,5 @@
 <script setup>
-import { extensionApi } from '../platform/extensionApi.js'
 import InstructionTopic from './InstructionTopic.vue'
-
-const noticesUrl = extensionApi.runtime.getURL('THIRD-PARTY-NOTICES.txt')
-const licenseUrl = extensionApi.runtime.getURL('LICENSE')
 </script>
 
 <template>
@@ -16,19 +12,10 @@ const licenseUrl = extensionApi.runtime.getURL('LICENSE')
                 <p>Проекты и доступы настраиваются независимо. После изменения таблицы обновите соответствующие данные API в настройках расширения.</p>
             </InstructionTopic>
             <InstructionTopic title="Фоновая работа">
+                <p>Раз в сутки проверяет новые версии на GitHub. Дата проверки и скачивание пакета — в «Настройки» → «Обновления».</p>
                 <p>Расширение раз в неделю обновляет данные из настроенных API и загружает иконки сайтов.</p>
                 <p>На support.5th.ru локально учитывает время работы с тикетом; при бездействии блокирует защищённые доступы.</p>
                 <p>SEO-проверки запускаются при открытии SEO, счётчик Яндекса — по кнопке «Получить» с передачей домена сайта.</p>
-            </InstructionTopic>
-        </section>
-        <section aria-labelledby="legal-title" class="grid gap-3">
-            <h2 id="legal-title" class="ui-title">Правовая информация</h2>
-            <InstructionTopic title="Лицензия расширения">
-                <p>SUP 5th распространяется по лицензии MIT.</p>
-                <p><a class="ui-link" :href="licenseUrl" target="_blank" rel="noreferrer">Текст лицензии MIT</a></p>
-            </InstructionTopic>
-            <InstructionTopic title="Лицензии сторонних библиотек">
-                <p><a class="ui-link" :href="noticesUrl" target="_blank" rel="noreferrer">Лицензии и уведомления сторонних библиотек</a></p>
             </InstructionTopic>
         </section>
     </div>

@@ -14,6 +14,7 @@ import { toPublicData } from './catalogueData.js'
 import { updateActiveTabIcon, updateBadgeForTab } from './actionBadge.js'
 import { getActiveSupportTicket, observeSupportTicket, resetActiveSupportTicket, registerSupportTicketTracking } from './supportTicketTracking.js'
 import { startAdminAuth, authContext, consumePendingAdminAuth, injectAuthForTab, forgetAuthTab, copyProjectAccessText, getProjectDetails, getProjectAccessField, getServices, getServiceField } from './projectAccess.js'
+import { updateChecker, registerExtensionUpdates } from './extensionUpdates.js'
 
 registerPopupSession()
 registerVaultIdleLock()
@@ -23,6 +24,7 @@ const ready = storageReady.then(async reset => {
     if (job.running) await sessionSet(REFRESH_JOB_KEY, { ...job, running: false, state: 'interrupted', finishedAt: Date.now(), errors: ['Фоновый процесс был перезапущен. Повторите загрузку.'] })
 })
 registerSupportTicketTracking(ready)
+registerExtensionUpdates(ready)
 const syncCatalogueIcons = async options => {
     const [data, services] = await Promise.all([getStoredData(), storageGet(SERVICES_KEY, [])])
     return syncSiteIcons([...toPublicData(data).lastSuccessfulData.projects, ...services], options)
@@ -34,6 +36,7 @@ const loadData = async options => {
     return toPublicData(data)
 }
 const clearAllData = async () => {
+    await updateChecker.cancel()
     invalidateOperations(); cancelRefresh()
     await lockCredentialVault()
     await clearSiteIcons()
@@ -51,6 +54,7 @@ const authorize = async type => {
     await extensionApi.tabs.create({ url }); return { opened: true }
 }
 const handlers = {
+    'updates:status': () => updateChecker.getStatus(), 'updates:check': () => updateChecker.check({ force: true }),
     'support:ticket:get': getActiveSupportTicket, 'support:ticket:reset': resetActiveSupportTicket,
     'support:ticket:observe': observeSupportTicket,
     'seo:fetch': fetchSeoResource, 'seo:downloadImage': downloadSeoImage, 'seo:serverIp': getServerAddress,

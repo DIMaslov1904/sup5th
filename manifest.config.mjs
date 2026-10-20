@@ -71,7 +71,6 @@ export const createManifest = (browser = 'chrome') => {
       ...{ gecko_android: { strict_min_version: '142.0' } },
       gecko: {
         id: 'sup5th@5th.ru',
-        update_url: 'https://raw.githubusercontent.com/DIMaslov1904/sup5th/main/updates/firefox.json',
         strict_min_version: '140.0',
         data_collection_permissions: { required: ['authenticationInfo', 'browsingActivity'] }
       }

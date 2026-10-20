@@ -18,12 +18,12 @@ import IconCacheControls from '../components/IconCacheControls.vue'
 import BiometricProviderHelp from '../components/BiometricProviderHelp.vue'
 import { useApiAutosave } from '../useApiAutosave.js'
 import CopyAccessApiCode from '../components/CopyAccessApiCode.vue'
+import ExtensionUpdates from '../components/ExtensionUpdates.vue'
 
 const section = ref('connection'), settings = ref({ projectsUrl: '', accessUrl: '' }), data = ref(null), errors = ref([])
 const savedSettings = ref({ projectsUrl: '', accessUrl: '' })
 const loaded = ref(false), busy = ref(''), message = ref({ type: 'info', text: '' }), caps = ref({ helloAvailable: false, prf: false })
-const sections = [['connection','Подключение'],['data','Загрузка'],['security','Защита'],['maintenance','Обслуживание']]
-const version = extensionApi.runtime.getManifest().version
+const sections = [['connection','Подключение'],['data','Загрузка'],['security','Защита'],['maintenance','Обслуживание'],['updates','Обновления']]
 const snapshot = computed(() => data.value?.lastSuccessfulData)
 const needsAuthorization = type => {
     const url = savedSettings.value[type === 'projects' ? 'projectsUrl' : 'accessUrl']
@@ -95,7 +95,8 @@ const reset = () => {
 <template>
     <section class="flex min-w-0 flex-1 flex-col gap-4 px-4">
         <Tabs v-model="section" :items="sections" label="Настройки расширения" wrap />
-        <Preloader v-if="!loaded" label="Загрузка настроек…" />
+        <ExtensionUpdates v-if="section === 'updates'" />
+        <Preloader v-else-if="!loaded" label="Загрузка настроек…" />
         <template v-else>
             <template v-if="section === 'connection'">
                 <Card v-for="[type,title,field] in [['projects','Проекты','projectsUrl'],['accesses','Личные доступы и сервисы','accessUrl']]" :key="type" :title="title">
@@ -143,6 +144,5 @@ const reset = () => {
             </template>
             <Notification v-if="message.text" :type="message.type" :text="message.text" />
         </template>
-        <p class="mt-auto text-right text-[11px] text-ui-muted/70">Версия {{ version }}</p>
     </section>
 </template>

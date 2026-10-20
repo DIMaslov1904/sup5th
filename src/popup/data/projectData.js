@@ -35,6 +35,8 @@ const callBackground = (type, payload = {}) => new Promise((resolve, reject) => 
 })
 
 export const loadApiSettings = () => callBackground('data:settings:get')
+export const loadUpdateStatus = () => callBackground('updates:status')
+export const checkExtensionUpdate = () => callBackground('updates:check')
 export const loadActiveSupportTicket = () => callBackground('support:ticket:get')
 export const resetActiveSupportTicket = () => callBackground('support:ticket:reset')
 

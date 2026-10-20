@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
       zipPack({
         inDir: outDir,
         outDir: 'release',
-        outFileName: browser === 'firefox' ? `sup5th-firefox-v${manifest.version}.zip` : `sup5th-v${manifest.version}.zip`
+        outFileName: browser === 'firefox' ? `sup5th-firefox-v${manifest.version}.zip` : `sup5th-chromium-v${manifest.version}.zip`
       })
     ],
     resolve: {

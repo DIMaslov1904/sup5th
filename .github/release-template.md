@@ -4,10 +4,9 @@
 
 ## Пакеты
 
-- Chrome: `sup5th-chrome-v<версия>.zip` — установка из распакованной папки.
-- Opera: `sup5th-opera-v<версия>.zip` — проверка в режиме разработчика / отправка в Opera Add-ons.
+- Chromium: `sup5th-chromium-v<версия>.zip` — один пакет для Chrome, Opera, Edge и других браузеров на Chromium.
 - Firefox: `sup5th-firefox-v<версия>.zip` — неподписанная сборка для тестирования и Mozilla.
-- Firefox: `sup5th-firefox-v<версия>.xpi` — только подписанный Mozilla пакет. Удалите строку, если XPI ещё не готов.
+- Firefox: подписанный Mozilla `.xpi` — добавляется вручную без изменения содержимого.
 
 ## Ограничения
 

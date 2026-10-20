@@ -11,6 +11,7 @@
     "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.firefox.json && tsc -p tsconfig.webextensions.json",
     "build": "npm run typecheck && vite build",
     "build:firefox": "npm run typecheck && vite build --mode firefox",
+    "build:all": "npm run typecheck && vite build && vite build --mode firefox",
     "lint:firefox": "addons-linter --self-hosted dist-firefox"
   },
   "dependencies": {
@@ -31,6 +32,5 @@
     "vite": "^8.3.0",
     "vite-plugin-zip-pack": "^1.2.4",
     "vue-tsc": "^3.3.13"
-  },
-  "license": "MIT"
+  }
 }

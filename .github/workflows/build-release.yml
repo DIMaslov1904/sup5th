@@ -35,17 +35,10 @@ jobs:
           node-version: '24.13.1'
           cache: npm
       - run: npm ci
-      - run: npm run build
-      - run: npm run build:firefox
+      - run: npm run build:all
       - run: npm run lint:firefox
       - run: node scripts/prepare-release.mjs
       - name: Publish versioned packages
-        run: gh release create "$RELEASE_TAG" release/assets/* --verify-tag --title "SUP 5th ${RELEASE_TAG#v}" --notes-file release/NOTES.md
+        run: gh release create "$RELEASE_TAG" "release/sup5th-chromium-${RELEASE_TAG}.zip" "release/sup5th-firefox-${RELEASE_TAG}.zip" --verify-tag --latest --title "SUP 5th ${RELEASE_TAG#v}" --notes-file release/NOTES.md
         env:
           GH_TOKEN: ${{ github.token }}
-      # Releases made with GITHUB_TOKEN do not trigger a second workflow.
-      - name: Publish checksums and update metadata
-        run: python3 scripts/publish_release.py
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPOSITORY: ${{ github.repository }}
