@@ -2,7 +2,7 @@
   "name": "sup5th",
   "displayName": "SUP 5th",
   "description": "Ассистент 5th: проекты и доступы, SEO-анализ страниц и интеграция с тикетами поддержки",
-  "version": "4.0.3",
+  "version": "4.0.4",
   "type": "module",
   "private": true,
   "scripts": {

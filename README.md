@@ -177,3 +177,14 @@ src/utils/                адреса, SEO-правила, WebAuthn и гене
 ```
 
 Стек: Vue 3, Vite 8, Tailwind CSS 4, CRXJS. Постоянными данными управляет worker; popup подписывается на изменения хранилищ и использует небольшой общий реактивный модуль состояний.
+
+## Создание новых версий
+
+``` bash
+npm version 4.0.4 --no-git-tag-version
+git add .
+git commit -m "Release 4.0.4"
+git push origin main
+git tag v4.0.4
+git push origin v4.0.4
+```
