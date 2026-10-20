@@ -46,7 +46,6 @@ onUnmounted(() => { alive = false; revision++; clearInterval(poll); extensionApi
                 <dt class="text-ui-muted">Текущая версия</dt><dd class="text-right font-semibold tabular-nums">{{ currentVersion }}</dd>
                 <dt class="text-ui-muted">Последняя проверка</dt><dd class="text-right tabular-nums">{{ loading ? 'Загрузка…' : date(status?.lastCheckedAt) }}</dd>
             </dl>
-            <p class="text-xs text-ui-muted">Проверяем раз в сутки при работающем браузере. Источник — GitHub Releases.</p>
             <div role="status" aria-live="polite" class="grid gap-3">
                 <Message v-if="error || (status?.error && !busy)" type="error">{{ error || status.error }}</Message>
                 <template v-if="status?.updateAvailable">
@@ -60,7 +59,7 @@ onUnmounted(() => { alive = false; revision++; clearInterval(poll); extensionApi
                 <Button size="sm" variant="secondary" :loading="busy" :disabled="loading" @click="check">{{ busy ? 'Проверяем…' : 'Проверить обновление' }}</Button>
                 <Button v-if="status?.updateAvailable && status.downloadUrl" size="sm" :href="status.downloadUrl">Скачать для {{ browserName }}</Button>
             </div>
-            <p v-if="status?.updateAvailable && status.downloadUrl" class="text-xs text-ui-muted">{{ isFirefox ? 'Установите подписанный XPI через менеджер дополнений Firefox.' : 'Распакуйте ZIP в прежнюю папку расширения и нажмите «Перезагрузить» в менеджере расширений.' }}</p>
+            <p v-if="status?.updateAvailable && status.downloadUrl" class="text-xs text-ui-muted">{{ isFirefox ? 'Переместите скачанный XPI в окно браузера.' : 'Распакуйте ZIP в прежнюю папку расширения и нажмите «Перезагрузить» в менеджере расширений.' }}</p>
         </div>
     </Card>
 </template>
