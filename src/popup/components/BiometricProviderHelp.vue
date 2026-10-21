@@ -1,11 +1,13 @@
 <script setup>
-import { getBiometricPlatform } from '../../utils/biometricHello.js'
+import { biometricProviderHint, getBiometricPlatform } from '../../utils/biometricHello.js'
 import { isFirefox } from '../../platform/extensionApi.js'
 const isMac = getBiometricPlatform() === 'mac'
+const isWindows = getBiometricPlatform() === 'windows'
 const isYandex = /YaBrowser\//i.test(navigator.userAgent)
 </script>
 <template>
-    <details v-if="isMac" class="text-xs text-ui-muted">
+    <p v-if="isWindows" class="text-xs text-ui-muted">{{ biometricProviderHint() }}</p>
+    <details v-else-if="isMac" class="text-xs text-ui-muted">
         <summary class="cursor-pointer text-ui-accent">Как подключить Touch ID на Mac</summary>
         <div class="mt-3 grid gap-3">
             <p v-if="isFirefox">На отдельной странице расширения выберите доступный в Firefox провайдер ключей доступа и подтвердите запрос устройства. Возможность использовать Touch ID зависит от выбранного провайдера.</p>

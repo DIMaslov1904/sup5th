@@ -38,8 +38,10 @@ const manifest = {
     "128": "src/assets/icons/icon_128.png"
   },
   "options_page": "src/options/index.html",
+  "side_panel": { "default_path": "src/sidepanel/index.html" },
   "permissions": [
     "storage",
+    "sidePanel",
     "offscreen",
     "webRequest",
     "downloads",
@@ -62,11 +64,12 @@ const manifest = {
 /** @param {'chrome' | 'firefox'} [browser] */
 export const createManifest = (browser = 'chrome') => {
   if (browser === 'chrome') return defineManifest(manifest)
-  const { minimum_chrome_version, ...shared } = manifest
+  const { minimum_chrome_version, side_panel, ...shared } = manifest
   return defineManifest({
     ...shared,
     background: { scripts: ['src/background/service-worker.js'], type: 'module' },
-    permissions: [...shared.permissions.filter(permission => permission !== 'offscreen'), 'clipboardWrite'],
+    permissions: [...shared.permissions.filter(permission => !['offscreen', 'sidePanel'].includes(permission)), 'clipboardWrite'],
+    ...{ sidebar_action: { default_panel: 'src/sidepanel/index.html', default_title: 'SUP 5th — SEO', open_at_install: false } },
     browser_specific_settings: {
       ...{ gecko_android: { strict_min_version: '142.0' } },
       gecko: {

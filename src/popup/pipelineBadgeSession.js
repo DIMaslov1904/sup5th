@@ -1,23 +1,14 @@
-import { parseSiteAddress } from '../utils/siteAddress.js'
+import { getPipelineLinks } from '../utils/pipelineLinks.js'
+export { getPipelineLinks } from '../utils/pipelineLinks.js'
 
-export const getPipelineLinks = repository => {
-    if (!String(repository || '').trim()) return null
-    try {
-        const url = parseSiteAddress(repository)
-        const path = url.pathname.replace(/\/+$/, '').replace(/\.git$/, '')
-        if (!path) return null
-        const base = url.origin + path
-        return { badgeUrl: `${base}/badges/main/pipeline.svg`, commitsUrl: `${base}/-/commits/main` }
-    } catch { return null }
-}
-
-// Lives in the popup document, never in storage or the background worker.
-export const createPipelineBadgeSession = (fetchBadge = fetch, isEnabled = () => true) => {
+// SVGs and auth suppression stay in this document. Only confirmed absence is persisted.
+export const createPipelineBadgeSession = (fetchBadge = fetch, isEnabled = () => true, missing = { get: async () => false, set: async () => {} }) => {
     const cache = new Map()
     let authRequired = false
     let queue = Promise.resolve()
     const request = async url => {
-        if (authRequired || !isEnabled()) { cache.delete(url); return null }
+        if (!isEnabled()) return { state: 'disabled' }
+        if (authRequired) return { state: 'auth' }
         try {
             const response = await fetchBadge(url, {
                 credentials: 'include', redirect: 'follow', cache: 'no-store',
@@ -25,24 +16,42 @@ export const createPipelineBadgeSession = (fetchBadge = fetch, isEnabled = () =>
             })
             const type = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase()
             const loginRedirect = response.redirected && /\/(?:sign_in|sign-in|login|oauth|saml)(?:\/|$)/i.test(new URL(response.url).pathname)
-            if (response.status === 401 || loginRedirect || (response.ok && ['text/html', 'application/xhtml+xml'].includes(type))) {
+            if ([401, 403].includes(response.status) || loginRedirect || (response.ok && ['text/html', 'application/xhtml+xml'].includes(type))) {
                 authRequired = true
-                return null
+                return { state: 'auth' }
             }
-            if (!response.ok || type !== 'image/svg+xml') return null
-            return await response.blob()
-        } catch { return null }
+            if ([404, 410].includes(response.status)) return { state: 'missing' }
+            if (!response.ok || type !== 'image/svg+xml') return { state: 'unknown' }
+            const svg = await response.text()
+            if (!/<svg\b/i.test(svg)) return { state: 'unknown' }
+            if (/(?:pipeline|build):\s*(?:unknown|not found|none)\b/i.test(svg) || /<text\b[^>]*>\s*(?:unknown|not found)\s*<\/text>/i.test(svg)) return { state: 'missing' }
+            return { state: 'ready', blob: new Blob([svg], { type: 'image/svg+xml' }) }
+        } catch { return { state: 'unknown' } }
     }
-    const load = repository => {
+    const discover = async (links, force) => {
+        if (!isEnabled()) return { state: 'disabled' }
+        if (authRequired) return { state: 'auth' }
+        if (force) await missing.set(links.repository, false)
+        else if (await missing.get(links.repository)) return { state: 'missing' }
+        const main = await request(links.badgeUrl)
+        if (main.state === 'ready') return { ...main, branch: 'main', links }
+        if (main.state !== 'missing') return main
+        const fallback = getPipelineLinks(links.repository, 'master'), master = await request(fallback.badgeUrl)
+        if (master.state === 'ready') return { ...master, branch: 'master', links: fallback }
+        if (master.state === 'missing') await missing.set(links.repository, true)
+        return master
+    }
+    const load = (repository, { force = false } = {}) => {
         const links = getPipelineLinks(repository)
-        if (!isEnabled() || authRequired || !links) return Promise.resolve(null)
-        if (!cache.has(links.badgeUrl)) {
-            const result = queue.then(() => request(links.badgeUrl))
-            cache.set(links.badgeUrl, result)
+        if (!isEnabled()) return Promise.resolve({ state: 'disabled' })
+        if (authRequired || !links) return Promise.resolve({ state: authRequired ? 'auth' : 'invalid' })
+        if (force || !cache.has(links.repository)) {
+            const result = queue.then(() => discover(links, force)).catch(() => ({ state: 'unknown' }))
+            cache.set(links.repository, result)
             // A queued project must wait until the preceding auth check finishes.
             queue = result.then(() => undefined)
         }
-        return cache.get(links.badgeUrl)
+        return cache.get(links.repository)
     }
     return { load }
 }

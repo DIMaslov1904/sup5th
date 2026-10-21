@@ -14,7 +14,7 @@ export const focusHeading = ({ id }) => {
     if (!visible) return { hidden: true }
     element.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'center', inline: 'nearest' })
     blinking?.cancel()
-    blinking = element.animate([
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) blinking = element.animate([
         { boxShadow: '0 0 0 4px transparent' },
         { boxShadow: '0 0 0 4px #fbbf24' },
         { boxShadow: '0 0 0 4px transparent' }

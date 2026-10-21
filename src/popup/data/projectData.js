@@ -35,6 +35,13 @@ const callBackground = (type, payload = {}) => new Promise((resolve, reject) => 
 })
 
 export const loadApiSettings = () => callBackground('data:settings:get')
+/** @param {string} repository */
+export const loadPipelineAbsence = repository => callBackground('pipeline:absence:get', { repository })
+/** @param {string} repository @param {boolean} missing */
+export const savePipelineAbsence = (repository, missing) => callBackground('pipeline:absence:set', { repository, missing })
+export const loadProjectShortcuts = () => callBackground('shortcuts:get')
+/** @param {object} patch */
+export const saveProjectShortcuts = patch => callBackground('shortcuts:update', patch)
 export const loadUpdateStatus = () => callBackground('updates:status')
 export const checkExtensionUpdate = () => callBackground('updates:check')
 export const loadActiveSupportTicket = () => callBackground('support:ticket:get')

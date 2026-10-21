@@ -2,7 +2,8 @@ import { extensionApi } from '../platform/extensionApi.js'
 import { trustedLocal } from '../platform/trustedStorage.js'
 import { createBiometricPageHandlers } from './biometricPages.js'
 import { fetchSeoResource } from './seoFetch.js'
-import { getServerAddress } from './serverAddress.js'
+import { getProjectShortcuts, updateProjectShortcuts } from './projectShortcuts.js'
+import { getPipelineAbsence, setPipelineAbsence } from './pipelineBadges.js'
 import { downloadSeoImage } from './imageDownload.js'
 import { syncSiteIcons, getSiteIconStatus, cancelSiteIcons, clearSiteIcons } from '../icons/iconService.js'
 import { registerPopupSession } from './popupSession.js'
@@ -54,10 +55,12 @@ const authorize = async type => {
     await extensionApi.tabs.create({ url }); return { opened: true }
 }
 const handlers = {
+    'pipeline:absence:get': getPipelineAbsence, 'pipeline:absence:set': setPipelineAbsence,
+    'shortcuts:get': getProjectShortcuts, 'shortcuts:update': updateProjectShortcuts,
     'updates:status': () => updateChecker.getStatus(), 'updates:check': () => updateChecker.check({ force: true }),
     'support:ticket:get': getActiveSupportTicket, 'support:ticket:reset': resetActiveSupportTicket,
     'support:ticket:observe': observeSupportTicket,
-    'seo:fetch': fetchSeoResource, 'seo:downloadImage': downloadSeoImage, 'seo:serverIp': getServerAddress,
+    'seo:fetch': fetchSeoResource, 'seo:downloadImage': downloadSeoImage,
     'icons:status': getSiteIconStatus, 'icons:refresh': () => syncCatalogueIcons({ force: true }), 'icons:cancel': cancelSiteIcons,
     'services:get': getServices, 'services:field': getServiceField,
     'data:settings:get': readApiSettings,

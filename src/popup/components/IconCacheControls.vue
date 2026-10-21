@@ -4,6 +4,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { cancelSiteIcons, loadIconStatus, refreshSiteIcons } from '../data/projectData'
 import Button from './ui/Button.vue'
 import Notification from './ui/Notification.vue'
+import MaintenanceCard from './MaintenanceCard.vue'
 
 const status = ref({ active: false, total: 0, completed: 0, failed: 0, cached: 0, bytes: 0 })
 const busy = ref(false), error = ref(''), largeWarning = ref(false)
@@ -23,16 +24,16 @@ onUnmounted(() => extensionApi.runtime.onMessage.removeListener(changed))
 </script>
 
 <template>
-    <div class="grid gap-2">
-        <div class="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" size="sm" :disabled="busy || status.active" @click="refresh">Обновить иконки</Button>
-            <Button v-if="status.active" variant="ghost" size="sm" :disabled="busy" @click="run(cancelSiteIcons)">Отменить</Button>
-            <span v-if="status.active" role="status" class="text-xs text-ui-muted">Иконки: {{ status.completed }} / {{ status.total }}</span>
-            <span v-else class="text-xs text-ui-muted/70">В кеше: {{ status.cached }} · {{ (status.bytes / 1024 / 1024).toFixed(1) }} МБ</span>
-        </div>
+    <MaintenanceCard title="Иконки сайтов">
+        <span v-if="status.active" role="status">Иконки: {{ status.completed }} / {{ status.total }}</span>
+        <span v-else>В кеше: {{ status.cached }} · {{ (status.bytes / 1024 / 1024).toFixed(1) }} МБ</span>
         <progress v-if="status.active" :value="status.completed" :max="status.total || 1" aria-label="Загрузка иконок" class="h-1 w-full accent-sky-400" />
         <Notification v-if="largeWarning" type="warning" text="Кеш иконок превысил 50 МБ. Это уведомление показывается один раз; загрузка продолжается." />
-        <p v-if="status.failed" class="text-xs text-ui-warning">Не удалось обновить: {{ status.failed }}. Для них сохраняется прежняя иконка или инициалы.</p>
+        <p v-if="status.failed" class="text-ui-warning">Не удалось обновить: {{ status.failed }}. Для них сохраняется прежняя иконка или инициалы.</p>
         <Notification v-if="error" :text="error" />
-    </div>
+        <template #actions>
+            <Button variant="secondary" size="sm" :disabled="busy || status.active" @click="refresh">Обновить иконки</Button>
+            <Button v-if="status.active" variant="ghost" size="sm" :disabled="busy" @click="run(cancelSiteIcons)">Отменить</Button>
+        </template>
+    </MaintenanceCard>
 </template>

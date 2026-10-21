@@ -1,6 +1,7 @@
 import { extensionApi } from '../platform/extensionApi.js'
 import { collectSeoDom } from '../utils/seoDom.js'
-import { evaluateRobotsFile, collectIndexingRules } from '../utils/seoRules.js'
+import { collectIndexingRules } from '../utils/seoRules.js'
+import { loadSeoNetwork } from '../utils/seoNetwork.js'
 import { getSeoActions, setSeoAction } from './seoActions.js'
 import { captureHeadings, focusHeading } from './headingNavigation.js'
 import { collectPageWeight } from './pageWeight.js'
@@ -18,56 +19,51 @@ const getMeta = (selector) => document.querySelector(selector)?.getAttribute('co
 
 const getHeadings = (level) => [...document.querySelectorAll(`h${level}`)]
     .map((element) => element.textContent.trim())
-    .filter(Boolean)
 
 // Запрос выполняется в background (нет ограничений CSP страницы)
 const fetchViaBackground = async (url, options = {}) => {
     const failed = { ok: false, status: 0, url: '', headers: {}, text: '', ttfb: null }
     try {
-        const response = await extensionApi.runtime.sendMessage({ type: 'seo:fetch', payload: { url, method: options.method || 'GET' } })
+        const response = await extensionApi.runtime.sendMessage({ type: 'seo:fetch', payload: { url, ...options, method: options.method || 'GET' } })
         if (!response?.ok) return failed
         const data = response.data || {}
-        return { ok: Boolean(data.ok), status: data.status || 0, url: data.url || '', headers: data.headers || {}, text: data.text || '', ttfb: data.ttfb ?? null }
+        return { ...failed, ...data }
     } catch { return failed }
 }
 
-const fetchPageInfo = fetchViaBackground
-
 const hasCyrillic = (value) => /[а-яё]/i.test(value)
 
-export const scanSeo = async () => {
+export const collectSeoReport = ({ internalLinkLimit = 50 } = {}) => {
+    const dom = collectSeoDom(document, location.href)
     const headings = Object.fromEntries([1, 2, 3, 4, 5, 6].map((level) => [`h${level}`, getHeadings(level)]))
     const robotsUrl = new URL('/robots.txt', location.href).href
-    const [pageInfo, robotsInfo] = await Promise.all([
-        fetchPageInfo(location.href, { method: 'HEAD' }).then(info => info.ok ? info : fetchPageInfo(location.href)),
-        fetchPageInfo(robotsUrl)
-    ])
-    const sitemapFromRobots = robotsInfo.text.match(/^\s*Sitemap:\s*(\S+)/im)?.[1]
-    const sitemapUrl = sitemapFromRobots || new URL('/sitemap.xml', location.href).href
-    let sitemapInfo = await fetchPageInfo(sitemapUrl, { method: 'HEAD' })
-    if (!sitemapInfo.ok) sitemapInfo = await fetchPageInfo(sitemapUrl)
-    const xRobots = pageInfo.headers['x-robots-tag'] || ''
+    const pageInfo = { url: location.href, status: 0, ok: false, ttfb: null }
+    const sitemapUrl = new URL('/sitemap.xml', location.href).href
+    const xRobots = ''
     const indexing = collectIndexingRules(document, xRobots)
 
     const title = document.title.trim()
-    const description = getMeta('meta[name="description"]')
+    const description = getMeta('meta[name="description" i]')
     const h1List = headings.h1
     const duplicateH1 = h1List.filter((heading, index) => h1List.indexOf(heading) !== index)
     const faviconLink = document.querySelector('link[rel~="icon"]')?.href || ''
 
     // Уникальные внутренние ссылки (для расширенного аудита на отдельной странице)
-    const allLinks = [...document.links].map((link) => link.href).filter((href) => /^https?:/.test(href))
-    const internalLinks = [...new Set(allLinks.filter((href) => {
+    const currentUrl = new URL(location.href); currentUrl.hash = ''
+    const internalLinkUrls = [...new Set([...document.links].map(link => {
         try {
-            return new URL(href).hostname === location.hostname
-        } catch {
-            return false
-        }
-    }))].slice(0, 50)
+            const url = new URL(link.href); url.hash = ''
+            return /^https?:$/.test(url.protocol) && url.origin === location.origin && !url.username && !url.password && url.href !== currentUrl.href ? url.href : ''
+        } catch { return '' }
+    }).filter(Boolean))]
+    const linkLimit = Number.isFinite(Number(internalLinkLimit)) ? Math.max(0, Math.min(499, Math.trunc(Number(internalLinkLimit)))) : 50
+    const internalLinks = internalLinkUrls.slice(0, linkLimit)
 
     captureHeadings()
     return {
-        ...collectSeoDom(document, location.href),
+        ...dom,
+        documentId,
+        indexingMeta: [...document.querySelectorAll('meta[name]')].map(el => ({ name: el.name, content: el.content })),
         actions: getSeoActions(),
         url: location.href,
         baseUrl: document.baseURI,
@@ -83,13 +79,13 @@ export const scanSeo = async () => {
         description,
         descriptionLength: description.length,
         descriptionHasCyrillic: hasCyrillic(description),
-        keywords: getMeta('meta[name="keywords"]'),
-        canonical: document.querySelector('link[rel="canonical"]')?.href || '',
+        keywords: getMeta('meta[name="keywords" i]'),
+        canonical: document.querySelector('link[rel~="canonical" i]')?.href || '',
         ...indexing,
         xRobots,
         xRobotsAllowed: pageInfo.status ? indexing.xRobotsAllowed : null,
         lang: document.documentElement.lang || '',
-        viewport: Boolean(getMeta('meta[name="viewport"]')),
+        viewport: Boolean(getMeta('meta[name="viewport" i]')),
         headings,
         h1Count: h1List.length,
         duplicateH1,
@@ -106,22 +102,20 @@ export const scanSeo = async () => {
             href: link.href
         })),
         response: {
+            pending: true,
             status: pageInfo.status,
             ok: pageInfo.ok,
             ttfb: pageInfo.ttfb ?? null
         },
         internalLinks,
+        internalLinksTotal: internalLinkUrls.length,
         robotsFile: {
             url: robotsUrl,
-            exists: robotsInfo.ok,
-            status: robotsInfo.status,
-            content: robotsInfo.text,
-            allowed: evaluateRobotsFile({ exists: robotsInfo.ok, status: robotsInfo.status, content: robotsInfo.text }, location.href).allowed
+            exists: false, status: 0, content: '', allowed: null, pending: true
         },
         sitemap: {
             url: sitemapUrl,
-            exists: sitemapInfo.ok,
-            status: sitemapInfo.status
+            exists: false, status: 0, pending: true
         },
         favicon: faviconLink,
         images: {
@@ -133,13 +127,14 @@ export const scanSeo = async () => {
             total: document.links.length,
             internal: [...document.links].filter((link) => link.hostname === location.hostname).length,
             external: [...document.links].filter((link) => link.hostname && link.hostname !== location.hostname).length,
-            withoutText: [...document.links].filter((link) => !link.textContent.trim() && !link.querySelector('img[alt]')).length
+            withoutText: dom.linkRows.filter(link => !link.accessibleName).length
         },
         wordCount: (document.body?.innerText || '').trim().split(/\s+/).filter(Boolean).length,
         htmlSize: document.documentElement.outerHTML.length,
         pageWeight: collectPageWeight(document)
     }
 }
+export const scanSeo = () => loadSeoNetwork(collectSeoReport(), (url, method, options) => fetchViaBackground(url, { method, ...options }))
 
 /** Регистрирует обработчик сообщений 'seo:scan' */
 const registerSeoHandler = () => {
@@ -155,6 +150,11 @@ const registerSeoHandler = () => {
         }
         if (message?.type === 'seo:action') {
             try { sendResponse({ ok: true, data: setSeoAction(message.payload) }) }
+            catch (error) { sendResponse({ ok: false, error: error.message }) }
+            return false
+        }
+        if (message?.type === 'seo:dom') {
+            try { sendResponse({ ok: true, data: collectSeoReport(message.payload || {}) }) }
             catch (error) { sendResponse({ ok: false, error: error.message }) }
             return false
         }

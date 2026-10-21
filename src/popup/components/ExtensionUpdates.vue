@@ -10,9 +10,14 @@ import Message from './ui/Message.vue'
 const currentVersion = extensionApi.runtime.getManifest().version
 const status = ref(null), loading = ref(true), checking = ref(false), error = ref('')
 const browserName = isFirefox ? 'Firefox' : 'Chromium'
+const extensionsUrl = isFirefox ? 'about:addons'
+    : /YaBrowser\//i.test(navigator.userAgent) ? 'browser://extensions/'
+    : /Edg\//i.test(navigator.userAgent) ? 'edge://extensions/'
+    : /OPR\//i.test(navigator.userAgent) ? 'opera://extensions/' : 'chrome://extensions/'
+const downloading = ref(false), copying = ref(false), copied = ref(false), installError = ref('')
 const busy = computed(() => checking.value || status.value?.checking)
 const date = value => value ? new Date(value).toLocaleString('ru-RU') : 'Ещё не выполнялась'
-let alive = true, revision = 0, poll
+let alive = true, revision = 0, poll, copyTimer
 const show = value => { if (alive) status.value = value }
 const load = async () => {
     const current = ++revision
@@ -29,6 +34,33 @@ const check = async () => {
     catch (reason) { if (alive) error.value = reason.message }
     finally { if (alive) checking.value = false }
 }
+const download = async () => {
+    // Firefox keeps the normal XPI link; privileged about: pages cannot be opened through tabs.create.
+    if (isFirefox || downloading.value || !status.value?.downloadUrl) return
+    downloading.value = true; installError.value = ''
+    try {
+        await extensionApi.downloads.download({ url: status.value.downloadUrl })
+    } catch {
+        if (alive) { downloading.value = false; installError.value = 'Не удалось начать скачивание. Попробуйте ещё раз.' }
+        return
+    }
+    try { await extensionApi.tabs.create({ url: extensionsUrl }) }
+    catch { if (alive) installError.value = 'Не удалось открыть менеджер расширений. Скопируйте адрес и вставьте его в адресную строку браузера.' }
+    finally { if (alive) downloading.value = false }
+}
+const copyExtensionsUrl = async () => {
+    if (copying.value) return
+    copying.value = true; copied.value = false; installError.value = ''
+    clearTimeout(copyTimer)
+    try {
+        await navigator.clipboard.writeText(extensionsUrl)
+        if (alive) {
+            copied.value = true
+            copyTimer = setTimeout(() => { copied.value = false }, 2000)
+        }
+    } catch { if (alive) installError.value = 'Не удалось скопировать адрес. Выделите его ниже и скопируйте вручную.' }
+    finally { if (alive) copying.value = false }
+}
 const changed = (changes, area) => { if (area === 'local' && changes[UPDATE_STATE_KEY]) load() }
 onMounted(() => {
     extensionApi.storage.onChanged.addListener(changed)
@@ -36,7 +68,7 @@ onMounted(() => {
     // An already-open popup also observes background checks that end without a storage change.
     poll = setInterval(() => { if (status.value?.checking && !checking.value) load() }, 1000)
 })
-onUnmounted(() => { alive = false; revision++; clearInterval(poll); extensionApi.storage.onChanged.removeListener(changed) })
+onUnmounted(() => { alive = false; revision++; clearInterval(poll); clearTimeout(copyTimer); extensionApi.storage.onChanged.removeListener(changed) })
 </script>
 
 <template>
@@ -57,9 +89,16 @@ onUnmounted(() => { alive = false; revision++; clearInterval(poll); extensionApi
             </div>
             <div class="flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" :loading="busy" :disabled="loading" @click="check">{{ busy ? 'Проверяем…' : 'Проверить обновление' }}</Button>
-                <Button v-if="status?.updateAvailable && status.downloadUrl" size="sm" :href="status.downloadUrl">Скачать для {{ browserName }}</Button>
+                <template v-if="status?.updateAvailable && status.downloadUrl">
+                    <Button size="sm" :href="isFirefox ? status.downloadUrl : ''" :loading="downloading" @click="download">Скачать для {{ browserName }}</Button>
+                    <Button size="sm" variant="secondary" :disabled="copying" :title="extensionsUrl" @click="copyExtensionsUrl">{{ copied ? 'Адрес скопирован' : 'Скопировать адрес расширений' }}</Button>
+                </template>
             </div>
-            <p v-if="status?.updateAvailable && status.downloadUrl" class="text-xs text-ui-muted">{{ isFirefox ? 'Переместите скачанный XPI в окно браузера.' : 'Распакуйте ZIP в прежнюю папку расширения и нажмите «Перезагрузить» в менеджере расширений.' }}</p>
+            <div v-if="status?.updateAvailable && status.downloadUrl" class="grid gap-2 text-xs text-ui-muted">
+                <p>{{ isFirefox ? 'Переместите скачанный XPI в окно браузера. Чтобы открыть менеджер расширений, скопируйте адрес ниже и вставьте его в адресную строку.' : 'После начала скачивания откроется менеджер расширений. Распакуйте ZIP в прежнюю папку расширения и нажмите «Перезагрузить».' }}</p>
+                <p>Адрес менеджера расширений: <code class="select-text">{{ extensionsUrl }}</code></p>
+                <p role="status" aria-live="polite" :class="installError ? 'text-ui-danger' : 'text-ui-success'">{{ installError || (copied ? 'Адрес скопирован. Вставьте его в адресную строку браузера.' : '') }}</p>
+            </div>
         </div>
     </Card>
 </template>

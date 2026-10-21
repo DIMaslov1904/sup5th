@@ -14,6 +14,8 @@ import Button from '../components/ui/Button.vue'
 import Message from '../components/ui/Message.vue'
 import Notification from '../components/ui/Notification.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
+import CopyButton from '../components/ui/CopyButton.vue'
+import ProjectShortcutStrip from '../components/ProjectShortcutStrip.vue'
 
 const projects = ref([]), services = ref([]), copying = ref(''), loaded = ref(false), connected = ref(false)
 let alive = true, revision = 0
@@ -39,8 +41,7 @@ const copyService = async field => {
         const value = await ensureUnlocked(() => getServiceField(selectedService.value.id, field), { intent: { type: 'service-copy', id: selectedService.value.id, field } })
         services.value = await loadServices()
         if (value !== BIOMETRIC_ACTION_HANDLED) await navigator.clipboard.writeText(value)
-        message.value = { type: 'success', text: (field === 'login' ? 'Логин' : 'Пароль') + ' скопирован' }
-    } catch (reason) { message.value = { type: 'error', text: reason.message } }
+    }
     finally { copying.value = '' }
 }
 const load = async () => {
@@ -64,6 +65,7 @@ onUnmounted(() => { alive = false; revision++; extensionApi.storage.onChanged.re
 </script>
 <template>
     <section class="min-w-0 w-full px-4 text-ui-text">
+        <ProjectShortcutStrip v-if="loaded && !selectedItem" @select="url => { selectedServiceId = ''; selectedProjectUrl = url }" />
         <Preloader v-if="!loaded || (refreshJob.running && !projects.length && !services.length)" label="Загрузка каталога…" />
         <Message v-else-if="loadError" type="error">{{ loadError }}</Message>
         <EmptyState v-else-if="!connected && !projects.length && !services.length" title="Данные ещё не подключены" description="Добавьте адреса API в настройках." />
@@ -101,8 +103,8 @@ onUnmounted(() => { alive = false; revision++; extensionApi.storage.onChanged.re
                 <h2 class="text-[13px] font-semibold">Доступ</h2>
                 <p class="break-all text-xs text-ui-muted">Логин: {{ selectedService.login || (selectedService.hasLogin ? 'Доступен после первой разблокировки' : 'Не указан') }}</p>
                 <div class="flex flex-wrap gap-2">
-                    <Button v-if="selectedService.hasLogin || selectedService.login" variant="ghost" size="sm" :disabled="Boolean(copying)" @click="copyService('login')">Скопировать логин</Button>
-                    <Button v-if="selectedService.hasPassword || selectedService.password" variant="ghost" size="sm" :disabled="Boolean(copying)" @click="copyService('password')">Скопировать пароль</Button>
+                    <CopyButton v-if="selectedService.hasLogin || selectedService.login" :disabled="Boolean(copying)" :action="() => copyService('login')" label="Скопировать логин" />
+                    <CopyButton v-if="selectedService.hasPassword || selectedService.password" :disabled="Boolean(copying)" :action="() => copyService('password')" label="Скопировать пароль" />
                 </div>
             </article>
         </div>

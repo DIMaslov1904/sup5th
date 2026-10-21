@@ -6,6 +6,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "test": "node --test tests/*.test.js",
     "dev": "vite",
     "dev:firefox": "vite --mode firefox",
     "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.firefox.json && tsc -p tsconfig.webextensions.json",
@@ -29,7 +30,7 @@
     "addons-linter": "^10.14.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
-    "vite": "^8.3.0",
+    "vite": "^8.3.5",
     "vite-plugin-zip-pack": "^1.2.4",
     "vue-tsc": "^3.3.13"
   }

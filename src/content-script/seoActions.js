@@ -1,4 +1,5 @@
-import { extensionApi } from '../platform/extensionApi.js'
+import { createImageAnnotations } from './imageAnnotations.js'
+const annotations = createImageAnnotations()
 const state = { headings: false, external: false, noindex: false, alt: false, downloads: false, css: false }
 const sheets = new Map()
 let style, overlays, observer, scheduled = false
@@ -34,44 +35,15 @@ const render = () => {
                 }
             }
         }
-        if (state.alt || state.downloads) for (const image of [...document.images].slice(0, 1000)) {
-            const rect = image.getBoundingClientRect()
-            if (!rect.width || !rect.height || getComputedStyle(image).visibility === 'hidden') continue
-            const labels = document.createElement('div')
-            Object.assign(labels.style, { position: 'absolute', left: `${rect.left + scrollX}px`, top: `${rect.top + scrollY}px`, maxWidth: '300px', display: 'flex', flexWrap: 'wrap', gap: '4px', background: '#0f172a', color: '#f8fafc', padding: '3px 6px', font: '12px sans-serif', borderRadius: '4px' })
-            if (state.alt) {
-                const label = document.createElement('span')
-                label.textContent = image.hasAttribute('alt') ? `alt: ${image.alt || '(пустой)'}` : 'alt отсутствует'
-                labels.append(label)
-            }
-            const url = image.currentSrc || image.src
-            if (state.downloads && /^https?:\/\//.test(url)) {
-                const link = document.createElement('a')
-                link.href = url; link.textContent = 'Скачать'; link.dataset.supSeoDownload = 'true'
-                Object.assign(link.style, { color: '#7dd3fc', cursor: 'pointer', pointerEvents: 'auto', textDecoration: 'underline' })
-                link.addEventListener('click', async event => {
-                    event.preventDefault(); event.stopPropagation()
-                    try {
-                        const response = await extensionApi.runtime.sendMessage({ type: 'seo:downloadImage', payload: { url } })
-                        if (!response?.ok) throw new Error(response?.error || 'Не удалось скачать изображение')
-                        link.textContent = 'Скачивается…'
-                    } catch (error) { link.textContent = 'Ошибка скачивания'; link.title = error.message }
-                })
-                labels.append(link)
-            }
-            if (labels.childNodes.length) overlays.append(labels)
-        }
+
     }
+    annotations.configure(state)
     if (state.external || state.headings || state.noindex || state.alt || state.downloads) {
         observer ||= new MutationObserver(() => { if (!scheduled) { scheduled = true; requestAnimationFrame(() => { scheduled = false; render() }) } })
-        observer.observe(document.body, { childList: true, subtree: true })
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['alt', 'src', 'srcset'] })
     }
 }
-const refreshImageLabels = () => {
-    if (!(state.alt || state.downloads) || scheduled) return
-    scheduled = true
-    requestAnimationFrame(() => { scheduled = false; render() })
-}
+const refreshImageLabels = () => annotations.schedule()
 addEventListener('resize', refreshImageLabels)
 addEventListener('scroll', refreshImageLabels, true)
 addEventListener('load', refreshImageLabels, true)
@@ -89,4 +61,4 @@ export const setSeoAction = ({ action, enabled }) => {
     }
     render(); return getSeoActions()
 }
-addEventListener('pagehide', () => { observer?.disconnect(); style?.remove(); overlays?.remove(); for (const [sheet, disabled] of sheets) sheet.disabled = disabled; for (const key in state) state[key] = false })
+addEventListener('pagehide', () => { annotations.clear(); observer?.disconnect(); style?.remove(); overlays?.remove(); for (const [sheet, disabled] of sheets) sheet.disabled = disabled; for (const key in state) state[key] = false })

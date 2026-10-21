@@ -97,11 +97,13 @@ onUnmounted(() => {
 <template>
   <Welcome v-if="setupReady && setupStep !== 'done'" :step="setupStep" :settings="setupSettings" @completed="openCatalogue" />
   <Layout v-else-if="stateReady && setupReady" v-model="view" v-model:search="search" @search="openCatalogue" @ticket="ticketOpen = true">
+    <Transition name="ui-view" mode="out-in"><div :key="view" class="flex flex-[1_0_auto] flex-col">
     <Site v-if="view === 'site'" />
-    <section v-if="view === 'seo'" class="px-3"><SeoPanel v-if="seoTabReady" :tab="seoTab" :session="seoSession" auto-scan /></section>
+    <section v-if="view === 'seo'" class="flex flex-1 flex-col px-3"><SeoPanel v-if="seoTabReady" :tab="seoTab" :session="seoSession" auto-scan /></section>
     <Projects v-if="view === 'projects'" v-model:search="search" v-model:selected-project-url="selectedProjectUrl" v-model:selected-service-id="selectedServiceId" />
     <Settings v-if="view === 'settings'" />
     <Tools v-if="view === 'tools'" />
+    </div></Transition>
   </Layout>
   <div v-else><Preloader label="Загрузка расширения…" /><Button v-if="setupError" class="mx-4" @click="retrySetup">Повторить загрузку</Button></div>
   <Notification v-if="setupError" :text="setupError" />

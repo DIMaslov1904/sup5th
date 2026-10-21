@@ -82,19 +82,14 @@ const config = {
             "?": ","
         },
         translit: {
-            а: "a", б: "b", в: "v", г: "g", д: "d", ё: "e", е: "e", ж: "zh", з: "z", и: "i",
-            й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t",
-            у: "u", ф: "f", х: "h", ц: "c", ч: "ch", ш: "sh", щ: "sch", ь: "'", ы: "i'", ъ: "",
-            э: "e'", ю: "yu", я: "ya",
-            А: "A", Б: "B", В: "V", Г: "G", Д: "D", Е: "E", Ё: "E", Ж: "Zh", З: "Z", И: "I",
-            Й: "Y", К: "K", Л: "L", М: "M", Н: "N", О: "O", П: "P", Р: "R", С: "S", Т: "T",
-            У: "U", Ф: "F", Х: "H", Ц: "C", Ч: "Ch", Ш: "Sh", Щ: "Sch", Ь: "'", Ы: "I'", Ъ: "",
-            Э: "E'", Ю: "Yu", Я: "Ya"
-        },
-        retranslit: {
-            Sch: "Щ", sch: "щ", Yu: "Ю", Ya: "Я", yu: "ю", ya: "я",
-            Ch: "Ч", ch: "ч", Sh: "Ш", sh: "ш",
-            "I'": "Ы", "i'": "ы", "e'": "э", "E'": "Э"
+            а: "a", б: "b", в: "v", г: "g", д: "d", ё: "yo", е: "e", ж: "zh", з: "z", и: "i",
+            й: "j", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t",
+            у: "u", ф: "f", х: "kh", ц: "ts", ч: "ch", ш: "sh", щ: "shch", ь: "ʹ", ы: "y", ъ: "ʺ",
+            э: "e", ю: "yu", я: "ya",
+            А: "A", Б: "B", В: "V", Г: "G", Д: "D", Е: "E", Ё: "Yo", Ж: "Zh", З: "Z", И: "I",
+            Й: "J", К: "K", Л: "L", М: "M", Н: "N", О: "O", П: "P", Р: "R", С: "S", Т: "T",
+            У: "U", Ф: "F", Х: "Kh", Ц: "Ts", Ч: "Ch", Ш: "Sh", Щ: "Shch", Ь: "ʹ", Ы: "Y", Ъ: "ʺ",
+            Э: "E", Ю: "Yu", Я: "Ya"
         }
     }
 }
@@ -108,16 +103,9 @@ const flip = (trans) => {
 }
 
 const flippedKeys = flip(config.dictionary.keys)
-const flippedTranslit = flip(config.dictionary.translit)
-
-const fixRetranslit = (str) => {
-    const obj = config.dictionary.retranslit
-    for (const key of Object.keys(obj)) {
-        const reg = new RegExp(`(${key})`, 'g')
-        str = str.replace(reg, (matched) => obj[matched])
-    }
-    return str
-}
+// Е/Э and the case of signs are ambiguous in reverse; prefer е, ь and ъ.
+const flippedTranslit = { ...flip(config.dictionary.translit), e: 'е', E: 'Е', 'ʹ': 'ь', 'ʺ': 'ъ' }
+const retranslitPattern = new RegExp(Object.keys(flippedTranslit).sort((a, b) => b.length - a.length).join('|'), 'g')
 
 /**
  * Конвертирует строку между раскладками.
@@ -142,9 +130,7 @@ export default function switcher(str, settings = {}) {
             mappingDict = config.dictionary.translit
             break
         case 'retranslit':
-            mappingDict = flippedTranslit
-            str = fixRetranslit(str)
-            break
+            return str.replace(retranslitPattern, symbol => flippedTranslit[symbol])
         default:
             mappingDict = flippedKeys
             break

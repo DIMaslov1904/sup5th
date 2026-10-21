@@ -1,5 +1,5 @@
 import { extensionApi } from '../platform/extensionApi.js'
-import { mutateStorage, storageGet, storageSet } from './storageRepository.js'
+import { mutateStorage, storageGet, storageSet, getStoredData } from './storageRepository.js'
 import { SUPPORT_TRACKING_KEY, SUPPORT_TIMER_ALARM, activeTicketFrom } from '../utils/supportTimer.js'
 import { setTicketTimerBadge, updateBadgeForTab } from './actionBadge.js'
 
@@ -44,8 +44,8 @@ const refreshTimer = async () => {
         await extensionApi.action.setBadgeText({ text: '' })
         await extensionApi.action.setTitle({ title: extensionApi.runtime.getManifest().name })
     }
-    const tabs = await extensionApi.tabs.query({})
-    await Promise.allSettled(tabs.filter(tab => Number.isInteger(tab.id)).map(tab => active ? setTicketTimerBadge(tab.id, active) : updateBadgeForTab(tab.id)))
+    const [tabs, data] = await Promise.all([extensionApi.tabs.query({}), getStoredData()])
+    await Promise.allSettled(tabs.filter(tab => Number.isInteger(tab.id)).map(tab => active ? setTicketTimerBadge(tab.id, active, { tab, data }) : updateBadgeForTab(tab.id, { tab, data, active })))
 }
 
 export const registerSupportTicketTracking = ready => {

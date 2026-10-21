@@ -32,9 +32,12 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir,
       rolldownOptions: {
-        input: browser === 'chrome'
-          ? { 'src/offscreen/index': resolve(rootDir, 'src/offscreen/index.html') }
-          : { 'src/biometric/index': resolve(rootDir, 'src/biometric/index.html') }
+        input: {
+          'src/sidepanel/index': resolve(rootDir, 'src/sidepanel/index.html'),
+          ...(browser === 'chrome'
+            ? { 'src/offscreen/index': resolve(rootDir, 'src/offscreen/index.html') }
+            : { 'src/biometric/index': resolve(rootDir, 'src/biometric/index.html') })
+        }
       },
       modulePreload: false
     },

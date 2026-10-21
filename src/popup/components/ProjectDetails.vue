@@ -11,9 +11,21 @@ import { pipelineBadgePreference } from '../pipelineBadgeState.js'
 import ProjectAccessCard from './ProjectAccessCard.vue'
 import FtpAccessCard from './FtpAccessCard.vue'
 import Notification from './ui/Notification.vue'
+import IconButton from './ui/IconButton.vue'
+import HeartIcon from './ui/HeartIcon.vue'
+import { projectShortcuts, updateProjectShortcuts, recordProjectOpen } from '../projectShortcutsState.js'
 
 const props = defineProps({ project: { type: Object, required: true } })
 const accesses = ref([]), loading = ref(false), error = ref('')
+const pinning = ref(false)
+const pinned = computed(() => projectShortcuts.value.pinned.includes(props.project.url))
+const togglePin = async () => {
+    pinning.value = true
+    try { await updateProjectShortcuts({ kind: 'pin', url: props.project.url, pinned: !pinned.value }) }
+    catch (reason) { error.value = reason.message }
+    finally { pinning.value = false }
+}
+watch(() => props.project.url, url => { recordProjectOpen(url).catch(reason => { error.value = reason.message }) }, { immediate: true })
 const href = siteHref
 const actions = computed(() => [
     { kind: 'admin', label: 'В админку', url: getAdminUrl(props.project) },
@@ -39,7 +51,10 @@ onUnmounted(() => { revision++; extensionApi.storage.onChanged.removeListener(ch
     <div class="grid min-w-0 grid-cols-1 gap-4 text-ui-text">
         <header class="flex min-w-0 items-center gap-3">
             <slot name="leading" />
-            <SiteIcon :url="project.siteUrl || project.url" :name="project.name" large />
+            <div class="group relative shrink-0">
+                <SiteIcon :url="project.siteUrl || project.url" :name="project.name" large />
+                <IconButton :label="pinned ? 'Убрать из избранного' : 'В избранное'" :aria-pressed="pinned" :disabled="pinning" class="absolute -right-1.5 -bottom-1.5 size-6 rounded-full border-ui-border bg-ui-panel shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" :class="pinned ? 'text-ui-danger opacity-100' : 'opacity-0'" @click="togglePin"><HeartIcon class="size-3.5" :filled="pinned" /></IconButton>
+            </div>
             <div class="min-w-0 flex-1">
                 <h1 :title="project.name || displayUrl(project.url)" class="ui-title line-clamp-2 wrap-anywhere">{{ project.name || displayUrl(project.url) }}</h1>
                 <a :href="href(project.siteUrl || project.url)" :title="displayUrl(project.url)" target="_blank" rel="noreferrer" class="inline-block truncate text-xs text-ui-muted hover:text-ui-accent">{{ displayUrl(project.url) }}</a>

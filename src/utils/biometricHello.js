@@ -21,7 +21,9 @@ export const getBiometricPlatform = () => {
     return /mac/i.test(platform) ? 'mac' : /win/i.test(platform) ? 'windows' : 'other'
 }
 
-export const biometricProviderHint = () => isFirefox
+export const biometricProviderHint = () => getBiometricPlatform() === 'windows'
+    ? 'На Windows используется Windows Hello или другой провайдер passkey с PRF. Работа биометрии сама по себе не гарантирует поддержку PRF. При настройке проверяется и создание ключа, и будущая разблокировка; могут потребоваться два подтверждения.'
+    : isFirefox
     ? 'Выберите доступный в Firefox провайдер passkey с поддержкой PRF. Проверка может использовать биометрию или системный PIN.'
     : getBiometricPlatform() === 'mac'
     ? 'На Mac при создании ключа нажмите «Другой способ» → «Связка ключей iCloud» или выберите Google Password Manager. Вариант «Ваш профиль Chrome» может не поддерживать PRF.'
@@ -125,9 +127,10 @@ const prfUnsupportedMessage = () => (
 )
 
 const readPrfSecret = (credential, { required = true } = {}) => {
-    const value = credential.getClientExtensionResults?.().prf?.results?.first
+    const prf = credential.getClientExtensionResults?.().prf
+    const value = prf?.results?.first
     if (!value) {
-        if (required) throw new Error(prfUnsupportedMessage())
+        if (required) throw new Error(`${prfUnsupportedMessage()} Ответ get(): ${prf ? 'PRF без результата' : 'расширение PRF отсутствует'}.`)
         return null
     }
     const secret = new Uint8Array(value)
@@ -135,10 +138,11 @@ const readPrfSecret = (credential, { required = true } = {}) => {
     return secret
 }
 
-// Старые Windows-записи сохраняют internal и evalByCredential.
-// У новых записей используем транспорт, сообщённый самим провайдером.
+// Windows сохраняет internal и evalByCredential из версии до адаптации под Mac.
+// На остальных платформах учитываем транспорт выбранного провайдера.
 const getBiometricSecret = async ({ credentialId, salt, transports = ['internal'], signal, allowMissingPrf = false }) => {
     signal?.throwIfAborted()
+    const credentialTransports = getBiometricPlatform() === 'windows' ? ['internal'] : transports
     const options = {
         signal,
         publicKey: {
@@ -149,7 +153,7 @@ const getBiometricSecret = async ({ credentialId, salt, transports = ['internal'
             allowCredentials: [{
                 id: base64UrlToBytes(credentialId),
                 type: 'public-key',
-                ...(transports.length ? { transports } : {})
+                ...(credentialTransports.length ? { transports: credentialTransports } : {})
             }],
             extensions: {
                 prf: {
@@ -198,11 +202,33 @@ const getCompatibilityKek = async ({ credentialIdHash, keySalt, passkeyName, sig
     return deriveKek(bytes, base64ToBytes(keySalt), COMPAT_HKDF_INFO)
 }
 
-// Регистрация passkey. Часть аутентификаторов возвращает PRF-результат прямо в create,
-// остальные — только при повторном get с prf.evalByCredential.
+// До шифрования данных проверяем тот же get(), которым будет открываться хранилище.
+// PRF в create() сам по себе не доказывает работоспособность будущего unlock.
+const confirmPrfUnlock = async ({ credential, salt, transports, isMac, signal }) => {
+    const createPrf = credential.getClientExtensionResults?.().prf
+    const createSecret = readPrfSecret(credential, { required: false })
+    if (isMac && createPrf?.enabled === false && !createSecret) return null
+    let secret
+    try {
+        secret = await getBiometricSecret({ credentialId: credential.id, salt, transports, signal,
+            allowMissingPrf: isMac && !createSecret })
+    } catch (error) {
+        if (['AbortError', 'NotAllowedError'].includes(error.name)) throw error
+        // Только признаки поддержки, без credential ID, соли и значений секретов.
+        throw new Error(`Проверка будущей разблокировки не пройдена. Защита не включена. ` +
+            `create(): PRF=${createPrf?.enabled ?? 'неизвестно'}, результат=${createSecret ? 'есть' : 'нет'}. ${error.message}`, { cause: error })
+    }
+    if (createSecret && !createSecret.every((value, index) => value === secret[index])) {
+        throw new Error('Провайдер вернул разные PRF-секреты при создании и разблокировке. Защита не включена.')
+    }
+    return secret
+}
+
+// Регистрация passkey с подтверждением будущей разблокировки.
 const registerBiometricPasskey = async ({ signal } = {}) => {
     signal?.throwIfAborted()
-    const isMac = getBiometricPlatform() === 'mac'
+    const platform = getBiometricPlatform()
+    const isMac = platform === 'mac'
     // Суффикс помогает отличить рабочий ключ от старых ключей в меню браузера.
     const passkeyName = isMac ? `SUP 5th · ${bytesToBase64Url(randomBytes(3))}` : 'SUP 5th'
     const salt = randomBytes(32)
@@ -230,7 +256,9 @@ const registerBiometricPasskey = async ({ signal } = {}) => {
             attestation: 'none',
             timeout: 120000,
             extensions: {
-                prf: { eval: { first: salt } },
+                // Сохраняем Windows-форму запроса из 50c238b^ для сравнения на устройстве.
+                // enable не является стандартным полем PRF и в Chromium игнорируется.
+                prf: { ...(platform === 'windows' ? { enable: true } : {}), eval: { first: salt } },
                 ...(isMac ? { credProps: true } : {})
             }
         }
@@ -240,18 +268,9 @@ const registerBiometricPasskey = async ({ signal } = {}) => {
     if (!credential) throw new Error('Создание пасскея отменено')
 
     const reportedTransports = credential.response?.getTransports?.() || []
-    const transports = reportedTransports.length ? reportedTransports : (getBiometricPlatform() === 'mac' ? [] : ['internal'])
-    const createPrf = credential.getClientExtensionResults?.().prf
-    let prfSecret = null
-    if (createPrf?.results?.first) {
-        prfSecret = readPrfSecret(credential)
-    } else {
-        // Явное отсутствие PRF на Mac не требует второго подтверждения.
-        // При неизвестной поддержке сначала пробуем get. Ошибки/отмена не вызывают fallback.
-        if (!isMac || createPrf?.enabled !== false) {
-            prfSecret = await getBiometricSecret({ credentialId: credential.id, salt: saltB64, transports, signal, allowMissingPrf: isMac })
-        }
-    }
+    const transports = platform === 'windows' ? ['internal']
+        : reportedTransports.length ? reportedTransports : (isMac ? [] : ['internal'])
+    const prfSecret = await confirmPrfUnlock({ credential, salt: saltB64, transports, isMac, signal })
     if (!prfSecret) {
         if (credential.getClientExtensionResults?.().credProps?.rk === false) {
             throw new Error('Для локальной разблокировки нужен сохраняемый в браузере passkey')

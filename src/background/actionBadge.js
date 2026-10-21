@@ -45,11 +45,11 @@ const getProjectIconData = async () => {
 
 const defaultIconPaths = () => Object.fromEntries(ICON_SIZES.map((size) => [size, `src/assets/icons/icon_${size}.png`]))
 
-export const setTicketTimerBadge = async (tabId, ticket) => {
+export const setTicketTimerBadge = async (tabId, ticket, context = {}) => {
     const elapsed = formatTicketElapsed(ticket.startedAt)
     let color = '#2563eb'
     if (Number.isInteger(tabId)) {
-        const [tab, data] = await Promise.all([extensionApi.tabs.get(tabId), getStoredData()])
+        const [tab, data] = await Promise.all([context.tab || extensionApi.tabs.get(tabId), context.data || getStoredData()])
         if (findProjectByUrl(data.lastSuccessfulData.projects, tab?.url)) color = '#22c55e'
     }
     await extensionApi.action.setBadgeBackgroundColor({ tabId, color })
@@ -81,14 +81,15 @@ const clearProjectBadge = async (tabId) => {
     }
 }
 
-export const updateBadgeForTab = async (tabId) => {
+export const updateBadgeForTab = async (tabId, context = {}) => {
+    let tab = context.tab, data = context.data
     try {
-        const tab = await extensionApi.tabs.get(tabId)
+        tab ||= await extensionApi.tabs.get(tabId)
         if (!tab?.url || !/^https?:/.test(tab.url)) {
             await clearProjectBadge(tabId)
             return
         }
-        const data = await getStoredData()
+        data ||= await getStoredData()
         const project = findProjectByUrl(data.lastSuccessfulData.projects, tab.url)
         if (project) await setProjectBadge(tabId)
         else await clearProjectBadge(tabId)
@@ -96,8 +97,8 @@ export const updateBadgeForTab = async (tabId) => {
         // Вкладка закрыта или недоступна — игнорируем
     } finally {
         try {
-            const active = activeTicketFrom(await storageGet(SUPPORT_TRACKING_KEY))
-            if (active) await setTicketTimerBadge(tabId, active)
+            const active = Object.hasOwn(context, 'active') ? context.active : activeTicketFrom(await storageGet(SUPPORT_TRACKING_KEY))
+            if (active) await setTicketTimerBadge(tabId, active, { tab, data })
             else await extensionApi.action.setTitle({ tabId, title: extensionApi.runtime.getManifest().name })
         } catch { /* Вкладка закрыта. */ }
     }

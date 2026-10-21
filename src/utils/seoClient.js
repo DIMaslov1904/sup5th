@@ -1,10 +1,15 @@
-import { extensionApi } from '../platform/extensionApi.js'
+import { extensionApi, isFirefox } from '../platform/extensionApi.js'
+import { createSeoSidePanel } from './seoSidePanel.js'
 import { injectExtensionScript } from '../platform/scriptInjection.js'
+import { seoAppUrl } from './seoSections.js'
+const sidePanel = createSeoSidePanel(extensionApi, { firefox: isFirefox })
+export const canPinSeoPage = sidePanel.supported
+export const pinSeoPage = sidePanel.open
 export const callBackground = (type, payload = {}) => extensionApi.runtime.sendMessage({ type, payload }).then(response => {
     if (!response?.ok) throw new Error(response?.error || 'Нет ответа от расширения')
     return response.data
 })
-export const fetchSeo = (url, method = 'GET', maxBytes) => callBackground('seo:fetch', { url, method, maxBytes })
+export const fetchSeo = (url, method = 'GET', maxBytes, options = {}) => callBackground('seo:fetch', { url, method, maxBytes, ...options })
 export const sendSeoToTab = async (tabId, type = 'seo:scan', payload = {}) => {
     if (!Number.isInteger(tabId)) throw new Error('Откройте проверяемый сайт')
     let response
@@ -18,8 +23,8 @@ export const sendSeoToTab = async (tabId, type = 'seo:scan', payload = {}) => {
     if (!response?.ok) throw new Error(response?.error || 'Не удалось получить SEO-данные')
     return response.data
 }
-export const openSeoApp = (tabId, tool = 'seo') => extensionApi.tabs.create({
-    url: `${extensionApi.runtime.getURL('src/options/index.html')}?tool=${encodeURIComponent(tool)}&tabId=${tabId}`
+export const openSeoApp = (tabId, tool = 'seo', section = '') => extensionApi.tabs.create({
+    url: seoAppUrl(extensionApi.runtime.getURL('src/options/index.html'), tabId, tool, section)
 })
 export const downloadText = (text, filename, type = 'text/plain') => {
     const url = URL.createObjectURL(new Blob([text], { type }))

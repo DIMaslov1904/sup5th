@@ -19,13 +19,10 @@ const fail = event => {
 </script>
 
 <template>
-    <div class="mt-3 grid justify-items-start gap-1 text-xs">
-        <span class="text-ui-muted/70">Яндекс ИКС</span>
+    <div class="grid justify-items-start text-xs">
         <img v-if="imageUrl" :key="imageUrl" :src="imageUrl" alt="Яндекс ИКС" referrerpolicy="no-referrer" class="rounded-lg" @error="fail" />
         <template v-else>
-            <Button size="sm" variant="secondary" @click="load">{{ failed ? 'Повторить' : 'Получить' }}</Button>
-            <span v-if="failed" role="status" class="text-ui-muted">Не удалось загрузить счётчик.</span>
-            <span class="text-ui-muted">При нажатии домен сайта передаётся Яндексу.</span>
+            <Button size="sm" variant="secondary" :title="failed ? 'Не удалось загрузить счётчик. Нажмите, чтобы повторить.' : undefined" @click="load">Получить</Button>
         </template>
     </div>
 </template>

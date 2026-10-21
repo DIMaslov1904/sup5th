@@ -40,7 +40,7 @@ onUnmounted(() => { disposed = true; revision++; extensionApi.runtime.onMessage.
 
 <template>
     <span aria-hidden="true" :class="[large ? 'size-12' : 'size-8', {'border border-ui-border bg-ui-raised': !source, 'bg-white': source && background === 'white'}]" class="flex rounded-panel shrink-0 items-center justify-center overflow-hidden text-[11px] font-semibold text-ui-muted">
-        <img v-if="source" :src="source" alt="" class="h-full w-full object-contain" @load="analyze" @error="revoke" />
+        <img v-if="source" :src="source" alt="" loading="lazy" decoding="async" class="h-full w-full object-contain" @load="analyze" @error="revoke" />
         <span v-else>{{ iconInitials(name || origin) }}</span>
     </span>
 </template>

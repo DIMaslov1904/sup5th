@@ -1,4 +1,6 @@
-export const fetchSeoResource = async ({ url, method = 'GET', timeout = 20000, maxBytes = 200000 }, sender = {}) => {
+import { extensionApi } from '../platform/extensionApi.js'
+import { observeSeoRequest, seoResponseHeaders } from './seoRequestTrace.js'
+export const fetchSeoResource = async ({ url, method = 'GET', timeout = 20000, maxBytes = 200000, trace = false, fresh = false }, sender = {}) => {
     const empty = { ok: false, status: 0, url: '', headers: {}, text: '', ttfb: null }
     let parsed
     try { parsed = new URL(url) } catch { return empty }
@@ -12,8 +14,9 @@ export const fetchSeoResource = async ({ url, method = 'GET', timeout = 20000, m
     const timer = setTimeout(() => controller.abort(), Math.min(Math.max(Number(timeout) || 20000, 1000), 30000))
     const limit = Math.min(Math.max(Number(maxBytes) || 200000, 1000), 8 * 1024 * 1024)
     const started = performance.now()
+    const observer = trace ? observeSeoRequest({ webRequest: extensionApi.webRequest, extensionUrl: extensionApi.runtime.getURL(''), url: parsed.href, method }) : null
     try {
-        const response = await fetch(parsed.href, { method, credentials: 'omit', redirect: 'follow', signal: controller.signal })
+        const response = await fetch(parsed.href, { method, credentials: 'omit', redirect: 'follow', ...(trace || fresh ? { cache: 'no-store' } : {}), signal: controller.signal })
         const ttfb = Math.round(performance.now() - started)
         let stream = response.body
         // HTTP Content-Encoding is decoded by fetch; .xml.gz served as a file needs decoding here.
@@ -31,8 +34,8 @@ export const fetchSeoResource = async ({ url, method = 'GET', timeout = 20000, m
         }
         const bytes = new Uint8Array(size); let offset = 0
         for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length }
-        return { ok: response.ok, status: response.status, url: response.url || parsed.href, headers: Object.fromEntries(response.headers.entries()), text: new TextDecoder().decode(bytes), ttfb, truncated }
+        return { ok: response.ok, status: response.status, url: response.url || parsed.href, headers: seoResponseHeaders(Object.fromEntries(response.headers.entries())), text: new TextDecoder().decode(bytes), ttfb, truncated, ...(observer?.result(response) || {}) }
     } catch (error) { return { ...empty, error: error.message, failure: controller.signal.aborted ? 'timeout' : 'network' } }
-    finally { clearTimeout(timer) }
+    finally { clearTimeout(timer); observer?.dispose() }
 }
 import { hasOrigin } from '../utils/hostPermissions.js'

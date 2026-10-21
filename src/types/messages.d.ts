@@ -2,6 +2,10 @@ import type { ActiveSupportTicket, ApiSettings } from './extension.js'
 
 // Responses without a model stay unknown until their modules are typed.
 export interface PopupResults {
+    'pipeline:absence:get': boolean
+    'pipeline:absence:set': boolean
+    'shortcuts:get': import('../utils/projectShortcuts.js').ProjectShortcutState
+    'shortcuts:update': import('../utils/projectShortcuts.js').ProjectShortcutState
     'updates:status': import('../updates/checker.js').UpdateStatus
     'updates:check': import('../updates/checker.js').UpdateStatus
     'data:settings:get': ApiSettings

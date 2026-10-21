@@ -29,26 +29,38 @@ export const evaluateRobots = (content, pageUrl, agent = '*') => {
 }
 
 export const evaluateRobotsFile = (file, url, agent = '*') => {
-    if (file.exists) return evaluateRobots(file.content, url, agent)
+    if (file.pending || file.failure) return { allowed: null, rules: [] }
     if ([404, 410].includes(file.status)) return { allowed: true, rules: [] }
+    if (file.truncated || /^\s*(?:<!doctype\s+html|<html\b)/i.test(file.content || '')) return { allowed: null, rules: [] }
+    if (file.exists) return evaluateRobots(file.content, url, agent)
     return { allowed: null, rules: [] }
 }
 const prohibitsIndexing = value => /(?:^|[\s,])(?:noindex|none)(?=$|[\s,])/i.test(value)
-export const collectIndexingRules = (doc, xRobots = '') => {
-    const metas = [...doc.querySelectorAll('meta[name]')].map(el => ({ agent: el.name.toLowerCase(), value: el.content.trim() }))
+export const indexingRulesFromMeta = (tags, xRobots = '') => {
+    const metas = tags.map(el => ({ agent: String(el.name || '').toLowerCase(), value: String(el.content || '').trim() }))
     const robots = metas.filter(item => item.agent === 'robots').map(item => item.value).join(', ')
-    const headers = [], parts = xRobots.split(','); let scope = '*'
-    for (const part of parts) {
-        const match = part.trim().match(/^([a-z\d_-]+)\s*:\s*(.*)$/i)
-        if (match && !['unavailable_after', 'max-snippet', 'max-image-preview', 'max-video-preview'].includes(match[1].toLowerCase())) { scope = match[1].toLowerCase(); headers.push({ agent: scope, value: match[2] }) }
-        else headers.push({ agent: scope, value: part.trim() })
+    const headers = [], ambiguousScopes = new Set()
+    const exactLines = Array.isArray(xRobots)
+    for (const line of Array.isArray(xRobots) ? xRobots : [xRobots]) {
+        let scope = '*'
+        for (const part of String(line || '').split(',')) {
+            const match = part.trim().match(/^([a-z\d_-]+)\s*:\s*(.*)$/i)
+            if (match && !['unavailable_after', 'max-snippet', 'max-image-preview', 'max-video-preview'].includes(match[1].toLowerCase())) { scope = match[1].toLowerCase(); headers.push({ agent: scope, value: match[2] }) }
+            else {
+                headers.push({ agent: scope, value: part.trim() })
+                // Fetch combines repeated fields. A trailing directive might have
+                // belonged to a separate unscoped header before that combination.
+                if (!exactLines && scope !== '*' && prohibitsIndexing(part)) ambiguousScopes.add(scope)
+            }
+        }
     }
     const headerRules = agent => headers.filter(item => item.agent === '*' || item.agent === agent).map(item => item.value).join(', ')
-    const agents = ['googlebot', 'yandex'].map(agent => ({ agent, allowed: !prohibitsIndexing([robots, ...metas.filter(item => item.agent === agent).map(item => item.value), headerRules(agent)].join(', ')) }))
-    return { robots, robotsAllowed: !prohibitsIndexing(robots), xRobotsAllowed: !prohibitsIndexing(headerRules('*')), indexingAgents: agents }
+    const agents = ['googlebot', 'yandex'].map(agent => ({ agent, allowed: prohibitsIndexing([robots, ...metas.filter(item => item.agent === agent).map(item => item.value), headerRules(agent)].join(', ')) ? false : [...ambiguousScopes].some(scope => scope !== agent) ? null : true }))
+    return { robots, robotsAllowed: !prohibitsIndexing(robots), xRobotsAllowed: prohibitsIndexing(headerRules('*')) ? false : ambiguousScopes.size ? null : true, indexingAgents: agents }
 }
+export const collectIndexingRules = (doc, xRobots = '') => indexingRulesFromMeta([...doc.querySelectorAll('meta[name]')].map(el => ({ name: el.name, content: el.content })), xRobots)
 
 export const parseMetaHtml = (text) => {
     const doc = new DOMParser().parseFromString(text, 'text/html')
-    return { title: doc.querySelector('title')?.textContent.trim() || '', description: doc.querySelector('meta[name="description" i]')?.content.trim() || '' }
+    return { title: doc.querySelector('title')?.textContent.trim() || '', description: doc.querySelector('meta[name="description" i]')?.content.trim() || '', indexingMeta: [...doc.querySelectorAll('meta[name]')].map(el => ({ name: el.name, content: el.content })) }
 }

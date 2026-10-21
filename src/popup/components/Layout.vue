@@ -72,7 +72,7 @@ const toggleLock = async () => {
                 </svg>
             </IconButton>
         </nav>
-        <div class="app-scroll flex min-h-0 flex-1 flex-col overflow-y-auto pt-16 pb-6">
+        <div class="app-scroll flex min-h-0 flex-1 flex-col overflow-y-auto pt-16" :class="modelItemMenu === 'seo' ? 'pb-0' : 'pb-6'">
             <p v-if="refreshJob.running" role="status" class="mx-4 mb-3 flex items-center gap-2 text-xs text-ui-accent"><span class="ui-loading" aria-hidden="true"></span>Загрузка данных: {{ refreshJob.completed }} / {{ refreshJob.total }}</p>
             <Notification v-if="lockError" :text="lockError" />
             <Notification v-if="ticketError" :text="ticketError" />

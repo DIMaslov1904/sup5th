@@ -1,6 +1,7 @@
 import { reactive, readonly } from 'vue'
 import { extensionApi } from '../platform/extensionApi.js'
 import { createPipelineBadgeSession } from './pipelineBadgeSession.js'
+import { loadPipelineAbsence, savePipelineAbsence } from './data/projectData.js'
 
 const key = 'pipelineBadgeEnabled'
 const state = reactive({ enabled: false, ready: false })
@@ -20,4 +21,7 @@ export const setPipelineBadgeEnabled = async enabled => {
     await extensionApi.storage.local.set({ [key]: enabled === true })
     state.enabled = enabled === true
 }
-export const pipelineBadgeSession = createPipelineBadgeSession(fetch, () => state.enabled)
+export const pipelineBadgeSession = createPipelineBadgeSession(fetch, () => state.enabled, {
+    get: loadPipelineAbsence,
+    set: savePipelineAbsence
+})
