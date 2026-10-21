@@ -1,4 +1,4 @@
-import { extensionApi, isFirefox } from '../platform/extensionApi.js'
+import { extensionApi } from '../platform/extensionApi.js'
 import { sessionGet, sessionSet } from './storageRepository.js'
 import { enableHelloProtection, getSecurityStatus } from './credentialVault.js'
 import { startAdminAuth, copyProjectAccessText, getProjectAccessField, getServiceField } from './projectAccess.js'
@@ -48,7 +48,7 @@ export const createBiometricPageHandlers = ({ unlock, refreshData }) => {
     const read = () => sessionGet(BIOMETRIC_PAGES_KEY, {})
     const write = flows => sessionSet(BIOMETRIC_PAGES_KEY, flows)
     const open = payload => serial(async () => {
-        if (!isFirefox || !['enable', 'unlock'].includes(payload.mode)) throw new Error('Неизвестный сценарий биометрии')
+        if (!['enable', 'unlock'].includes(payload.mode)) throw new Error('Неизвестный сценарий биометрии')
         const status = await getSecurityStatus()
         if (payload.mode === 'enable' && status.enabled) throw new Error('Защита уже включена')
         if (payload.mode === 'unlock' && !status.enabled) throw new Error('Защита ещё не включена')
@@ -91,7 +91,7 @@ export const createBiometricPageHandlers = ({ unlock, refreshData }) => {
         if (!flow || flow.expiresAt <= Date.now()) return { state: 'expired' }
         return { state: flow.state }
     }
-    if (isFirefox) extensionApi.tabs.onRemoved.addListener(tabId => {
+    extensionApi.tabs.onRemoved.addListener(tabId => {
         serial(async () => {
             const flows = await read()
             for (const flow of Object.values(flows)) if (flow.tabId === tabId && flow.state === 'pending') flow.state = 'cancelled'

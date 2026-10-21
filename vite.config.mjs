@@ -34,9 +34,11 @@ export default defineConfig(({ mode }) => {
       rolldownOptions: {
         input: {
           'src/sidepanel/index': resolve(rootDir, 'src/sidepanel/index.html'),
+          'src/biometric/index': resolve(rootDir, 'src/biometric/index.html'),
+          'src/biometric/diagnostics': resolve(rootDir, 'src/biometric/diagnostics.html'),
           ...(browser === 'chrome'
             ? { 'src/offscreen/index': resolve(rootDir, 'src/offscreen/index.html') }
-            : { 'src/biometric/index': resolve(rootDir, 'src/biometric/index.html') })
+            : {})
         }
       },
       modulePreload: false

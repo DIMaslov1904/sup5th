@@ -86,6 +86,7 @@ const unlock = () => run('security', async () => {
     await unlockCredentialProtection(securityStatus.value); await refreshSecurityStatus()
 }, 'Хранилище разблокировано')
 const lock = () => run('security', async () => { await lockCredentialVault(); await refreshSecurityStatus() })
+const diagnoseBiometrics = () => run('diagnostics', () => extensionApi.tabs.create({ url: extensionApi.runtime.getURL('src/biometric/diagnostics.html') }))
 const disable = () => {
     if (!confirm('Отключить защиту? Пароли будут храниться локально без шифрования.')) return
     run('security', async () => { await disableCredentialProtection(); await refreshSecurityStatus() })
@@ -143,6 +144,7 @@ const reset = () => {
                     <template v-else><Button v-if="!securityStatus.unlocked" :disabled="Boolean(busy)" @click="unlock">Разблокировать</Button><template v-else><Button variant="secondary" :disabled="Boolean(busy)" @click="lock">Заблокировать</Button><Button variant="danger" :disabled="Boolean(busy)" @click="disable">Отключить защиту</Button></template></template>
                     <p v-if="!caps.available" class="text-xs text-ui-warning">{{ caps.unavailableReason || 'WebAuthn недоступен в этом браузере.' }}</p>
                     <BiometricProviderHelp v-if="!securityStatus.enabled" />
+                    <Button variant="secondary" :disabled="Boolean(busy)" @click="diagnoseBiometrics">Диагностика биометрии</Button>
                 </div>
             </Card>
             <template v-if="section === 'maintenance'">

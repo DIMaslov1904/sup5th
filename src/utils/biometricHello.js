@@ -22,7 +22,7 @@ export const getBiometricPlatform = () => {
 }
 
 export const biometricProviderHint = () => getBiometricPlatform() === 'windows'
-    ? 'На Windows используется Windows Hello или другой провайдер passkey с PRF. Работа биометрии сама по себе не гарантирует поддержку PRF. При настройке проверяется и создание ключа, и будущая разблокировка; могут потребоваться два подтверждения.'
+    ? 'На Windows используется Windows Hello или другой провайдер passkey с PRF. После создания ключа нажмите «Проверить разблокировку» и подтвердите второй запрос. Защита включится после успешной проверки.'
     : isFirefox
     ? 'Выберите доступный в Firefox провайдер passkey с поддержкой PRF. Проверка может использовать биометрию или системный PIN.'
     : getBiometricPlatform() === 'mac'
@@ -204,10 +204,14 @@ const getCompatibilityKek = async ({ credentialIdHash, keySalt, passkeyName, sig
 
 // До шифрования данных проверяем тот же get(), которым будет открываться хранилище.
 // PRF в create() сам по себе не доказывает работоспособность будущего unlock.
-const confirmPrfUnlock = async ({ credential, salt, transports, isMac, signal }) => {
+const confirmPrfUnlock = async ({ credential, salt, transports, isMac, signal, beforeUnlockCheck }) => {
     const createPrf = credential.getClientExtensionResults?.().prf
     const createSecret = readPrfSecret(credential, { required: false })
     if (isMac && createPrf?.enabled === false && !createSecret) return null
+    // Страница может дождаться отдельного нажатия после закрытия окна создания.
+    // Не включаем защиту, пока тот же ключ не прошёл get().
+    await beforeUnlockCheck?.()
+    signal?.throwIfAborted()
     let secret
     try {
         secret = await getBiometricSecret({ credentialId: credential.id, salt, transports, signal,
@@ -225,7 +229,7 @@ const confirmPrfUnlock = async ({ credential, salt, transports, isMac, signal })
 }
 
 // Регистрация passkey с подтверждением будущей разблокировки.
-const registerBiometricPasskey = async ({ signal } = {}) => {
+const registerBiometricPasskey = async ({ signal, beforeUnlockCheck } = {}) => {
     signal?.throwIfAborted()
     const platform = getBiometricPlatform()
     const isMac = platform === 'mac'
@@ -270,7 +274,7 @@ const registerBiometricPasskey = async ({ signal } = {}) => {
     const reportedTransports = credential.response?.getTransports?.() || []
     const transports = platform === 'windows' ? ['internal']
         : reportedTransports.length ? reportedTransports : (isMac ? [] : ['internal'])
-    const prfSecret = await confirmPrfUnlock({ credential, salt: saltB64, transports, isMac, signal })
+    const prfSecret = await confirmPrfUnlock({ credential, salt: saltB64, transports, isMac, signal, beforeUnlockCheck })
     if (!prfSecret) {
         if (credential.getClientExtensionResults?.().credProps?.rk === false) {
             throw new Error('Для локальной разблокировки нужен сохраняемый в браузере passkey')
