@@ -127,7 +127,6 @@ const reset = () => {
                 <Card v-for="[type,title,count] in [['projects','Проекты',snapshot?.projects.length],['accesses','Доступы',snapshot?.accesses.length]]" :key="type" :title="title">
                     <dl class="grid gap-2 text-xs"><div class="flex justify-between gap-3"><dt class="text-ui-muted">Записей</dt><dd>{{ count || 0 }}</dd></div><div class="flex justify-between gap-3"><dt class="text-ui-muted">Последняя успешная загрузка</dt><dd>{{ date(snapshot?.[`${type}UpdatedAt`]) }}</dd></div><div class="flex justify-between gap-3"><dt class="text-ui-muted">Состояние</dt><dd>{{ freshness(type) }}</dd></div></dl>
                 </Card>
-                <p class="text-xs text-ui-muted">Плановое обновление — раз в неделю. Заблокированные доступы обновляются после разблокировки.</p>
             </template>
             <Card v-if="section === 'security'" title="Защита паролей">
                 <div class="grid gap-3">
@@ -137,7 +136,6 @@ const reset = () => {
                     <template v-else><Button v-if="!securityStatus.unlocked" :disabled="Boolean(busy)" @click="unlock">Разблокировать</Button><template v-else><Button variant="secondary" :disabled="Boolean(busy)" @click="lock">Заблокировать</Button><Button variant="danger" :disabled="Boolean(busy)" @click="disable">Отключить защиту</Button></template></template>
                     <p v-if="!caps.available" class="text-xs text-ui-warning">{{ caps.unavailableReason || 'WebAuthn недоступен в этом браузере.' }}</p>
                     <BiometricProviderHelp v-if="!securityStatus.enabled" />
-                    <p class="text-xs text-ui-muted">Автоблокировка: 10 минут без ввода на устройстве, блокировка экрана или завершение сессии браузера.</p>
                 </div>
             </Card>
             <template v-if="section === 'maintenance'">
