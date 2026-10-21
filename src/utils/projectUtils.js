@@ -1,7 +1,6 @@
-import { siteKey, siteHref, parseSiteAddress, createAccessIndex } from './siteAddress.js'
+import { siteHref, parseSiteAddress, createAccessIndex } from './siteAddress.js'
 export const CMS_PATHS = { UMI: 'admin/content/sitetree/', EzPro: 'ezpro/', Bitrix: 'bitrix/admin/#authorize', ABO: 'login.php', MODX: 'manager/', AdminLTE: 'admin/', Joomla: 'administrator/' }
 export const CMS_ICONS = ['abo', 'adminlte', 'bitrix', 'cms', 'ezpro', 'joomla', 'modx', 'tilda', 'umi', 'wordpress', 'drupal', 'opencart']
-export const normalizeHost = siteKey
 export const findProjectByUrl = (projects, value) => {
     let target
     try { target = parseSiteAddress(value) } catch { return null }

@@ -12,6 +12,13 @@ export const bytesToBase64 = (bytes) => {
 
 export const base64ToBytes = (value) => Uint8Array.from(atob(value), (character) => character.charCodeAt(0))
 
+export const bytesToBase64Url = bytes => bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+
+export const base64UrlToBytes = value => {
+    const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
+    return base64ToBytes(base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '='))
+}
+
 export const randomBytes = (length) => crypto.getRandomValues(new Uint8Array(length))
 
 export const importAesKey = (rawKey, usages = ['encrypt', 'decrypt']) =>

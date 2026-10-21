@@ -50,7 +50,7 @@ const enable = () => run(async () => {
 const authorize = () => run(() => props.step === 'projects' ? authorizeProjectsApi() : authorizeAccessApi())
 onMounted(async () => {
     try { capabilities.value = await getBiometricCapabilities() }
-    catch { capabilities.value = { helloAvailable: false } }
+    catch { capabilities.value = { available: false } }
 })
 </script>
 <template>
@@ -73,7 +73,7 @@ onMounted(async () => {
                 <Message v-if="securityStatus.enabled" type="success">Биометрическая защита уже включена.</Message>
                 <template v-else>
                     <Button :loading="busy" :disabled="!capabilities?.available" @click="enable">Настроить биометрию</Button>
-                    <p v-if="capabilities && !capabilities.available" class="text-xs text-ui-muted">{{ capabilities.unavailableReason || 'WebAuthn сейчас недоступен. Этот шаг можно пропустить.' }}</p>
+                    <p v-if="capabilities && !capabilities.available" class="text-xs text-ui-muted">WebAuthn сейчас недоступен. Этот шаг можно пропустить.</p>
                     <BiometricProviderHelp />
                 </template>
                 <Button variant="ghost" :disabled="busy" @click="run(() => advance('accesses'))">{{ securityStatus.enabled ? 'Далее' : 'Пропустить' }}</Button>

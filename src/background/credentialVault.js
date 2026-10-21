@@ -1,8 +1,7 @@
 import { extensionApi } from '../platform/extensionApi.js'
 import { trustedLocal } from '../platform/trustedStorage.js'
-import { base64ToBytes, bytesToBase64, importAesKey, openJson, sealJson } from './credentialCrypto.js'
+import { base64ToBytes, importAesKey, openJson, sealJson } from '../utils/credentialCrypto.js'
 import { publicAccess, publicService, accessSecret } from './credentialRecords.js'
-export { publicAccess, publicService, accessSecret } from './credentialRecords.js'
 import { DATA_KEY, SERVICES_KEY, SECURITY_KEY, VAULT_KEY, UNLOCKED_KEY, AUTH_SESSIONS_KEY, getStoredData, storageGet, storageSetMany, sessionGet, sessionSet, sessionRemove, mutateStorage } from './storageRepository.js'
 
 let revision = 0

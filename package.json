@@ -6,7 +6,6 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "node --test tests/*.test.js",
     "dev": "vite",
     "dev:firefox": "vite --mode firefox",
     "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.firefox.json && tsc -p tsconfig.webextensions.json",

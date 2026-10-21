@@ -1,4 +1,5 @@
 import { extensionApi, isFirefox } from '../platform/extensionApi.js'
+import { base64ToBytes, bytesToBase64, base64UrlToBytes, bytesToBase64Url, randomBytes, sealBytes, openBytes } from './credentialCrypto.js'
 // WebAuthn: PRF и локальный режим совместимости для macOS без PRF.
 // В режиме совместимости credential ID служит ключевым материалом и не сохраняется.
 //
@@ -14,8 +15,6 @@ const HKDF_SALT = encoder.encode('SUP5th-PRF-v1')
 const HKDF_INFO = encoder.encode('SUP5th-hello-kek-v1')
 const COMPAT_HKDF_INFO = encoder.encode('SUP5th-credential-id-kek-v1')
 
-export const randomBytes = (length) => crypto.getRandomValues(new Uint8Array(length))
-
 export const getBiometricPlatform = () => {
     const platform = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent
     return /mac/i.test(platform) ? 'mac' : /win/i.test(platform) ? 'windows' : 'other'
@@ -29,68 +28,11 @@ export const biometricProviderHint = () => getBiometricPlatform() === 'windows'
     ? 'На Mac при создании ключа нажмите «Другой способ» → «Связка ключей iCloud» или выберите Google Password Manager. Вариант «Ваш профиль Chrome» может не поддерживать PRF.'
     : 'Выберите настроенный на устройстве провайдер passkey с поддержкой PRF. Проверка может использовать биометрию или системный PIN.'
 
-// --- base64 / base64url ---
-const bytesToBase64 = (bytes) => {
-    let binary = ''
-    const chunkSize = 0x8000
-    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-        binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize))
-    }
-    return btoa(binary)
-}
-
-const base64ToBytes = (value) => Uint8Array.from(atob(value), (character) => character.charCodeAt(0))
-
-export const bytesToBase64Url = (bytes) =>
-    bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
-
-export const base64UrlToBytes = (value) => {
-    const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
-    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
-    return base64ToBytes(padded)
-}
-
-// --- Доступность биометрии и PRF ---
-export const isBiometricAvailable = async () => {
-    if (typeof PublicKeyCredential === 'undefined' ||
-        typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable !== 'function') {
-        return false
-    }
-    try {
-        return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
-    } catch {
-        return false
-    }
-}
-
-// Возможности браузера не гарантируют PRF у выбранного провайдера passkey.
-const getClientCapabilities = async () => {
-    if (typeof globalThis.PublicKeyCredential?.getClientCapabilities === 'function') {
-        try {
-            return await PublicKeyCredential.getClientCapabilities()
-        } catch {
-            return null
-        }
-    }
-    return null
-}
-
-export const getBiometricCapabilities = async () => {
-    const caps = await getClientCapabilities()
-    const match = navigator.userAgent.match(/\bChrome\/(\d+)/)
-    const chromeMajor = match ? Number(match[1]) : 0
-    return {
-        helloAvailable: await isBiometricAvailable(),
-        available: typeof PublicKeyCredential !== 'undefined' &&
-            typeof navigator.credentials?.create === 'function' && typeof navigator.credentials?.get === 'function',
-        unavailableReason: '',
-        platform: getBiometricPlatform(),
-        // В Chrome возможности расширений WebAuthn именуются как "extension:prf"
-        prf: typeof caps?.['extension:prf'] === 'boolean' ? caps['extension:prf'] : null,
-        capabilities: caps || null,
-        chromeMajor
-    }
-}
+// Фактическую выдачу PRF проверяем на созданном ключе, а не по версии браузера.
+export const getBiometricCapabilities = async () => ({
+    available: typeof PublicKeyCredential !== 'undefined' &&
+        typeof navigator.credentials?.create === 'function' && typeof navigator.credentials?.get === 'function'
+})
 
 const getRpId = () => (typeof extensionApi !== 'undefined' && extensionApi.runtime?.id) ? extensionApi.runtime.id : location.hostname
 
@@ -106,21 +48,6 @@ const deriveKek = async (secret, salt = HKDF_SALT, info = HKDF_INFO) => {
     )
 }
 
-export const wrapKey = async (rawKey, kek) => {
-    const iv = randomBytes(12)
-    const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, kek, rawKey))
-    return { iv: bytesToBase64(iv), ciphertext: bytesToBase64(ciphertext) }
-}
-
-export const unwrapKey = async (wrapped, kek) => {
-    const plaintext = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: base64ToBytes(wrapped.iv) },
-        kek,
-        base64ToBytes(wrapped.ciphertext)
-    )
-    return new Uint8Array(plaintext)
-}
-
 const prfUnsupportedMessage = () => (
     'Выбранный passkey не выдал PRF-секрет. Успешная проверка устройства сама по себе не позволяет расшифровать пароли. ' +
     biometricProviderHint()
@@ -130,7 +57,7 @@ const readPrfSecret = (credential, { required = true } = {}) => {
     const prf = credential.getClientExtensionResults?.().prf
     const value = prf?.results?.first
     if (!value) {
-        if (required) throw new Error(`${prfUnsupportedMessage()} Ответ get(): ${prf ? 'PRF без результата' : 'расширение PRF отсутствует'}.`)
+        if (required) throw new Error(prfUnsupportedMessage())
         return null
     }
     const secret = new Uint8Array(value)
@@ -218,9 +145,7 @@ const confirmPrfUnlock = async ({ credential, salt, transports, isMac, signal, b
             allowMissingPrf: isMac && !createSecret })
     } catch (error) {
         if (['AbortError', 'NotAllowedError'].includes(error.name)) throw error
-        // Только признаки поддержки, без credential ID, соли и значений секретов.
-        throw new Error(`Проверка будущей разблокировки не пройдена. Защита не включена. ` +
-            `create(): PRF=${createPrf?.enabled ?? 'неизвестно'}, результат=${createSecret ? 'есть' : 'нет'}. ${error.message}`, { cause: error })
+        throw new Error(`Проверка разблокировки не пройдена. Защита не включена. ${error.message}`, { cause: error })
     }
     if (createSecret && !createSecret.every((value, index) => value === secret[index])) {
         throw new Error('Провайдер вернул разные PRF-секреты при создании и разблокировке. Защита не включена.')
@@ -260,9 +185,7 @@ const registerBiometricPasskey = async ({ signal, beforeUnlockCheck } = {}) => {
             attestation: 'none',
             timeout: 120000,
             extensions: {
-                // Сохраняем Windows-форму запроса из 50c238b^ для сравнения на устройстве.
-                // enable не является стандартным полем PRF и в Chromium игнорируется.
-                prf: { ...(platform === 'windows' ? { enable: true } : {}), eval: { first: salt } },
+                prf: { eval: { first: salt } },
                 ...(isMac ? { credProps: true } : {})
             }
         }
@@ -298,13 +221,13 @@ export const enableBiometricProtectionFlow = async (options = {}) => {
     const registration = await registerBiometricPasskey(options)
     if (registration.keySource === 'credential-id') {
         const { kek, ...config } = registration
-        const wrappedKey = await wrapKey(rawVaultKey, kek)
+        const wrappedKey = await sealBytes(rawVaultKey, kek)
         options.signal?.throwIfAborted()
         return { rawVaultKey: bytesToBase64(rawVaultKey), ...config, wrappedKey }
     }
     const { credentialId, transports, salt, prfSecret } = registration
     const kek = await deriveKek(prfSecret)
-    const wrappedKey = await wrapKey(rawVaultKey, kek)
+    const wrappedKey = await sealBytes(rawVaultKey, kek)
     options.signal?.throwIfAborted()
     return {
         rawVaultKey: bytesToBase64(rawVaultKey),
@@ -328,7 +251,7 @@ export const unlockWithBiometricFlow = async ({ credentialId, prfSalt, wrappedKe
     const kek = compatible
         ? await getCompatibilityKek({ credentialIdHash, keySalt, passkeyName, signal })
         : await deriveKek(await getBiometricSecret({ credentialId, salt: prfSalt, transports, signal }))
-    const rawKey = await unwrapKey(wrappedKey, kek)
+    const rawKey = await openBytes(wrappedKey, kek)
     signal?.throwIfAborted()
     if (rawKey.length !== 32) throw new Error('Провайдер passkey вернул некорректный ключ')
     return { key: bytesToBase64(rawKey) }

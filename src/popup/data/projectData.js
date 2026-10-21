@@ -89,8 +89,7 @@ export const loadProjectDetails = (url) =>
 export const getProjectAccessField = (url, accessId, field) =>
     callBackground('project:accessField', { url, accessId, field })
 
-export const getCredentialSecurityStatus = (helloAvailable = false, prfSupported = false) =>
-    callBackground('security:status', { helloAvailable, prfSupported })
+export const getCredentialSecurityStatus = () => callBackground('security:status')
 
 /** @param {Awaited<ReturnType<typeof import('../../utils/biometricHello.js').enableBiometricProtectionFlow>>} payload */
 export const enableHelloProtection = (payload) => callBackground('security:enableHello', payload)
