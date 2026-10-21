@@ -6,6 +6,8 @@ import { getAdminUrl, getCmsIconPath, getTicketUrl } from '../../utils/projectUt
 import { siteHref } from '../../utils/siteAddress.js'
 import { displayUrl } from '../../utils/displayUrl.js'
 import SiteIcon from './SiteIcon.vue'
+import PipelineBadge from './PipelineBadge.vue'
+import { pipelineBadgePreference } from '../pipelineBadgeState.js'
 import ProjectAccessCard from './ProjectAccessCard.vue'
 import FtpAccessCard from './FtpAccessCard.vue'
 import Notification from './ui/Notification.vue'
@@ -42,6 +44,7 @@ onUnmounted(() => { revision++; extensionApi.storage.onChanged.removeListener(ch
                 <h1 :title="project.name || displayUrl(project.url)" class="ui-title line-clamp-2 wrap-anywhere">{{ project.name || displayUrl(project.url) }}</h1>
                 <a :href="href(project.siteUrl || project.url)" :title="displayUrl(project.url)" target="_blank" rel="noreferrer" class="inline-block truncate text-xs text-ui-muted hover:text-ui-accent">{{ displayUrl(project.url) }}</a>
             </div>
+            <PipelineBadge v-if="pipelineBadgePreference.enabled" :repository="project.git" />
         </header>
         <div class="grid grid-cols-4 gap-2">
             <a v-for="action in actions" :key="action.kind" :href="action.url || undefined" target="_blank" rel="noreferrer" :aria-disabled="!action.url" :tabindex="action.url ? undefined : -1"

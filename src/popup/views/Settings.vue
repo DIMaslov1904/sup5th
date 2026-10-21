@@ -19,6 +19,7 @@ import BiometricProviderHelp from '../components/BiometricProviderHelp.vue'
 import { useApiAutosave } from '../useApiAutosave.js'
 import CopyAccessApiCode from '../components/CopyAccessApiCode.vue'
 import ExtensionUpdates from '../components/ExtensionUpdates.vue'
+import { pipelineBadgePreference, setPipelineBadgeEnabled } from '../pipelineBadgeState.js'
 
 const section = ref('connection'), settings = ref({ projectsUrl: '', accessUrl: '' }), data = ref(null), errors = ref([])
 const savedSettings = ref({ projectsUrl: '', accessUrl: '' })
@@ -98,7 +99,7 @@ const reset = () => {
         <ExtensionUpdates v-if="section === 'updates'" />
         <Preloader v-else-if="!loaded" label="Загрузка настроек…" />
         <template v-else>
-            <template v-if="section === 'connection'">
+            <template v-if="section === 'connection'">                
                 <Card v-for="[type,title,field] in [['projects','Проекты','projectsUrl'],['accesses','Личные доступы и сервисы','accessUrl']]" :key="type" :title="title">
                     <Input :model-value="settings[field]" :aria-label="`URL API: ${title}`" :aria-invalid="Boolean(autosave.states[field].error)" :aria-describedby="autosave.states[field].status !== 'idle' ? `api-${field}-status` : undefined" placeholder="URL веб-приложения Apps Script" :disabled="Boolean(busy)" @update:model-value="value => autosave.update(field, value)" @blur="autosave.flush(field)" @keydown.enter.prevent="autosave.flush(field)" />
                     <p v-if="autosave.states[field].status !== 'idle'" :id="`api-${field}-status`" role="status" aria-live="polite" class="mt-2 text-xs" :class="autosave.states[field].error ? 'text-ui-danger' : 'text-ui-muted'">{{ autosave.states[field].error || saveLabels[autosave.states[field].status] }}</p>
@@ -106,6 +107,15 @@ const reset = () => {
                     <CopyAccessApiCode v-else class="mt-2" />
                     <Message v-if="data?.[type === 'projects' ? 'projectApiStatus' : 'accessApiStatus']" type="warning" class="mt-2">{{ data[type === 'projects' ? 'projectApiStatus' : 'accessApiStatus'] === 'access_denied' ? 'Доступ к таблице ограничен. Обратитесь к владельцу.' : 'Войдите в Google и подтвердите доступ, затем повторите загрузку.' }}</Message>
                     <Button v-if="needsAuthorization(type)" size="sm" variant="ghost" class="mt-2" :disabled="Boolean(busy)" @click="authorize(type)">Открыть API / авторизацию</Button>
+                </Card>
+                <Card title="Статус pipeline">
+                    <label class="flex cursor-pointer items-center justify-between gap-3 text-[13px]">
+                        <span>Показывать статус pipeline в проекте</span>
+                        <input type="checkbox" role="switch" :checked="pipelineBadgePreference.enabled" :disabled="!pipelineBadgePreference.ready || Boolean(busy)"
+                            aria-describedby="pipeline-badge-help" class="peer sr-only" @change="event => run('pipeline', () => setPipelineBadgeEnabled(event.target.checked))" />
+                        <span aria-hidden="true" class="relative h-5 w-9 shrink-0 rounded-full bg-ui-border transition-colors after:absolute after:top-0.5 after:left-0.5 after:size-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-ui-accent peer-checked:after:translate-x-4 peer-focus-visible:outline-2 peer-focus-visible:outline-ui-accent peer-disabled:opacity-50"></span>
+                    </label>
+                    <p id="pipeline-badge-help" class="mt-2 text-xs text-ui-muted">По умолчанию выключено. При включении загружается статус ветки main из GitLab. Если требуется вход, запросы прекращаются до закрытия popup.</p>
                 </Card>
             </template>
             <template v-if="section === 'data'">
