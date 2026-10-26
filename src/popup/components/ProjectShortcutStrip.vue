@@ -1,24 +1,18 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { extensionApi } from '../../platform/extensionApi.js'
 import { loadProjectData } from '../data/projectData.js'
 import { projectShortcuts, recordProjectOpen } from '../projectShortcutsState.js'
-import { selectProjectShortcuts, PROJECT_POPULAR_WINDOW } from '../../utils/projectShortcuts.js'
+import { selectProjectShortcuts } from '../../utils/projectShortcuts.js'
 import { siteHref } from '../../utils/siteAddress.js'
 import SiteIcon from './SiteIcon.vue'
 import Notification from './ui/Notification.vue'
 import HeartIcon from './ui/HeartIcon.vue'
 const emit = defineEmits(['select'])
-const projects = ref([]), scroller = ref(null), error = ref(''), now = ref(Date.now())
+const projects = ref([]), scroller = ref(null), error = ref('')
 const hovered = ref(''), focused = ref('')
-let alive = true, revision = 0, hoverTimer, expiryTimer
-const items = computed(() => selectProjectShortcuts(projects.value, projectShortcuts.value, now.value))
-const expire = () => {
-    now.value = Date.now(); clearTimeout(expiryTimer)
-    const deadlines = projectShortcuts.value.visits.map(event => event.at + PROJECT_POPULAR_WINDOW).filter(time => time > now.value)
-    if (deadlines.length) expiryTimer = setTimeout(expire, Math.min(...deadlines) - now.value)
-}
-watch(projectShortcuts, expire, { immediate: true })
+let alive = true, revision = 0, hoverTimer
+const items = computed(() => selectProjectShortcuts(projects.value, projectShortcuts.value))
 const load = async () => {
     const current = ++revision
     try { const data = await loadProjectData(); if (alive && current === revision) projects.value = data.lastSuccessfulData.projects }
@@ -26,7 +20,7 @@ const load = async () => {
 }
 const changed = (changes, area) => { if (area === 'local' && changes.projectData) load() }
 onMounted(() => { extensionApi.storage.onChanged.addListener(changed); load() })
-onUnmounted(() => { alive = false; revision++; clearTimeout(hoverTimer); clearTimeout(expiryTimer); extensionApi.storage.onChanged.removeListener(changed) })
+onUnmounted(() => { alive = false; revision++; clearTimeout(hoverTimer); extensionApi.storage.onChanged.removeListener(changed) })
 const leave = () => { clearTimeout(hoverTimer); hoverTimer = setTimeout(() => { hovered.value = '' }, 500) }
 const hover = url => { clearTimeout(hoverTimer); hoverTimer = setTimeout(() => { hovered.value = url }, 300) }
 const blur = event => { if (!event.currentTarget.contains(event.relatedTarget)) focused.value = '' }
@@ -41,7 +35,7 @@ const wheel = event => {
 const reveal = event => { if (event.propertyName === 'width') event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }
 </script>
 <template>
-    <nav v-if="items.length" ref="scroller" aria-label="Избранные и популярные проекты" class="project-shortcuts mb-3 flex shrink-0 gap-2 overflow-x-auto overscroll-x-contain py-1" @wheel="wheel">
+    <nav v-if="items.length" ref="scroller" aria-label="Избранные и последние проекты" class="project-shortcuts mb-3 flex shrink-0 gap-2 overflow-x-auto overscroll-x-contain py-1" @wheel="wheel">
         <article v-for="project in items" :key="project.url" class="project-shortcut relative flex shrink-0 items-center justify-center rounded-panel border border-ui-border bg-ui-panel p-1.5" :class="{'is-open': hovered === project.url || focused === project.url}" @mouseenter="hover(project.url)" @mouseleave="leave" @focusin="focused = project.url" @focusout="blur" @transitionend.self="reveal">
             <button type="button" :aria-label="`Открыть проект ${project.name || project.url}`" class="flex min-w-0 flex-1 cursor-pointer items-center overflow-hidden rounded-control text-left" @click="select(project)">
                 <SiteIcon :url="project.siteUrl || project.url" :name="project.name" class="project-shortcut-icon rounded-control!" />

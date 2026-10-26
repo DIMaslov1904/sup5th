@@ -7,9 +7,10 @@ import { publicAccess, publicService, accessSecret } from './credentialRecords.j
 import { sealJson } from '../utils/credentialCrypto.js'
 import { assignLocalIds, accessIdentity, serviceIdentity } from './recordIdentity.js'
 import { apiAuthorizationError, classifyApiAuthorization } from './apiAuthorization.js'
+import { REFRESH_PERIOD } from '../utils/dataRefreshPolicy.js'
+export { REFRESH_PERIOD } from '../utils/dataRefreshPolicy.js'
 
-export const PROJECTS_ALARM = 'weekly-projects-refresh'
-export const REFRESH_PERIOD = 7 * 24 * 60 * 60000
+export const PROJECTS_ALARM = 'projects-refresh'
 export const REFRESH_JOB_KEY = 'dataRefreshJob'
 let running = null, controller = null
 export const getRefreshJob = () => sessionGet(REFRESH_JOB_KEY, { running: false, state: 'idle' })
@@ -127,7 +128,11 @@ export const refreshAll = ({ scope = 'all', onlyIfDue = false } = {}) => {
     return work
 }
 export const scheduleRefresh = async () => {
+    // Remove the old schedule when upgrading from weekly refreshes.
+    await extensionApi.alarms.clear('weekly-projects-refresh')
     const settings = await readApiSettings()
     if (!settings.projectsUrl && !settings.accessUrl) return extensionApi.alarms.clear(PROJECTS_ALARM)
-    if (!await extensionApi.alarms.get(PROJECTS_ALARM)) await extensionApi.alarms.create(PROJECTS_ALARM, { delayInMinutes: REFRESH_PERIOD / 60000, periodInMinutes: REFRESH_PERIOD / 60000 })
+    const periodInMinutes = REFRESH_PERIOD / 60000
+    const alarm = await extensionApi.alarms.get(PROJECTS_ALARM)
+    if (alarm?.periodInMinutes !== periodInMinutes) await extensionApi.alarms.create(PROJECTS_ALARM, { delayInMinutes: periodInMinutes, periodInMinutes })
 }

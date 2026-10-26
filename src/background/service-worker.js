@@ -16,6 +16,7 @@ import { updateActiveTabIcon, updateBadgeForTab } from './actionBadge.js'
 import { getActiveSupportTicket, observeSupportTicket, resetActiveSupportTicket, registerSupportTicketTracking } from './supportTicketTracking.js'
 import { startAdminAuth, authContext, consumePendingAdminAuth, injectAuthForTab, forgetAuthTab, copyProjectAccessText, getProjectDetails, getProjectAccessField, getServices, getServiceField } from './projectAccess.js'
 import { updateChecker, registerExtensionUpdates } from './extensionUpdates.js'
+import { openSupportTicket, supportAuthPage, forgetSupportAuthTab } from './supportAuth.js'
 
 registerPopupSession()
 registerVaultIdleLock()
@@ -60,6 +61,7 @@ const handlers = {
     'updates:status': () => updateChecker.getStatus(), 'updates:check': () => updateChecker.check({ force: true }),
     'support:ticket:get': getActiveSupportTicket, 'support:ticket:reset': resetActiveSupportTicket,
     'support:ticket:observe': observeSupportTicket,
+    'support:ticket:open': openSupportTicket, 'support:auth:page': supportAuthPage,
     'seo:fetch': fetchSeoResource, 'seo:downloadImage': downloadSeoImage,
     'icons:status': getSiteIconStatus, 'icons:refresh': () => syncCatalogueIcons({ force: true }), 'icons:cancel': cancelSiteIcons,
     'services:get': getServices, 'services:field': getServiceField,
@@ -84,7 +86,7 @@ extensionApi.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!handler) return false
     const internal = sender.id === extensionApi.runtime.id && sender.url?.startsWith(extensionApi.runtime.getURL(''))
     const contentAllowed = ['auth:context', 'auth:consume', 'seo:fetch', 'seo:downloadImage'].includes(message.type)
-    const supportAllowed = message.type === 'support:ticket:observe' && /^https:\/\/support\.5th\.ru\//.test(sender.url || '')
+    const supportAllowed = ['support:ticket:observe', 'support:auth:page'].includes(message.type) && /^https:\/\/support\.5th\.ru\//.test(sender.url || '')
     if (!internal && ((!contentAllowed && !supportAllowed) || sender.id !== extensionApi.runtime.id || sender.frameId !== 0 || !/^https?:\/\//.test(sender.url || ''))) {
         sendResponse({ ok: false, error: 'Операция доступна только в интерфейсе расширения' }); return false
     }
@@ -101,7 +103,7 @@ extensionApi.runtime.onInstalled.addListener(startup)
 extensionApi.runtime.onStartup.addListener(startup)
 extensionApi.alarms.onAlarm.addListener(alarm => { if (alarm.name === PROJECTS_ALARM) startup() })
 extensionApi.tabs.onActivated.addListener(({ tabId }) => updateBadgeForTab(tabId))
-extensionApi.tabs.onRemoved.addListener(tabId => ready.then(() => forgetAuthTab(tabId)).catch(console.error))
+extensionApi.tabs.onRemoved.addListener(tabId => ready.then(() => Promise.all([forgetAuthTab(tabId), forgetSupportAuthTab(tabId)])).catch(console.error))
 extensionApi.tabs.onUpdated.addListener((tabId, changes, tab) => {
     if (changes.status !== 'complete') return
     updateBadgeForTab(tabId)

@@ -22,6 +22,7 @@ import CopyAccessApiCode from '../components/CopyAccessApiCode.vue'
 import ExtensionUpdates from '../components/ExtensionUpdates.vue'
 import { pipelineBadgePreference, setPipelineBadgeEnabled } from '../pipelineBadgeState.js'
 import { projectShortcuts, updateProjectShortcuts } from '../projectShortcutsState.js'
+import { REFRESH_PERIOD } from '../../utils/dataRefreshPolicy.js'
 
 const section = ref('connection'), settings = ref({ projectsUrl: '', accessUrl: '' }), data = ref(null), errors = ref([])
 const savedSettings = ref({ projectsUrl: '', accessUrl: '' })
@@ -39,7 +40,7 @@ const freshness = type => {
     if (!url) return 'API не подключён'
     if (!time) return 'Ожидается первая загрузка'
     if (snapshot.value[`${type}Url`] !== url) return 'Источник изменён — загрузите данные'
-    return Date.now() - time >= 7 * 86400000 ? 'Требуется обновление' : 'Актуально по недельному расписанию'
+    return Date.now() - time >= REFRESH_PERIOD ? 'Требуется обновление' : 'Актуально по ежедневному расписанию'
 }
 let alive = true, revision = 0
 const load = async () => {
@@ -112,8 +113,8 @@ const reset = () => {
                 </Card>
                 <Card title="Доп. функции">
                     <label class="mb-3 flex cursor-pointer items-center justify-between gap-3 text-[13px]">
-                        <span>Показывать популярные проекты</span>
-                        <input type="checkbox" role="switch" aria-label="Показывать популярные проекты" :checked="projectShortcuts.enabled" :disabled="Boolean(busy)" class="peer sr-only" @change="event => run('shortcuts', () => updateProjectShortcuts({kind:'configure',enabled:event.target.checked}))" />
+                        <span>Показывать последние проекты</span>
+                        <input type="checkbox" role="switch" aria-label="Показывать последние проекты" :checked="projectShortcuts.enabled" :disabled="Boolean(busy)" class="peer sr-only" @change="event => run('shortcuts', () => updateProjectShortcuts({kind:'configure',enabled:event.target.checked}))" />
                         <span aria-hidden="true" class="relative h-5 w-9 shrink-0 rounded-full bg-ui-border transition-colors after:absolute after:top-0.5 after:left-0.5 after:size-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-ui-accent peer-checked:after:translate-x-4 peer-focus-visible:outline-2 peer-focus-visible:outline-ui-accent peer-disabled:opacity-50"></span>
                     </label>
                     <label class="flex cursor-pointer items-center justify-between gap-3 text-[13px]">

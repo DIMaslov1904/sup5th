@@ -1,6 +1,8 @@
 import { startTicketCreation } from './supportTicket.js'
 import { startSupportWorkTracking } from './supportWorkTracking.js'
+import { startSupportAuth } from './supportAuth.js'
 
+startSupportAuth()
 startTicketCreation()
 
 const frameBody = document.getElementById('body-frame')

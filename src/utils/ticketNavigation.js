@@ -12,5 +12,7 @@ export const searchTicketNumber = value => {
 export const openTicket = async value => {
     const number = String(value).trim().replace(/^0+/, '')
     if (!/^\d+$/.test(number)) throw new Error('Введите положительный целый номер тикета')
-    return extensionApi.tabs.create({ url: `https://support.5th.ru/published/index.php?app=ST#/requests/search/${number}/` })
+    const response = await extensionApi.runtime.sendMessage({ type: 'support:ticket:open', payload: { number } })
+    if (!response?.ok) throw new Error(response?.error || 'Не удалось открыть тикет')
+    return response.data
 }
