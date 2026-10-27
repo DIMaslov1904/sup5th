@@ -7,10 +7,10 @@ import { getPipelineAbsence, setPipelineAbsence } from './pipelineBadges.js'
 import { downloadSeoImage } from './imageDownload.js'
 import { syncSiteIcons, getSiteIconStatus, cancelSiteIcons, clearSiteIcons } from '../icons/iconService.js'
 import { registerPopupSession } from './popupSession.js'
-import { storageReady, SCHEMA_VERSION, SERVICES_KEY, ERRORS_KEY, storageGet, storageSet, sessionSet, getStoredData, mutateStorage, invalidateOperations } from './storageRepository.js'
+import { storageReady, SCHEMA_VERSION, SERVICES_KEY, ERRORS_KEY, storageGet, storageSet, getStoredData, mutateStorage, invalidateOperations } from './storageRepository.js'
 import { getSecurityStatus, enableHelloProtection, unlockWithHelloKey, lockCredentialVault, disableCredentialProtection, registerVaultIdleLock } from './credentialVault.js'
 import { readApiSettings, saveApiSettings } from './apiSettings.js'
-import { refreshAll, getRefreshJob, cancelRefresh, scheduleRefresh, PROJECTS_ALARM, REFRESH_JOB_KEY } from './apiRefresh.js'
+import { refreshAll, getRefreshJob, saveRefreshJob, cancelRefresh, scheduleRefresh, PROJECTS_ALARM } from './apiRefresh.js'
 import { toPublicData } from './catalogueData.js'
 import { updateActiveTabIcon, updateBadgeForTab } from './actionBadge.js'
 import { getActiveSupportTicket, observeSupportTicket, resetActiveSupportTicket, registerSupportTicketTracking } from './supportTicketTracking.js'
@@ -23,7 +23,7 @@ registerVaultIdleLock()
 const ready = storageReady.then(async reset => {
     if (reset) await clearSiteIcons()
     const job = await getRefreshJob()
-    if (job.running) await sessionSet(REFRESH_JOB_KEY, { ...job, running: false, state: 'interrupted', finishedAt: Date.now(), errors: ['Фоновый процесс был перезапущен. Повторите загрузку.'] })
+    if (job.running) await saveRefreshJob({ ...job, running: false, state: 'interrupted', finishedAt: Date.now(), errors: ['Фоновый процесс был перезапущен. Повторите загрузку.'] })
 })
 registerSupportTicketTracking(ready)
 registerExtensionUpdates(ready)

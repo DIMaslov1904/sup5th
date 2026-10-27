@@ -2,7 +2,7 @@
   "name": "sup5th",
   "displayName": "SUP 5th",
   "description": "Ассистент 5th: проекты и доступы, SEO-анализ страниц и интеграция с тикетами поддержки",
-  "version": "4.0.6",
+  "version": "4.0.7",
   "type": "module",
   "private": true,
   "scripts": {
@@ -11,7 +11,8 @@
     "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.firefox.json && tsc -p tsconfig.webextensions.json",
     "build": "npm run typecheck && vite build",
     "build:firefox": "npm run typecheck && vite build --mode firefox",
-    "build:all": "npm run typecheck && vite build && vite build --mode firefox",
+    "build:safari": "npm run typecheck && vite build --mode safari",
+    "build:all": "npm run typecheck && vite build && vite build --mode firefox && vite build --mode safari",
     "lint:firefox": "addons-linter --self-hosted dist-firefox"
   },
   "dependencies": {

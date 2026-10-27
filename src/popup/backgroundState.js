@@ -1,4 +1,4 @@
-import { extensionApi } from '../platform/extensionApi.js'
+import { extensionApi, isSafari } from '../platform/extensionApi.js'
 import { ref } from 'vue'
 import { getCredentialSecurityStatus, loadRefreshJob, loadActiveSupportTicket } from './data/projectData.js'
 import { SUPPORT_TRACKING_KEY } from '../utils/supportTimer.js'
@@ -18,7 +18,7 @@ export const connectBackgroundState = () => {
         if (!changes || changes.credentialSecurity || changes.unlockedCredentialVaultKey) {
             await refreshSecurityStatus()
         }
-        if (!changes || (area === 'session' && changes.dataRefreshJob)) {
+        if (!changes || (area === (isSafari ? 'local' : 'session') && changes.dataRefreshJob)) {
             const revision = ++jobRevision, value = await loadRefreshJob()
             if (!disposed && revision === jobRevision) refreshJob.value = value
         }

@@ -53,7 +53,7 @@ export const setTicketTimerBadge = async (tabId, ticket, context = {}) => {
         if (findProjectByUrl(data.lastSuccessfulData.projects, tab?.url)) color = '#22c55e'
     }
     await extensionApi.action.setBadgeBackgroundColor({ tabId, color })
-    await extensionApi.action.setBadgeTextColor({ tabId, color: '#ffffff' })
+    await extensionApi.action.setBadgeTextColor?.({ tabId, color: '#ffffff' })
     await extensionApi.action.setBadgeText({ tabId, text: elapsed })
     await extensionApi.action.setTitle({ tabId, title: `Тикет №${ticket.ticketId} · ${elapsed}\nОтсчёт с ${new Date(ticket.startedAt).toLocaleString('ru-RU')}` })
 }

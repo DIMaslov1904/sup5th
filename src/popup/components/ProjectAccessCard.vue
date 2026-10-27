@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { ensureUnlocked, BIOMETRIC_ACTION_HANDLED } from '../unlockStore'
+import { ensureUnlocked, copyUnlockedText } from '../unlockStore'
 import { getProjectAccessField, getProjectAccessText, startAdminAuth } from '../data/projectData'
 import { getAdminUrl } from '../../utils/projectUtils'
 import CredentialCard from './CredentialCard.vue'
@@ -16,10 +16,9 @@ const run = async (kind, action, success = '') => {
     finally { busy.value = '' }
 }
 const copy = field => run(field, async () => {
-    const value = await ensureUnlocked(() => field === 'text'
+    await copyUnlockedText(() => field === 'text'
         ? getProjectAccessText(props.project.url, props.access.id)
         : getProjectAccessField(props.project.url, props.access.id, field), { intent: { type: 'project-copy', url: props.project.url, accessId: props.access.id, field } })
-    if (value !== BIOMETRIC_ACTION_HANDLED) await navigator.clipboard.writeText(value)
 }, `${{ login: 'Логин', password: 'Пароль', text: 'Доступ' }[field]} скопирован`)
 const login = () => run('login-admin', () => ensureUnlocked(() => startAdminAuth(props.project.url, props.access.id), { refreshAfterUnlock: false, intent: { type: 'auth', url: props.project.url, accessId: props.access.id } }))
 </script>

@@ -61,10 +61,17 @@ const manifest = {
   "minimum_chrome_version": "130"
 }
 
-/** @param {'chrome' | 'firefox'} [browser] */
+/** @param {'chrome' | 'firefox' | 'safari'} [browser] */
 export const createManifest = (browser = 'chrome') => {
   if (browser === 'chrome') return defineManifest(manifest)
   const { minimum_chrome_version, side_panel, ...shared } = manifest
+  // CRXJS's defineManifest types only know Gecko browser_specific_settings.
+  if (browser === 'safari') return {
+    ...shared,
+    background: { scripts: ['src/background/service-worker.js'], type: 'module' },
+    permissions: shared.permissions.filter(permission => !['offscreen', 'sidePanel', 'downloads', 'idle'].includes(permission)),
+    browser_specific_settings: { safari: { strict_min_version: '18.4' } }
+  }
   return defineManifest({
     ...shared,
     background: { scripts: ['src/background/service-worker.js'], type: 'module' },

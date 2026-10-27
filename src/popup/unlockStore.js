@@ -2,8 +2,10 @@
 // ensureUnlocked(action) — если хранилище заблокировано, показывает модалку
 // через системный аутентификатор и выполняет action после разблокировки.
 import { reactive } from 'vue'
-import { isFirefox } from '../platform/extensionApi.js'
-import { runBiometricPage } from '../utils/biometricPage.js'
+import { isFirefox, isSafari } from '../platform/extensionApi.js'
+import { copyText } from '../utils/clipboard.js'
+import { securityStatus, refreshSecurityStatus } from './backgroundState.js'
+import { runBiometricPage, BIOMETRIC_ACTION_HANDLED } from '../utils/biometricPage.js'
 export { BIOMETRIC_ACTION_HANDLED } from '../utils/biometricPage.js'
 import {
     getCredentialSecurityStatus,
@@ -54,12 +56,26 @@ export const cancelUnlock = () => {
 export const ensureUnlocked = async (action, options) => {
     const status = await getCredentialSecurityStatus(false, false)
     if (!status.enabled || status.unlocked) return action()
-    if (isFirefox) {
+    if (isFirefox || isSafari) {
         const result = await runBiometricPage('unlock', options)
         return options?.intent ? result : action()
     }
     await showUnlock('hello', options)
     return action()
+}
+
+export const copyUnlockedText = async (action, options) => {
+    if (!isSafari) return copyText(ensureUnlocked(action, options), { skip: BIOMETRIC_ACTION_HANDLED })
+    // Do not reserve Safari's clipboard while waiting in a different tab for
+    // WebAuthn. The biometric page owns copying after its own explicit click.
+    if (securityStatus.value.enabled && !securityStatus.value.unlocked) return runBiometricPage('unlock', options)
+    try { return await copyText(action()) }
+    catch (error) {
+        await refreshSecurityStatus().catch(() => {})
+        // The session may have expired after the UI last received its status.
+        if (securityStatus.value.enabled && !securityStatus.value.unlocked) return runBiometricPage('unlock', options)
+        throw error
+    }
 }
 
 // Разблокировка через провайдер passkey: PRF или локальный режим совместимости.

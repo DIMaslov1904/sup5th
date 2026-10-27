@@ -1,7 +1,8 @@
 import { extensionApi } from '../platform/extensionApi.js'
 import { POPUP_PORT_NAME, POPUP_STATE_KEY, POPUP_RETENTION_MS, closedPopupState, defaultPopupState, normalizePopupState, restorePopupState } from '../utils/popupState.js'
 import { POPUP_EXPIRY_ALARM, SEO_SESSION_KEY, seoContextKey } from '../utils/seoSessionState.js'
-import { storageReady } from './storageRepository.js'
+import { storageReady, sessionSet } from './storageRepository.js'
+import { writeSeoSessionCache } from '../utils/sessionQuota.js'
 
 // Serialize reconnects so a new popup reads the previous disconnect's snapshot.
 export const registerPopupSession = () => {
@@ -16,13 +17,7 @@ export const registerPopupSession = () => {
         return Object.fromEntries(Object.entries(saved).filter(([, entry]) => !entry.expiresAt || entry.expiresAt > Date.now()))
     }
     const writeSeo = async entries => {
-        // Оставляем запас в session storage для прочего состояния расширения.
-        while (new TextEncoder().encode(JSON.stringify(entries)).length > 8 * 1024 * 1024) {
-            const oldest = Object.keys(entries).sort((a, b) => entries[a].updatedAt - entries[b].updatedAt)[0]
-            delete entries[oldest]
-        }
-        if (Object.keys(entries).length) await extensionApi.storage.session.set({ [SEO_SESSION_KEY]: entries })
-        else await extensionApi.storage.session.remove(SEO_SESSION_KEY)
+        await writeSeoSessionCache(extensionApi.storage.session, entries)
     }
     const expire = async () => {
         const saved = (await extensionApi.storage.session.get(POPUP_STATE_KEY))[POPUP_STATE_KEY]
@@ -65,7 +60,7 @@ export const registerPopupSession = () => {
             ports.delete(port)
             const closedAt = Date.now(), saved = closedPopupState(state, closedAt)
             enqueue(async () => {
-                if (saved) await extensionApi.storage.session.set({ [POPUP_STATE_KEY]: saved })
+                if (saved) await sessionSet(POPUP_STATE_KEY, saved)
                 else await extensionApi.storage.session.remove(POPUP_STATE_KEY)
                 if (ports.size) return
                 const entries = await readSeo(), expiresAt = closedAt + POPUP_RETENTION_MS

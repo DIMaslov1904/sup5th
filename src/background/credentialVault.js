@@ -1,4 +1,5 @@
-import { extensionApi } from '../platform/extensionApi.js'
+import { extensionApi, isSafari } from '../platform/extensionApi.js'
+import { createVaultSession, isVaultSessionValid, VAULT_SESSION_ALARM } from '../utils/vaultSessionPolicy.js'
 import { trustedLocal } from '../platform/trustedStorage.js'
 import { base64ToBytes, importAesKey, openJson, sealJson } from '../utils/credentialCrypto.js'
 import { publicAccess, publicService, accessSecret } from './credentialRecords.js'
@@ -11,7 +12,7 @@ export const getSecurityConfig = () => storageGet(SECURITY_KEY)
 export const getUnlockedKey = async ({ required = true } = {}) => {
     if (!(await getSecurityConfig())?.enabled) return null
     const session = await sessionGet(UNLOCKED_KEY)
-    if (session?.key) return importAesKey(base64ToBytes(session.key))
+    if (isVaultSessionValid(session, isSafari)) return importAesKey(base64ToBytes(session.key))
     if (required) throw new Error('Хранилище заблокировано. Подтвердите вход биометрией устройства.')
     return null
 }
@@ -22,7 +23,14 @@ export const readCredentialVault = async key => {
 }
 export const getSecurityStatus = async () => {
     const config = await getSecurityConfig()
-    return config?.enabled ? { ...config, unlocked: Boolean((await sessionGet(UNLOCKED_KEY))?.key) } : { enabled: false, mode: 'off', unlocked: true }
+    return config?.enabled ? { ...config, unlocked: isVaultSessionValid(await sessionGet(UNLOCKED_KEY), isSafari) } : { enabled: false, mode: 'off', unlocked: true }
+}
+const saveVaultSession = async key => {
+    const session = createVaultSession(key, isSafari)
+    await sessionSet(UNLOCKED_KEY, session)
+    if (!isSafari) return
+    try { await extensionApi.alarms.create(VAULT_SESSION_ALARM, { when: session.expiresAt }) }
+    catch (error) { await sessionRemove(UNLOCKED_KEY); throw error }
 }
 export const enableHelloProtection = payload => mutateStorage(async () => {
     if ((await getSecurityConfig())?.enabled) throw new Error('Защита уже включена')
@@ -48,7 +56,7 @@ export const enableHelloProtection = payload => mutateStorage(async () => {
         [DATA_KEY]: { ...data, lastSuccessfulData: { ...data.lastSuccessfulData, accesses: data.lastSuccessfulData.accesses.map(publicAccess) } },
         [SERVICES_KEY]: services.map(publicService), [SECURITY_KEY]: config, [VAULT_KEY]: await sealJson(vault, key)
     })
-    await sessionSet(UNLOCKED_KEY, { key: rawVaultKey })
+    await saveVaultSession(rawVaultKey)
     return getSecurityStatus()
 })
 export const unlockWithHelloKey = async ({ key }) => {
@@ -57,7 +65,7 @@ export const unlockWithHelloKey = async ({ key }) => {
     await readCredentialVault(await importAesKey(base64ToBytes(key)))
     return mutateStorage(async () => {
         assertVaultRevision(expected)
-        await sessionSet(UNLOCKED_KEY, { key })
+        await saveVaultSession(key)
         return getSecurityStatus()
     })
 }
@@ -91,6 +99,17 @@ export const disableCredentialProtection = () => mutateStorage(async () => {
 })
 
 export const registerVaultIdleLock = () => {
+    if (isSafari) {
+        const expire = async () => {
+            const session = await sessionGet(UNLOCKED_KEY)
+            if (session && !isVaultSessionValid(session, true)) await lockCredentialVault()
+        }
+        extensionApi.alarms.onAlarm.addListener(alarm => {
+            if (alarm.name === VAULT_SESSION_ALARM) expire().catch(error => console.error('[vault] expiry', error))
+        })
+        expire().catch(error => console.error('[vault] expiry state', error))
+        return
+    }
     extensionApi.idle.setDetectionInterval(600)
     extensionApi.idle.onStateChanged.addListener(state => {
         if (state !== 'active') lockCredentialVault().catch(error => console.error('[vault] idle lock', error))

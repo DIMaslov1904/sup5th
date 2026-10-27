@@ -2,7 +2,7 @@
 import { extensionApi } from '../../platform/extensionApi.js'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { getServiceField, loadServices, loadProjectData, loadApiSettings } from '../data/projectData'
-import { ensureUnlocked, BIOMETRIC_ACTION_HANDLED } from '../unlockStore'
+import { copyUnlockedText } from '../unlockStore'
 import { searchCatalogue } from '../../utils/catalogue.js'
 import { displayUrl } from '../../utils/displayUrl.js'
 import { siteHref } from '../../utils/siteAddress.js'
@@ -38,9 +38,8 @@ const openItem = item => {
 const copyService = async field => {
     copying.value = field
     try {
-        const value = await ensureUnlocked(() => getServiceField(selectedService.value.id, field), { intent: { type: 'service-copy', id: selectedService.value.id, field } })
+        await copyUnlockedText(() => getServiceField(selectedService.value.id, field), { intent: { type: 'service-copy', id: selectedService.value.id, field } })
         services.value = await loadServices()
-        if (value !== BIOMETRIC_ACTION_HANDLED) await navigator.clipboard.writeText(value)
     }
     finally { copying.value = '' }
 }

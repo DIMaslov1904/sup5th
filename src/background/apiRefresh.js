@@ -1,4 +1,4 @@
-import { extensionApi } from '../platform/extensionApi.js'
+import { extensionApi, isSafari } from '../platform/extensionApi.js'
 import { DATA_KEY, SERVICES_KEY, VAULT_KEY, ERRORS_KEY, storageGet, storageSet, storageSetMany, sessionGet, sessionSet, mutateStorage, getStoredData, currentGeneration, assertGeneration } from './storageRepository.js'
 import { readApiSettings } from './apiSettings.js'
 import { normalizeProject, normalizeAccessData } from './catalogueData.js'
@@ -13,7 +13,11 @@ export { REFRESH_PERIOD } from '../utils/dataRefreshPolicy.js'
 export const PROJECTS_ALARM = 'projects-refresh'
 export const REFRESH_JOB_KEY = 'dataRefreshJob'
 let running = null, controller = null
-export const getRefreshJob = () => sessionGet(REFRESH_JOB_KEY, { running: false, state: 'idle' })
+// Safari progress must not compete with SEO reports or the in-memory vault key.
+const readJob = isSafari ? storageGet : sessionGet
+const writeJob = isSafari ? storageSet : sessionSet
+export const getRefreshJob = () => readJob(REFRESH_JOB_KEY, { running: false, state: 'idle' })
+export const saveRefreshJob = job => writeJob(REFRESH_JOB_KEY, job)
 export const cancelRefresh = () => { controller?.abort(); running = null }
 export const logError = (type, error, generation) => mutateStorage(async () => {
     if (generation !== undefined) assertGeneration(generation)
@@ -83,7 +87,7 @@ export const refreshAll = ({ scope = 'all', onlyIfDue = false } = {}) => {
             return { ...data, refreshed: {} }
         }
         const job = { id, running: true, state: 'loading', scope, startedAt: Date.now(), completed: 0, total: types.length, errors: [] }
-        const publish = () => mutateStorage(async () => { assertGeneration(generation); await sessionSet(REFRESH_JOB_KEY, { ...job }) })
+        const publish = () => mutateStorage(async () => { assertGeneration(generation); await saveRefreshJob({ ...job }) })
         await publish()
         const refreshed = {}, securityRevision = vaultRevision(), statuses = {}
         await Promise.all(types.map(async type => {
@@ -112,14 +116,14 @@ export const refreshAll = ({ scope = 'all', onlyIfDue = false } = {}) => {
                 ...(statuses.projects !== undefined ? { projectApiStatus: statuses.projects } : {}),
                 ...(statuses.accesses !== undefined ? { accessApiStatus: statuses.accesses, accessAuthRequired: ['login_required', 'authorization_needed'].includes(statuses.accesses) } : {}) }
             await storageSet(DATA_KEY, next)
-            await sessionSet(REFRESH_JOB_KEY, { ...job, running: false, state: job.errors.length ? 'error' : 'done', finishedAt: Date.now() })
+            await saveRefreshJob({ ...job, running: false, state: job.errors.length ? 'error' : 'done', finishedAt: Date.now() })
             return { ...next, refreshed }
         })
     })().catch(async error => {
         if (generation === currentGeneration()) await mutateStorage(async () => {
             assertGeneration(generation)
             const job = await getRefreshJob()
-            if (job.id === id) await sessionSet(REFRESH_JOB_KEY, { ...job, running: false, state: 'error', finishedAt: Date.now(), errors: [...job.errors, error.message] })
+            if (job.id === id) await saveRefreshJob({ ...job, running: false, state: 'error', finishedAt: Date.now(), errors: [...job.errors, error.message] })
         })
         throw error
     })

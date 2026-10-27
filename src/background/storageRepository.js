@@ -1,5 +1,6 @@
-import { extensionApi } from '../platform/extensionApi.js'
+import { extensionApi, isSafari } from '../platform/extensionApi.js'
 import { trustedLocal, restrictStorageAccess } from '../platform/trustedStorage.js'
+import { createSessionWriter } from '../utils/sessionQuota.js'
 export const SCHEMA_VERSION = 1
 export const DATA_KEY = 'projectData'
 export const SERVICES_KEY = 'services'
@@ -18,6 +19,8 @@ export const emptyData = () => ({
 // No legacy readers or migrations: incompatible data must be imported again.
 export const storageReady = (async () => {
     await restrictStorageAccess()
+    // Progress moved to private IndexedDB in Safari; discard only the old copy.
+    if (isSafari) await extensionApi.storage.session.remove('dataRefreshJob')
     const saved = await trustedLocal.get('schemaVersion')
     if (saved.schemaVersion === SCHEMA_VERSION) return false
     await trustedLocal.clear()
@@ -30,7 +33,8 @@ export const storageGet = async (key, fallback = null) => { await storageReady; 
 export const storageSetMany = async values => { await storageReady; await trustedLocal.set(values) }
 export const storageSet = (key, value) => storageSetMany({ [key]: value })
 export const sessionGet = async (key, fallback = null) => { await storageReady; return (await extensionApi.storage.session.get(key))[key] ?? fallback }
-export const sessionSet = async (key, value) => { await storageReady; await extensionApi.storage.session.set({ [key]: value }) }
+const writeSession = createSessionWriter(extensionApi?.storage.session)
+export const sessionSet = async (key, value) => { await storageReady; await writeSession({ [key]: value }) }
 export const sessionRemove = async key => { await storageReady; await extensionApi.storage.session.remove(key) }
 export const getStoredData = () => storageGet(DATA_KEY, emptyData())
 

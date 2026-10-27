@@ -1,4 +1,4 @@
-import { extensionApi } from '../platform/extensionApi.js'
+import { extensionApi, isSafari } from '../platform/extensionApi.js'
 
 export const createImageAnnotations = (doc = document) => {
     const records = new Map(), visible = new Set()
@@ -14,14 +14,14 @@ export const createImageAnnotations = (doc = document) => {
         if (record.label) return record.label
         const label = doc.createElement('div'), text = doc.createElement('span'), link = doc.createElement('a')
         Object.assign(label.style, { position: 'absolute', maxWidth: '300px', display: 'flex', flexWrap: 'wrap', gap: '4px', background: '#0f172a', color: '#f8fafc', padding: '3px 6px', font: '12px sans-serif', borderRadius: '4px' })
-        link.dataset.supSeoDownload = 'true'; link.textContent = 'Скачать'
+        link.dataset.supSeoDownload = 'true'; link.textContent = isSafari ? 'Открыть оригинал' : 'Скачать'
         Object.assign(link.style, { color: '#7dd3fc', cursor: 'pointer', pointerEvents: 'auto', textDecoration: 'underline' })
         link.addEventListener('click', async event => {
             event.preventDefault(); event.stopPropagation()
             try {
                 const response = await extensionApi.runtime.sendMessage({ type: 'seo:downloadImage', payload: { url: image.currentSrc || image.src } })
                 if (!response?.ok) throw new Error(response?.error || 'Не удалось скачать изображение')
-                link.textContent = 'Скачивается…'
+                link.textContent = response.data?.opened ? 'Открыто в новой вкладке' : 'Скачивается…'
             } catch (error) { link.textContent = 'Ошибка скачивания'; link.title = error.message }
         })
         label.append(text, link)
@@ -46,7 +46,7 @@ export const createImageAnnotations = (doc = document) => {
             record.text.hidden = !options.alt
             const url = image.currentSrc || image.src
             record.link.hidden = !options.downloads || !/^https?:\/\//.test(url)
-            if (!record.link.hidden && record.link.getAttribute('href') !== url) { record.link.href = url; record.link.textContent = 'Скачать'; record.link.removeAttribute('title') }
+            if (!record.link.hidden && record.link.getAttribute('href') !== url) { record.link.href = url; record.link.textContent = isSafari ? 'Открыть оригинал' : 'Скачать'; record.link.removeAttribute('title') }
             if (!label.isConnected) makeRoot().append(label)
         }
     }

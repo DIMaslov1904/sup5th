@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue'
-import { extensionApi } from '../platform/extensionApi.js'
+import { extensionApi, isSafari } from '../platform/extensionApi.js'
 import { biometricPageCall } from '../utils/biometricPage.js'
 import { enableBiometricProtectionFlow, unlockWithBiometricFlow } from '../utils/biometricHello.js'
 import { getCredentialSecurityStatus } from '../popup/data/projectData.js'
@@ -40,7 +40,7 @@ const run = async () => {
         controller.signal.throwIfAborted()
         const response = await biometricPageCall('complete', { id, ...payload })
         done.value = true; action.value = response.action
-        if (response.action.kind === 'copy') { copyValue = response.action.value; delete response.action.value; await copy() }
+        if (response.action.kind === 'copy') { copyValue = response.action.value; delete response.action.value; if (!isSafari) await copy() }
         if (response.action.kind === 'error') error.value = response.action.error
     } catch (reason) { error.value = reason.name === 'AbortError' ? 'Проверка отменена. Защита не изменена.'
         : reason.name === 'NotAllowedError' ? 'Браузер не завершил проверку: ключ не найден, запрос отклонён или истекло время ожидания. Защита не изменена.' : reason.message }
@@ -65,6 +65,7 @@ const leave = async () => {
             <p v-if="awaitingUnlockCheck" role="status" class="text-ui-accent">Ключ создан. Нажмите «Проверить разблокировку», чтобы проверить доступ к нему. Защита пока не включена.</p>
             <p v-else-if="busy" role="status" class="flex items-center gap-2 text-ui-accent"><span class="ui-loading" aria-hidden="true"></span>Подтвердите вход на устройстве…</p>
             <p v-else-if="done && copied" role="status" class="text-ui-success">Скопировано в буфер обмена.</p>
+            <p v-else-if="done && action?.kind === 'copy'" role="status">Хранилище разблокировано. Нажмите «Копировать», чтобы скопировать выбранное значение.</p>
             <p v-else-if="done && action?.kind === 'auth'" role="status">Вход на сайт продолжен.</p>
             <p v-else-if="done && action?.kind === 'refresh'" role="status">Данные обновлены.</p>
             <BiometricProviderHelp v-if="flow?.mode === 'enable' && !done" />

@@ -12,11 +12,12 @@ import Message from '../components/ui/Message.vue'
 import Notification from '../components/ui/Notification.vue'
 import BiometricProviderHelp from '../components/BiometricProviderHelp.vue'
 import CopyAccessApiCode from '../components/CopyAccessApiCode.vue'
+import { needsApiAuthorization } from '../../utils/apiAuthorizationState.js'
 
 const props = defineProps({ step: { type: String, required: true }, settings: { type: Object, required: true } })
 const emit = defineEmits(['completed'])
 const projectsUrl = ref(props.settings.projectsUrl || ''), accessUrl = ref(props.settings.accessUrl || '')
-const busy = ref(false), error = ref(''), apiFailed = ref(false), capabilities = ref(null)
+const busy = ref(false), error = ref(''), apiAuthorizationRequired = ref(false), capabilities = ref(null)
 const stepNumber = computed(() => ['projects', 'security', 'accesses'].indexOf(props.step) + 1)
 const run = async action => {
     if (busy.value) return
@@ -26,20 +27,21 @@ const run = async action => {
 }
 const advance = async step => {
     await saveApiSettings({ setupStep: step })
-    apiFailed.value = false
+    apiAuthorizationRequired.value = false
     if (step === 'done') emit('completed')
 }
 const connect = scope => run(async () => {
-    apiFailed.value = false
+    apiAuthorizationRequired.value = false
     const field = scope === 'projects' ? 'projectsUrl' : 'accessUrl'
     const value = scope === 'projects' ? projectsUrl.value : accessUrl.value
     if (!value.trim()) throw new Error('Укажите адрес API')
     await saveApiSettings({ [field]: value, setupStep: props.step })
-    try {
-        const load = () => refreshAll({ scope })
-        const result = scope === 'accesses' ? await ensureUnlocked(load, { refreshAfterUnlock: false, intent: { type: 'refresh', scope, setupStep: 'done' } }) : await load()
-        if (result !== BIOMETRIC_ACTION_HANDLED && result.refreshErrors?.length) throw new Error(result.refreshErrors.join('\n'))
-    } catch (reason) { apiFailed.value = true; throw reason }
+    const load = () => refreshAll({ scope })
+    const result = scope === 'accesses' ? await ensureUnlocked(load, { refreshAfterUnlock: false, intent: { type: 'refresh', scope, setupStep: 'done' } }) : await load()
+    if (result !== BIOMETRIC_ACTION_HANDLED) {
+        apiAuthorizationRequired.value = needsApiAuthorization(result, scope)
+        if (result.refreshErrors?.length) throw new Error(result.refreshErrors.join('\n'))
+    }
     await advance(scope === 'projects' ? 'security' : 'done')
 })
 const enable = () => run(async () => {
@@ -90,7 +92,7 @@ onMounted(async () => {
             </form>
         </Card>
         <p v-if="refreshJob.running" role="status" class="mt-3 text-xs text-ui-accent">Загрузка данных: {{ refreshJob.completed }} / {{ refreshJob.total }}</p>
-        <Button v-if="apiFailed && step !== 'security'" variant="secondary" class="mt-3" :disabled="busy" @click="authorize">Открыть API / авторизацию</Button>
+        <Button v-if="apiAuthorizationRequired && step !== 'security'" variant="secondary" class="mt-3" :disabled="busy" @click="authorize">Открыть API / авторизацию</Button>
         <Button v-if="step !== 'projects'" variant="ghost" class="mt-4 self-start" :disabled="busy" @click="run(() => advance(step === 'accesses' ? 'security' : 'projects'))">← Назад</Button>
         <Notification v-if="error" :text="error" />
     </main>

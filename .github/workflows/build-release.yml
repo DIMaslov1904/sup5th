@@ -35,10 +35,11 @@ jobs:
           node-version: '24.13.1'
           cache: npm
       - run: npm ci
+      - run: npm test
       - run: npm run build:all
       - run: npm run lint:firefox
       - run: node scripts/prepare-release.mjs
       - name: Publish versioned packages
-        run: gh release create "$RELEASE_TAG" "release/sup5th-chromium-${RELEASE_TAG}.zip" "release/sup5th-firefox-${RELEASE_TAG}.zip" --verify-tag --latest --title "SUP 5th ${RELEASE_TAG#v}" --notes-file release/NOTES.md
+        run: gh release create "$RELEASE_TAG" "release/sup5th-chromium-${RELEASE_TAG}.zip" "release/sup5th-firefox-${RELEASE_TAG}.zip" "release/sup5th-safari-${RELEASE_TAG}.zip" --verify-tag --latest --title "SUP 5th ${RELEASE_TAG#v}" --notes-file release/NOTES.md
         env:
           GH_TOKEN: ${{ github.token }}

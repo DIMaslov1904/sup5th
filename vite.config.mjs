@@ -10,18 +10,19 @@ import { createManifest } from "./manifest.config.mjs"
 const rootDir = dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig(({ mode }) => {
-  const browser = mode === 'firefox' ? 'firefox' : 'chrome'
+  const browser = mode === 'safari' ? 'safari' : mode === 'firefox' ? 'firefox' : 'chrome'
   const manifest = createManifest(browser)
-  const outDir = browser === 'firefox' ? 'dist-firefox' : 'dist'
+  const outDir = browser === 'chrome' ? 'dist' : `dist-${browser}`
   return {
     plugins: [
       vue(),
       tailwindcss(),
-      crx({ manifest, browser }),
+      // CRXJS's Firefox target emits background scripts usable by Safari too.
+      crx({ manifest, browser: browser === 'safari' ? 'firefox' : browser }),
       zipPack({
         inDir: outDir,
         outDir: 'release',
-        outFileName: browser === 'firefox' ? `sup5th-firefox-v${manifest.version}.zip` : `sup5th-chromium-v${manifest.version}.zip`
+        outFileName: `sup5th-${browser === 'chrome' ? 'chromium' : browser}-v${manifest.version}.zip`
       })
     ],
     resolve: {
@@ -33,7 +34,7 @@ export default defineConfig(({ mode }) => {
       outDir,
       rolldownOptions: {
         input: {
-          'src/sidepanel/index': resolve(rootDir, 'src/sidepanel/index.html'),
+          ...(browser !== 'safari' ? { 'src/sidepanel/index': resolve(rootDir, 'src/sidepanel/index.html') } : {}),
           'src/biometric/index': resolve(rootDir, 'src/biometric/index.html'),
           ...(browser === 'chrome'
             ? { 'src/offscreen/index': resolve(rootDir, 'src/offscreen/index.html') }

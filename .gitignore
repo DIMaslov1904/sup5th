@@ -105,6 +105,7 @@ dist
 
 dist/
 dist-firefox/
+dist-safari/
 web-ext-artifacts/
 release/
 
