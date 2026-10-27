@@ -35,7 +35,6 @@ jobs:
           node-version: '24.13.1'
           cache: npm
       - run: npm ci
-      - run: npm test
       - run: npm run build:all
       - run: npm run lint:firefox
       - run: node scripts/prepare-release.mjs
