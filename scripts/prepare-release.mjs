@@ -7,7 +7,7 @@ if (!/^v[0-9]+(?:\.[0-9]+){1,3}$/.test(tag || '') || tag !== `v${version}`) thro
 const revision = ref => execFileSync('git', ['rev-parse', ref], { encoding: 'utf8' }).trim()
 if (revision(`${tag}^{commit}`) !== revision('HEAD')) throw new Error('Build must run at the tagged commit')
 
-for (const browser of ['chromium', 'firefox', 'safari']) {
+for (const browser of ['chromium', 'safari']) {
     const source = `release/sup5th-${browser}-v${version}.zip`
     if (!existsSync(source)) throw new Error(`Missing build: ${source}`)
 }
