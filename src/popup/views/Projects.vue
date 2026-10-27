@@ -3,7 +3,7 @@ import { extensionApi } from '../../platform/extensionApi.js'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { getServiceField, loadServices, loadProjectData, loadApiSettings } from '../data/projectData'
 import { copyUnlockedText } from '../unlockStore'
-import { searchCatalogue } from '../../utils/catalogue.js'
+import { createCatalogueSearch } from '../../utils/catalogue.js'
 import { displayUrl } from '../../utils/displayUrl.js'
 import { siteHref } from '../../utils/siteAddress.js'
 import { refreshJob } from '../backgroundState.js'
@@ -27,7 +27,8 @@ const selectedServiceId = defineModel('selectedServiceId', { type: String, defau
 const selectedService = computed(() => services.value.find(item => item.id === selectedServiceId.value) || null)
 const selectedProject = computed(() => projects.value.find(item => item.url === selectedProjectUrl.value) || null)
 const selectedItem = computed(() => selectedService.value || selectedProject.value)
-const filteredProjects = computed(() => searchCatalogue(services.value, projects.value, search.value))
+const catalogueSearch = computed(() => createCatalogueSearch(services.value, projects.value))
+const filteredProjects = computed(() => catalogueSearch.value(search.value))
 const linkHref = siteHref
 const back = () => { selectedProjectUrl.value = ''; selectedServiceId.value = ''; message.value.text = '' }
 const openItem = item => {
