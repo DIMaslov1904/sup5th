@@ -1,4 +1,4 @@
-import { extensionApi, isSafari } from '../platform/extensionApi.js'
+import { extensionApi } from '../platform/extensionApi.js'
 import { trustedLocal, restrictStorageAccess } from '../platform/trustedStorage.js'
 import { createSessionWriter } from '../utils/sessionQuota.js'
 export const SCHEMA_VERSION = 1
@@ -19,8 +19,6 @@ export const emptyData = () => ({
 // No legacy readers or migrations: incompatible data must be imported again.
 export const storageReady = (async () => {
     await restrictStorageAccess()
-    // Progress moved to private IndexedDB in Safari; discard only the old copy.
-    if (isSafari) await extensionApi.storage.session.remove('dataRefreshJob')
     const saved = await trustedLocal.get('schemaVersion')
     if (saved.schemaVersion === SCHEMA_VERSION) return false
     await trustedLocal.clear()

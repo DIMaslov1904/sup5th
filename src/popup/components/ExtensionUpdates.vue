@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { extensionApi, isFirefox, isSafari } from '../../platform/extensionApi.js'
+import { extensionApi, isFirefox } from '../../platform/extensionApi.js'
 import { loadUpdateStatus, checkExtensionUpdate } from '../data/projectData.js'
 import { UPDATE_STATE_KEY } from '../../updates/checker.js'
 import Button from './ui/Button.vue'
@@ -9,8 +9,8 @@ import Message from './ui/Message.vue'
 
 const currentVersion = extensionApi.runtime.getManifest().version
 const status = ref(null), loading = ref(true), checking = ref(false), error = ref('')
-const browserName = isSafari ? 'Safari' : isFirefox ? 'Firefox' : 'Chromium'
-const extensionsUrl = isSafari ? '' : isFirefox ? 'about:addons'
+const browserName = isFirefox ? 'Firefox' : 'Chromium'
+const extensionsUrl = isFirefox ? 'about:addons'
     : /YaBrowser\//i.test(navigator.userAgent) ? 'browser://extensions/'
     : /Edg\//i.test(navigator.userAgent) ? 'edge://extensions/'
     : /OPR\//i.test(navigator.userAgent) ? 'opera://extensions/' : 'chrome://extensions/'
@@ -36,7 +36,7 @@ const check = async () => {
 }
 const download = async () => {
     // Firefox keeps the normal XPI link; privileged about: pages cannot be opened through tabs.create.
-    if (isFirefox || isSafari || downloading.value || !status.value?.downloadUrl) return
+    if (isFirefox || downloading.value || !status.value?.downloadUrl) return
     downloading.value = true; installError.value = ''
     try {
         await extensionApi.downloads.download({ url: status.value.downloadUrl })
@@ -83,26 +83,20 @@ onUnmounted(() => { alive = false; revision++; clearInterval(poll); clearTimeout
                 <template v-if="status?.updateAvailable">
                     <p class="text-xs font-medium text-ui-accent">Доступна версия {{ status.latestVersion }}</p>
                     <p v-if="status.error && status.lastSuccessfulAt" class="text-xs text-ui-muted">По данным успешной проверки от {{ date(status.lastSuccessfulAt) }}.</p>
-                    <p v-if="!status.downloadUrl" class="text-xs text-ui-muted">{{ isSafari ? 'Пакет Safari ещё не добавлен в релиз.' : isFirefox ? 'Подписанный XPI ещё не добавлен в релиз.' : 'Пакет Chromium ещё не добавлен в релиз.' }}</p>
+                    <p v-if="!status.downloadUrl" class="text-xs text-ui-muted">{{ isFirefox ? 'Подписанный XPI ещё не добавлен в релиз.' : 'Пакет Chromium ещё не добавлен в релиз.' }}</p>
                 </template>
                 <p v-else-if="status?.lastSuccessfulAt && !status.error && !busy" class="text-xs text-ui-success">Установлена актуальная версия.</p>
             </div>
             <div class="flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" :loading="busy" :disabled="loading" @click="check">{{ busy ? 'Проверяем…' : 'Проверить обновление' }}</Button>
                 <template v-if="status?.updateAvailable && status.downloadUrl">
-                    <Button size="sm" :href="isFirefox || isSafari ? status.downloadUrl : ''" :loading="downloading" @click="download">Скачать для {{ browserName }}</Button>
-                    <Button v-if="!isSafari" size="sm" variant="secondary" :disabled="copying" :title="extensionsUrl" @click="copyExtensionsUrl">{{ copied ? 'Адрес скопирован' : 'Скопировать адрес расширений' }}</Button>
+                    <Button size="sm" :href="isFirefox ? status.downloadUrl : ''" :loading="downloading" @click="download">Скачать для {{ browserName }}</Button>
+                    <Button size="sm" variant="secondary" :disabled="copying" :title="extensionsUrl" @click="copyExtensionsUrl">{{ copied ? 'Адрес скопирован' : 'Скопировать адрес расширений' }}</Button>
                 </template>
             </div>
             <div v-if="status?.updateAvailable && status.downloadUrl" class="grid gap-2 text-xs text-ui-muted">
-                <template v-if="isSafari">
-                    <p>Распакуйте ZIP в прежнюю папку расширения. В Safari → Настройки → Расширения выберите SUP 5th и нажмите «Перезагрузить». Если расширение удалено, добавьте папку через Настройки → Разработчик → «Добавить временное расширение».</p>
-                    <p>Временная установка удаляется после выхода из Safari или через 24 часа. Для повторной загрузки разрешите неподписанные расширения.</p>
-                </template>
-                <template v-else>
-                    <p>{{ isFirefox ? 'Переместите скачанный XPI в окно браузера. Чтобы открыть менеджер расширений, скопируйте адрес ниже и вставьте его в адресную строку.' : 'После начала скачивания откроется менеджер расширений. Распакуйте ZIP в прежнюю папку расширения и нажмите «Перезагрузить».' }}</p>
-                    <p>Адрес менеджера расширений: <code class="select-text">{{ extensionsUrl }}</code></p>
-                </template>
+                <p>{{ isFirefox ? 'Переместите скачанный XPI в окно браузера. Чтобы открыть менеджер расширений, скопируйте адрес ниже и вставьте его в адресную строку.' : 'После начала скачивания откроется менеджер расширений. Распакуйте ZIP в прежнюю папку расширения и нажмите «Перезагрузить».' }}</p>
+                <p>Адрес менеджера расширений: <code class="select-text">{{ extensionsUrl }}</code></p>
                 <p role="status" aria-live="polite" :class="installError ? 'text-ui-danger' : 'text-ui-success'">{{ installError || (copied ? 'Адрес скопирован. Вставьте его в адресную строку браузера.' : '') }}</p>
             </div>
         </div>

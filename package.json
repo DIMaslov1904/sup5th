@@ -11,9 +11,8 @@
     "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.firefox.json && tsc -p tsconfig.webextensions.json",
     "build": "npm run typecheck && vite build",
     "build:firefox": "npm run typecheck && vite build --mode firefox",
-    "build:safari": "npm run typecheck && vite build --mode safari",
-    "build:release": "npm run typecheck && vite build && vite build --mode safari",
-    "build:all": "npm run typecheck && vite build && vite build --mode firefox && vite build --mode safari",
+    "build:release": "npm run build",
+    "build:all": "npm run typecheck && vite build && vite build --mode firefox",
     "lint:firefox": "addons-linter --self-hosted dist-firefox"
   },
   "dependencies": {

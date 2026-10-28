@@ -1,10 +1,10 @@
 import { normalizeSeoSection } from './seoSections.js'
 export const seoSidePanelKey = windowId => `seoSidePanel:${windowId}`
-export const createSeoSidePanel = (api, { firefox = false, safari = false } = {}) => ({
-    supported: !safari && Boolean(firefox ? api?.sidebarAction?.open : api?.sidePanel?.open),
+export const createSeoSidePanel = (api, { firefox = false } = {}) => ({
+    supported: Boolean(firefox ? api?.sidebarAction?.open : api?.sidePanel?.open),
     open: (tab, section = 'overview') => {
         if (!Number.isInteger(tab?.id) || !Number.isInteger(tab?.windowId) || !/^https?:\/\//.test(tab?.url || '')) throw new Error('Откройте проверяемый сайт')
-        const panel = safari ? null : firefox ? api?.sidebarAction : api?.sidePanel
+        const panel = firefox ? api?.sidebarAction : api?.sidePanel
         if (!panel?.open) throw new Error('Боковая панель не поддерживается этим браузером')
         // Native open must run in the click handler, before any awaited work.
         const saved = api.storage.session.set({ [seoSidePanelKey(tab.windowId)]: { tabId: tab.id, tool: 'overview', section: normalizeSeoSection(section) } })

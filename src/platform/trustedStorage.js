@@ -1,6 +1,6 @@
-import { extensionApi, isFirefox, isSafari } from './extensionApi.js'
+import { extensionApi, isFirefox } from './extensionApi.js'
 
-// Firefox and Safari cannot restrict storage.local to trusted extension contexts. Keep the
+// Firefox cannot restrict storage.local to trusted extension contexts. Keep the
 // actual records in extension-origin IndexedDB; storage.local carries revisions
 // only, so existing onChanged listeners never expose values to content scripts.
 let database
@@ -46,13 +46,9 @@ const privateLocal = {
         await extensionApi.storage.local.clear()
     }
 }
-export const trustedLocal = isFirefox || isSafari ? privateLocal : extensionApi?.storage.local
+export const trustedLocal = isFirefox ? privateLocal : extensionApi?.storage.local
 export const restrictStorageAccess = async () => {
     if (isFirefox) return // session is trusted-only by default; local records use IndexedDB.
-    if (isSafari) {
-        await extensionApi.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })
-        return
-    }
     await Promise.all([
         extensionApi.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' }),
         extensionApi.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })

@@ -21,8 +21,7 @@ export const readRelease = (release, browser) => {
     versionParts(version)
     if (release.tag_name !== `v${version}` || release.draft !== false || release.prerelease !== false || !Array.isArray(release.assets)
         || release.html_url !== `${RELEASES_URL}/tag/v${version}`) throw new Error('Некорректные данные стабильного релиза')
-    const names = browser === 'safari' ? [`sup5th-safari-v${version}.zip`]
-        : [`sup5th-chromium-v${version}.zip`, `sup5th-chrome-v${version}.zip`]
+    const names = [`sup5th-chromium-v${version}.zip`, `sup5th-chrome-v${version}.zip`]
     const packages = release.assets.filter(asset => asset.state === 'uploaded' && asset.size > 0 && typeof asset.name === 'string'
         && (browser === 'firefox' ? asset.name.toLowerCase().endsWith('.xpi') : names.includes(asset.name)))
     if (browser === 'firefox' && packages.length > 1) throw new Error('В релизе несколько XPI. Оставьте один подписанный пакет Firefox.')

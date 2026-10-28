@@ -1,9 +1,9 @@
-import { extensionApi, isFirefox, isSafari } from '../platform/extensionApi.js'
+import { extensionApi, isFirefox } from '../platform/extensionApi.js'
 import { createSeoSidePanel } from './seoSidePanel.js'
 import { injectExtensionScript } from '../platform/scriptInjection.js'
 import { seoAppUrl } from './seoSections.js'
 import { createSeoMessenger } from './seoMessaging.js'
-const sidePanel = createSeoSidePanel(extensionApi, { firefox: isFirefox, safari: isSafari })
+const sidePanel = createSeoSidePanel(extensionApi, { firefox: isFirefox })
 export const canPinSeoPage = sidePanel.supported
 export const pinSeoPage = sidePanel.open
 export const callBackground = (type, payload = {}) => extensionApi.runtime.sendMessage({ type, payload }).then(response => {

@@ -54,8 +54,6 @@ export const createBiometricPageHandlers = ({ unlock, refreshData }) => {
         if (payload.mode === 'unlock' && !status.enabled) throw new Error('Защита ещё не включена')
         const intent = validateIntent(payload.intent), id = crypto.randomUUID()
         const [returnTab] = await extensionApi.tabs.query({ active: true, currentWindow: true })
-        // Safari replaces about:blank tabs when navigating to an extension URL,
-        // changing tab.id. Create the final URL and serialize get() until saved.
         const tab = await extensionApi.tabs.create({ url: `${extensionApi.runtime.getURL(pagePath)}?request=${id}`, active: true })
         const flows = Object.fromEntries(Object.entries(await read()).filter(([, flow]) => flow.expiresAt > Date.now()))
         flows[id] = { mode: payload.mode, intent, advanceSetup: payload.mode === 'enable' && payload.advanceSetup === true, refreshAfterUnlock: payload.refreshAfterUnlock !== false, tabId: tab.id, returnTabId: returnTab?.id, state: 'pending', expiresAt: Date.now() + lifetime }

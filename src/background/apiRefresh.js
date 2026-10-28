@@ -1,4 +1,4 @@
-import { extensionApi, isSafari } from '../platform/extensionApi.js'
+import { extensionApi } from '../platform/extensionApi.js'
 import { DATA_KEY, SERVICES_KEY, VAULT_KEY, ERRORS_KEY, storageGet, storageSet, storageSetMany, sessionGet, sessionSet, mutateStorage, getStoredData, currentGeneration, assertGeneration } from './storageRepository.js'
 import { readApiSettings } from './apiSettings.js'
 import { normalizeProject, normalizeAccessData } from './catalogueData.js'
@@ -13,11 +13,8 @@ export { REFRESH_PERIOD } from '../utils/dataRefreshPolicy.js'
 export const PROJECTS_ALARM = 'projects-refresh'
 export const REFRESH_JOB_KEY = 'dataRefreshJob'
 let running = null, controller = null
-// Safari progress must not compete with SEO reports or the in-memory vault key.
-const readJob = isSafari ? storageGet : sessionGet
-const writeJob = isSafari ? storageSet : sessionSet
-export const getRefreshJob = () => readJob(REFRESH_JOB_KEY, { running: false, state: 'idle' })
-export const saveRefreshJob = job => writeJob(REFRESH_JOB_KEY, job)
+export const getRefreshJob = () => sessionGet(REFRESH_JOB_KEY, { running: false, state: 'idle' })
+export const saveRefreshJob = job => sessionSet(REFRESH_JOB_KEY, job)
 export const cancelRefresh = () => { controller?.abort(); running = null }
 export const logError = (type, error, generation) => mutateStorage(async () => {
     if (generation !== undefined) assertGeneration(generation)

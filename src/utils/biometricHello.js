@@ -1,4 +1,4 @@
-import { extensionApi, isFirefox, isSafari } from '../platform/extensionApi.js'
+import { extensionApi, isFirefox } from '../platform/extensionApi.js'
 import { base64ToBytes, bytesToBase64, base64UrlToBytes, bytesToBase64Url, randomBytes, sealBytes, openBytes } from './credentialCrypto.js'
 // WebAuthn: PRF и локальный режим совместимости для macOS без PRF.
 // В режиме совместимости credential ID служит ключевым материалом и не сохраняется.
@@ -22,8 +22,6 @@ export const getBiometricPlatform = () => {
 
 export const biometricProviderHint = () => getBiometricPlatform() === 'windows'
     ? 'На Windows используется Windows Hello или другой провайдер passkey с PRF. После создания ключа нажмите «Проверить разблокировку» и подтвердите второй запрос. Защита включится после успешной проверки.'
-    : isSafari
-    ? 'Выберите ключ SUP 5th в системном окне Safari и подтвердите запрос устройства. Если Safari запрещает passkey на странице расширения, защита не включится.'
     : isFirefox
     ? 'Выберите доступный в Firefox провайдер passkey с поддержкой PRF. Проверка может использовать биометрию или системный PIN.'
     : getBiometricPlatform() === 'mac'
@@ -75,7 +73,7 @@ const getBiometricSecret = async ({ credentialId, salt, transports = ['internal'
     const options = {
         signal,
         publicKey: {
-            ...(isFirefox || isSafari ? {} : { rpId: getRpId() }),
+            ...(isFirefox ? {} : { rpId: getRpId() }),
             challenge: randomBytes(32),
             timeout: 120000,
             userVerification: 'required',
@@ -114,7 +112,7 @@ const getCompatibilityKek = async ({ credentialIdHash, keySalt, passkeyName, sig
     const credential = await navigator.credentials.get({
         signal,
         publicKey: {
-            ...(isFirefox || isSafari ? {} : { rpId: getRpId() }), challenge: randomBytes(32), timeout: 120000,
+            ...(isFirefox ? {} : { rpId: getRpId() }), challenge: randomBytes(32), timeout: 120000,
             userVerification: 'required', allowCredentials: []
         }
     })
@@ -167,7 +165,7 @@ const registerBiometricPasskey = async ({ signal, beforeUnlockCheck } = {}) => {
     const options = {
         signal,
         publicKey: {
-            rp: { ...(isFirefox || isSafari ? {} : { id: getRpId() }), name: RP_NAME },
+            rp: { ...(isFirefox ? {} : { id: getRpId() }), name: RP_NAME },
             user: {
                 id: randomBytes(16),
                 name: passkeyName,

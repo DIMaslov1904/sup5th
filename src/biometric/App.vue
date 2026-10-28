@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue'
-import { extensionApi, isSafari } from '../platform/extensionApi.js'
+import { extensionApi } from '../platform/extensionApi.js'
 import { biometricPageCall } from '../utils/biometricPage.js'
 import { enableBiometricProtectionFlow, unlockWithBiometricFlow } from '../utils/biometricHello.js'
 import { getCredentialSecurityStatus } from '../popup/data/projectData.js'
@@ -40,7 +40,7 @@ const run = async () => {
         controller.signal.throwIfAborted()
         const response = await biometricPageCall('complete', { id, ...payload })
         done.value = true; action.value = response.action
-        if (response.action.kind === 'copy') { copyValue = response.action.value; delete response.action.value; if (!isSafari) await copy() }
+        if (response.action.kind === 'copy') { copyValue = response.action.value; delete response.action.value; await copy() }
         if (response.action.kind === 'error') error.value = response.action.error
     } catch (reason) { error.value = reason.name === 'AbortError' ? 'Проверка отменена. Защита не изменена.'
         : reason.name === 'NotAllowedError' ? 'Браузер не завершил проверку: ключ не найден, запрос отклонён или истекло время ожидания. Защита не изменена.' : reason.message }

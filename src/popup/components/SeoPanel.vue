@@ -1,5 +1,4 @@
 <script setup>
-import { isSafari } from '../../platform/extensionApi.js'
 import { computed, onBeforeUnmount, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { callBackground, sendSeoToTab, fetchSeo, openSeoApp, canPinSeoPage, pinSeoPage } from '../../utils/seoClient.js'
 import { SEO_SECTIONS, normalizeSeoSection } from '../../utils/seoSections.js'
@@ -225,7 +224,7 @@ const tools = computed(() => {
                         <a :href="/^https?:/.test(item.src) ? item.src : undefined" target="_blank" rel="noreferrer" class="break-all text-ui-accent">{{ item.src || 'Источник отсутствует' }}</a>
                         <span>Alt: {{ item.alt === null ? 'Отсутствует' : item.alt || '(пустой)' }}</span>
                         <span>Title: {{ item.title || 'Нет' }} · {{ item.width }} × {{ item.height }} · {{ item.loading || 'eager' }}</span>
-                        <button v-if="/^https?:/.test(item.src)" type="button" class="w-fit cursor-pointer text-ui-accent hover:underline" @click="downloadImage(item.src)">{{ isSafari ? 'Открыть оригинал' : 'Скачать' }}</button>
+                        <button v-if="/^https?:/.test(item.src)" type="button" class="w-fit cursor-pointer text-ui-accent hover:underline" @click="downloadImage(item.src)">Скачать</button>
                     </div>
 
                 </article>

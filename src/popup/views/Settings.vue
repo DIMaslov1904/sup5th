@@ -1,5 +1,5 @@
 <script setup>
-import { extensionApi, isSafari } from '../../platform/extensionApi.js'
+import { extensionApi } from '../../platform/extensionApi.js'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { loadApiSettings, loadProjectData, refreshAll, loadErrorLog, clearErrorLog, clearAllData, authorizeProjectsApi, authorizeAccessApi, lockCredentialVault, disableCredentialProtection } from '../data/projectData.js'
 import { getBiometricCapabilities } from '../../utils/biometricHello.js'
@@ -140,7 +140,6 @@ const reset = () => {
                 <div class="grid gap-3">
                     <p class="text-xs text-ui-muted">{{ securityStatus.enabled ? (securityStatus.unlocked ? 'Хранилище разблокировано.' : 'Хранилище заблокировано.') : 'Защита выключена. Пароли хранятся локально без шифрования.' }}</p>
                     <p v-if="securityStatus.keySource === 'credential-id'" class="text-xs text-ui-muted">Ключ доступа: {{ securityStatus.passkeyName }} · локальный режим совместимости.</p>
-                    <p v-if="isSafari" class="text-xs text-ui-muted">В Safari хранилище блокируется через 10 минут после разблокировки и при завершении браузерной сессии. Блокировка экрана отдельно не отслеживается.</p>
                     <Button v-if="!securityStatus.enabled" :disabled="Boolean(busy) || !caps.available" variant="secondary" @click="enable">Включить биометрию устройства</Button>
                     <template v-else><Button v-if="!securityStatus.unlocked" :disabled="Boolean(busy)" @click="unlock">Разблокировать</Button><template v-else><Button variant="secondary" :disabled="Boolean(busy)" @click="lock">Заблокировать</Button><Button variant="danger" :disabled="Boolean(busy)" @click="disable">Отключить защиту</Button></template></template>
                     <p v-if="!caps.available" class="text-xs text-ui-warning">WebAuthn недоступен в этом браузере.</p>

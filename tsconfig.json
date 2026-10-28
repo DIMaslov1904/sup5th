@@ -15,5 +15,5 @@
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src/**/*.js", "src/**/*.ts", "src/**/*.vue", "manifest.config.mjs"],
-  "exclude": ["node_modules", "dist", "dist-firefox", "dist-safari", "release", "dist-zip"]
+  "exclude": ["node_modules", "dist", "dist-firefox", "release", "dist-zip"]
 }
