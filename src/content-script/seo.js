@@ -5,6 +5,7 @@ import { loadSeoNetwork } from '../utils/seoNetwork.js'
 import { getSeoActions, setSeoAction } from './seoActions.js'
 import { captureHeadings, focusHeading } from './headingNavigation.js'
 import { collectPageWeight } from './pageWeight.js'
+import { AUDIT_DISCOVERY_LIMIT } from '../utils/seoAuditDiscovery.js'
 const documentId = [...crypto.getRandomValues(new Uint32Array(4))].join('-')
 /**
  * SEO-анализ текущей страницы.
@@ -56,7 +57,7 @@ export const collectSeoReport = ({ internalLinkLimit = 50 } = {}) => {
             return /^https?:$/.test(url.protocol) && url.origin === location.origin && !url.username && !url.password && url.href !== currentUrl.href ? url.href : ''
         } catch { return '' }
     }).filter(Boolean))]
-    const linkLimit = Number.isFinite(Number(internalLinkLimit)) ? Math.max(0, Math.min(499, Math.trunc(Number(internalLinkLimit)))) : 50
+    const linkLimit = Number.isFinite(Number(internalLinkLimit)) ? Math.max(0, Math.min(AUDIT_DISCOVERY_LIMIT - 1, Math.trunc(Number(internalLinkLimit)))) : 50
     const internalLinks = internalLinkUrls.slice(0, linkLimit)
 
     captureHeadings()

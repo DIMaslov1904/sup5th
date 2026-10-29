@@ -1,3 +1,4 @@
+import { collectAuditLinks } from './seoAuditDiscovery.js'
 const normalizeRobotsPath = value => String(value).replace(/%([\da-f]{2})|[^\x00-\x7F]/giu, (match, hex) => {
     if (!hex) return encodeURIComponent(match)
     const char = String.fromCharCode(parseInt(hex, 16))
@@ -60,7 +61,7 @@ export const indexingRulesFromMeta = (tags, xRobots = '') => {
 }
 export const collectIndexingRules = (doc, xRobots = '') => indexingRulesFromMeta([...doc.querySelectorAll('meta[name]')].map(el => ({ name: el.name, content: el.content })), xRobots)
 
-export const parseMetaHtml = (text) => {
+export const parseMetaHtml = (text, pageUrl) => {
     const doc = new DOMParser().parseFromString(text, 'text/html')
-    return { title: doc.querySelector('title')?.textContent.trim() || '', description: doc.querySelector('meta[name="description" i]')?.content.trim() || '', indexingMeta: [...doc.querySelectorAll('meta[name]')].map(el => ({ name: el.name, content: el.content })) }
+    return { title: doc.querySelector('title')?.textContent.trim() || '', description: doc.querySelector('meta[name="description" i]')?.content.trim() || '', indexingMeta: [...doc.querySelectorAll('meta[name]')].map(el => ({ name: el.name, content: el.content })), ...(pageUrl ? { internalLinks: collectAuditLinks(doc, pageUrl) } : {}) }
 }

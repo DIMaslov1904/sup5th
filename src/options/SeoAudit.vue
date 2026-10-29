@@ -3,7 +3,8 @@ import { computed, onUnmounted, ref, shallowRef } from 'vue'
 import { extensionApi } from '../platform/extensionApi.js'
 import { sendSeoToTab, fetchSeo } from '../utils/seoClient.js'
 import { createAuditControl, runSeoAuditRequests } from '../utils/seoAuditRunner.js'
-import { createAuditSample, normalizeAuditPageLimit, summarizeAuditPages, AUDIT_PAGE_LIMIT, DEFAULT_AUDIT_PAGE_LIMIT } from '../utils/seoAuditPages.js'
+import { filterAuditPages, normalizeAuditPageLimit, summarizeAuditPages, AUDIT_PAGE_LIMIT, DEFAULT_AUDIT_PAGE_LIMIT } from '../utils/seoAuditPages.js'
+import { AUDIT_DISCOVERY_LIMIT } from '../utils/seoAuditDiscovery.js'
 import { buildAuditChecks, summarizeAuditChecks } from '../utils/seoAuditChecks.js'
 import { evaluateRobotsFile } from '../utils/seoRules.js'
 import { withoutFragment } from '../utils/linkCheckStatus.js'
@@ -15,16 +16,13 @@ import SitemapDuplicates from './SitemapDuplicates.vue'
 const props = defineProps({ tab: Object })
 const state = ref('idle'), message = ref(''), notice = ref('')
 const progress = ref({ current: 0, total: 0, started: 0 }), report = shallowRef(null), audit = shallowRef(null)
-const pageLimit = ref(DEFAULT_AUDIT_PAGE_LIMIT)
+const pageLimit = ref(DEFAULT_AUDIT_PAGE_LIMIT), httpFilter = ref('all')
+const httpFilters = [{ value: 'all', label: 'Все' }, { value: '4xx', label: 'Ошибки 4xx' }, { value: '5xx', label: 'Ошибки 5xx' }]
+const filteredPages = computed(() => filterAuditPages(audit.value?.results || [], httpFilter.value))
 const busy = computed(() => ['scanning', 'checking', 'paused', 'stopping'].includes(state.value))
 const minimumLimit = computed(() => busy.value ? Math.max(progress.value.started || 0, 1) : 1)
 const normalizePageLimit = () => {
     pageLimit.value = Math.max(minimumLimit.value, normalizeAuditPageLimit(pageLimit.value))
-    if (state.value === 'paused' && audit.value?.pagesPending) {
-        const sample = createAuditSample(report.value, pageLimit.value)
-        audit.value = { ...audit.value, sample }
-        progress.value = { ...progress.value, total: sample.urls.length }
-    }
 }
 const checks = computed(() => report.value && audit.value ? buildAuditChecks(report.value, audit.value) : [])
 const summary = computed(() => summarizeAuditChecks(checks.value))
@@ -48,12 +46,12 @@ const runAudit = async () => {
     const signal = controller.signal
     control = createAuditControl(signal)
     normalizePageLimit()
-    state.value = 'scanning'; message.value = ''; notice.value = ''; audit.value = null; report.value = null
+    state.value = 'scanning'; message.value = ''; notice.value = ''; audit.value = null; report.value = null; httpFilter.value = 'all'
     progress.value = { current: 0, total: 0, started: 0 }
     try {
         const tab = props.tab?.id ? await extensionApi.tabs.get(props.tab.id) : (await extensionApi.tabs.query({ active: true, lastFocusedWindow: true }))[0]
         if (!tab?.id || !/^https?:\/\//.test(tab.url || '')) throw new Error('Откройте проверяемый сайт')
-        const data = await sendSeoToTab(tab.id, 'seo:dom', { internalLinkLimit: AUDIT_PAGE_LIMIT - 1 })
+        const data = await sendSeoToTab(tab.id, 'seo:dom', { internalLinkLimit: AUDIT_DISCOVERY_LIMIT - 1 })
         if (!alive || current !== revision) return
         report.value = data
         if (!signal.aborted) state.value = 'checking'
@@ -96,6 +94,7 @@ const runAudit = async () => {
             <Button v-if="state === 'checking' || state === 'paused'" variant="secondary" size="sm" @click="togglePause">{{ state === 'paused' ? 'Продолжить' : 'Пауза' }}</Button>
             <Button v-if="busy" variant="secondary" size="sm" :disabled="state === 'stopping'" @click="stopAudit">Остановить аудит</Button>
         </div>
+        <p class="text-xs text-ui-muted">До {{ AUDIT_PAGE_LIMIT.toLocaleString('ru-RU') }} URL. Источники: открытая страница, ссылки из проверенных HTML и sitemap.</p>
         <Notification v-if="message" :text="message" />
         <div v-if="busy && progress.total" class="ui-panel text-xs" role="status">
             HTTP: {{ progress.current }} из {{ progress.total }}<span v-if="audit?.sitemap.pending"> · sitemap загружается</span>
@@ -110,7 +109,10 @@ const runAudit = async () => {
                 </dl>
                 <a :href="report.url" :title="report.url" target="_blank" rel="noreferrer" class="mt-3 block truncate text-xs text-ui-accent">{{ report.url }}</a>
                 <p class="mt-1 text-xs text-ui-muted">DOM: {{ new Date(report.scannedAt).toLocaleString('ru-RU') }}. HTTP: повторные GET-запросы без cookies.</p>
-                <p class="mt-1 text-xs text-ui-muted">Выборка: {{ audit.results.length }} из {{ audit.sample.total }} найденных URL; лимит — {{ audit.sample.limit }}. Полных HTML по уникальным конечным URL: {{ pages.htmlCount }}.</p>
+                <p class="mt-2 text-sm font-semibold">Найдено уникальных URL: {{ audit.sample.total }}{{ audit.sample.limited ? '+' : '' }}</p>
+                <p class="mt-1 text-xs text-ui-muted">Открытая страница и ссылки: {{ audit.sample.linked }} · В sitemap: {{ audit.sample.mapped }} · Не встречены в обработанных sitemap: {{ audit.sample.outsideSitemap }}.</p>
+                <p class="mt-1 text-xs text-ui-muted">HTTP-проверено: {{ audit.results.length }} из {{ audit.sample.total }}; лимит — {{ audit.sample.limit }}. Полных HTML по уникальным конечным URL: {{ pages.htmlCount }}.</p>
+                <p class="mt-1 text-xs text-ui-muted">Счётчик отражает обнаруженные адреса в пределах сайта, а не полный размер сайта. {{ busy ? 'Поиск продолжается.' : audit.sample.limited ? 'Достигнут лимит сбора адресов.' : audit.results.length < audit.sample.total ? 'Часть найденных URL не проверена; ссылки с них не собраны.' : 'Обработаны доступные источники.' }}</p>
             </Card>
             <Card title="Проверки">
                 <ul class="grid min-w-0 gap-1.5">
@@ -121,9 +123,17 @@ const runAudit = async () => {
                 </ul>
             </Card>
             <Card v-if="audit.results.length" title="HTTP-проверка выборки">
-                <p class="mb-2 text-xs text-ui-muted">404/410: {{ pages.broken }} · 5xx: {{ pages.serverErrors }} · Неизвестно: {{ pages.uncertain }}</p>
-                <ul class="grid max-h-80 min-w-0 gap-2 overflow-y-auto pr-1 text-xs">
-                    <li v-for="link in audit.results" :key="link.url" class="grid min-w-0 gap-1 rounded-control bg-ui-field/40 px-2 py-1.5">
+                <p class="mb-2 text-xs text-ui-muted">4xx: {{ pages.clientErrors }} (404/410: {{ pages.broken }}) · 5xx: {{ pages.serverErrors }} · Неизвестно / ограничения: {{ pages.uncertain }}</p>
+                <fieldset class="mb-3 flex flex-wrap items-center gap-3 text-xs">
+                    <legend class="mb-1 text-ui-muted">Показать HTTP-результаты</legend>
+                    <label v-for="filter in httpFilters" :key="filter.value" :for="`audit-http-${filter.value}`" class="flex cursor-pointer items-center gap-1.5">
+                        <input :id="`audit-http-${filter.value}`" v-model="httpFilter" type="radio" name="audit-http-filter" :value="filter.value" class="accent-ui-primary" />{{ filter.label }}
+                    </label>
+                </fieldset>
+                <p class="mb-2 text-xs text-ui-muted" role="status">Показано: {{ filteredPages.length }} из {{ audit.results.length }}</p>
+                <p v-if="!filteredPages.length" class="text-xs text-ui-muted">В проверенной выборке нет ошибок {{ httpFilter }}.</p>
+                <ul v-else class="grid max-h-80 min-w-0 gap-2 overflow-y-auto pr-1 text-xs">
+                    <li v-for="link in filteredPages" :key="link.url" class="grid min-w-0 gap-1 rounded-control bg-ui-field/40 px-2 py-1.5">
                         <div class="flex min-w-0 justify-between gap-3"><a :href="link.url" :title="link.url" target="_blank" rel="noreferrer" class="min-w-0 truncate text-ui-accent">{{ link.url }}</a><span class="shrink-0" :class="['broken','server'].includes(link.outcome) ? 'text-ui-danger' : link.outcome === 'ok' ? 'text-ui-success' : 'text-ui-warning'">{{ link.label }}</span></div>
                         <a v-if="link.redirected" :href="link.finalUrl" :title="link.finalUrl" target="_blank" rel="noreferrer" class="truncate text-ui-muted">→ {{ link.finalUrl }}</a>
                         <span v-if="link.metaReason" class="text-[11px] text-ui-muted">Метаданные: {{ link.metaReason }}</span>

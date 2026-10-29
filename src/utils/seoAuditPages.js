@@ -1,19 +1,19 @@
 import { classifyLinkCheck } from './linkCheckStatus.js'
 import { parseMetaHtml } from './seoRules.js'
-export const AUDIT_PAGE_LIMIT = 500
-export const DEFAULT_AUDIT_PAGE_LIMIT = 10
+import { normalizeAuditUrl as normalizeUrl } from './seoAuditDiscovery.js'
+export const AUDIT_PAGE_LIMIT = 5000
+export const DEFAULT_AUDIT_PAGE_LIMIT = 100
 export const AUDIT_HTML_LIMIT = 1024 * 1024
 export const normalizeAuditPageLimit = count => Number.isFinite(Number(count)) ? Math.max(1, Math.min(AUDIT_PAGE_LIMIT, Math.trunc(Number(count)))) : DEFAULT_AUDIT_PAGE_LIMIT
-const normalizeUrl = value => {
-    try { const url = new URL(value); if (!/^https?:$/.test(url.protocol) || url.username || url.password) return ''; url.hash = ''; return url.href } catch { return '' }
-}
 export const normalizeAuditText = value => String(value || '').normalize('NFC').replace(/\s+/g, ' ').trim()
 export const createAuditSample = (data, count = DEFAULT_AUDIT_PAGE_LIMIT) => {
     const limit = normalizeAuditPageLimit(count)
     const current = normalizeUrl(data.url), origin = new URL(current).origin
-    const urls = [...new Set([current, ...(data.internalLinks || [])].map(normalizeUrl).filter(value => value && new URL(value).origin === origin))]
-    return { urls: urls.slice(0, limit), limit, total: Math.max(urls.length, 1 + (Number(data.internalLinksTotal) || 0)) }
+    const urls = [...new Set([current, ...(data.internalLinks || [])].map(value => normalizeUrl(value)).filter(value => value && new URL(value).origin === origin))]
+    return { urls: urls.slice(0, limit), limit, total: urls.length }
 }
+export const filterAuditPages = (results, filter = 'all') => filter === '4xx' ? results.filter(item => item.status >= 400 && item.status < 500)
+    : filter === '5xx' ? results.filter(item => item.status >= 500 && item.status < 600) : results
 export const inspectAuditPage = (url, info, parse = parseMetaHtml) => {
     const finalUrl = normalizeUrl(info.url) || normalizeUrl(url)
     const response = { status: info.status || 0, ok: info.ok === true, url: finalUrl, headers: info.headers || {}, ttfb: info.ttfb ?? null, failure: info.failure, truncated: info.truncated === true, xRobotsTags: info.xRobotsTags, chain: info.chain || [] }
@@ -24,7 +24,7 @@ export const inspectAuditPage = (url, info, parse = parseMetaHtml) => {
     else if (info.truncated) result.metaReason = 'HTML обрезан при загрузке'
     else if (new URL(finalUrl).origin !== new URL(url).origin) result.metaReason = 'Конечный URL вне области проверки'
     else {
-        try { const meta = parse(info.text || ''); Object.assign(result, { metaState: 'complete', title: normalizeAuditText(meta.title), description: normalizeAuditText(meta.description), indexingMeta: meta.indexingMeta || [] }) }
+        try { const meta = parse(info.text || '', finalUrl); Object.assign(result, { metaState: 'complete', title: normalizeAuditText(meta.title), description: normalizeAuditText(meta.description), indexingMeta: meta.indexingMeta || [], internalLinks: meta.internalLinks || [] }) }
         catch { result.metaReason = 'Не удалось прочитать метаданные HTML' }
     }
     return result
@@ -38,6 +38,7 @@ export const summarizeAuditPages = results => {
     }
     return { htmlCount: pages.length, titleCount: pages.filter(item => item.title).length, descriptionCount: pages.filter(item => item.description).length,
         duplicateTitles: groups('title'), duplicateDescriptions: groups('description'),
-        broken: results.filter(item => item.outcome === 'broken').length, serverErrors: results.filter(item => item.outcome === 'server').length,
+        clientErrors: filterAuditPages(results, '4xx').length,
+        broken: results.filter(item => item.outcome === 'broken').length, serverErrors: filterAuditPages(results, '5xx').length,
         uncertain: results.filter(item => !['ok', 'broken', 'server'].includes(item.outcome)).length }
 }
