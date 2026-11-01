@@ -7,7 +7,6 @@ import { loadSeoNetwork } from '../../utils/seoNetwork.js'
 import { buildHeadingTree } from '../../utils/headingTree.js'
 import HeadingTree from './HeadingTree.vue'
 import { evaluateRobotsFile } from '../../utils/seoRules.js'
-import { checkSearchIndexation } from '../../utils/seoIndexation.js'
 import { classifyLinkCheck, withoutFragment } from '../../utils/linkCheckStatus.js'
 import Preloader from './ui/Preloader.vue'
 import Button from './ui/Button.vue'
@@ -48,22 +47,6 @@ const twitterMeta = computed(() => {
     const twitter = report.value?.twitter || {}
     return Object.entries(twitter).filter(([, value]) => value).map(([field, value]) => ({ label: `twitter:${field}`, value }))
 })
-const indexationLabels = { idle: 'Не проверялось', ok: '', limited: 'Ответ ограничен (капча или сокращённая выдача)', error: 'Запрос не удался' }
-const indexationRow = engine => {
-    const item = report.value?.searchIndexation?.[engine]
-    if (!item) return 'Не проверялось'
-    return item.found == null ? indexationLabels[item.status] || 'Не проверялось' : `~${item.found.toLocaleString('ru-RU')}`
-}
-const checkingIndexation = ref(false)
-const runIndexationCheck = async () => {
-    if (checkingIndexation.value || !report.value) return
-    checkingIndexation.value = true; error.value = ''
-    try {
-        const result = await checkSearchIndexation(report.value.url, (url, method, options) => fetchSeo(url, method, undefined, options))
-        if (alive) { report.value = { ...report.value, searchIndexation: result }; reportDirty = true; schedulePersist() }
-    } catch (reason) { if (alive) error.value = reason.message }
-    finally { if (alive) checkingIndexation.value = false }
-}
 let cancelled = false, alive = true, scanRevision = 0
 let sessionContext = null, restoring = false
 const tabs = SEO_SECTIONS
@@ -270,14 +253,6 @@ const tools = computed(() => {
             <template v-if="section === 'index'">
                 <Card title="Индекс качества сайта | Вебмастер"><YandexCounter :key="`${tab?.id}:${report.url}:${report.scannedAt}`" :page-url="report.url" /></Card>
                 <Card title="Индексация"><div class="grid gap-2 text-xs"><p>Meta robots: {{ report.robots || 'Не задан' }}</p><p>X-Robots-Tag: {{ report.response.pending ? 'Проверяем…' : report.xRobots || 'Не задан' }}</p><p :class="report.robotsAllowed && report.xRobotsAllowed ? 'text-ui-success' : 'text-ui-warning'">{{ !report.robotsAllowed || report.xRobotsAllowed === false ? 'Есть общий запрет noindex' : report.response.pending ? 'Проверяем HTTP…' : report.xRobotsAllowed === null ? 'HTTP-ограничения не определены: результат неполный' : 'Общего запрета noindex нет' }}</p><p>robots.txt: {{ report.robotsFile.pending ? 'Проверяем…' : report.robotsFile.exists ? 'HTTP ' + report.robotsFile.status : 'Недоступен' }} · {{ robotsRules.allowed === null ? 'Правила не удалось определить' : robotsRules.allowed ? 'Путь разрешён для *' : 'Путь запрещён для *' }}</p><p v-for="item in report.indexingAgents" :key="item.agent">{{ item.agent }}: {{ item.allowed === null ? 'область действия noindex неизвестна' : item.allowed ? 'запрета noindex не найдено' : 'есть запрет noindex' }}{{ report.xRobotsAllowed === null ? ' (HTTP-проверка неполная)' : '' }}</p><p class="text-ui-muted">Отсутствие запрета не гарантирует индексацию. Правила конкретного робота могут отличаться.</p></div></Card>
-                <Card title="Индексация поисковиков">
-                    <div class="grid gap-2 text-xs">
-                        <p>Яндекс: {{ indexationRow('yandex') }}</p>
-                        <p>Google: {{ indexationRow('google') }}</p>
-                        <p class="text-ui-muted">Оценка приблизительная: site:-запрос зависит от капчи и региона, точное число страниц поисковики не раскрывают.</p>
-                        <Button size="sm" variant="secondary" class="justify-self-start" :disabled="checkingIndexation" @click="runIndexationCheck">{{ checkingIndexation ? 'Проверяем…' : 'Проверить' }}</Button>
-                    </div>
-                </Card>
                 <details class="ui-panel text-xs"><summary class="cursor-pointer">robots.txt</summary><pre class="mt-2 overflow-auto whitespace-pre-wrap">{{ report.robotsFile.content || 'Пустой или не получен' }}</pre></details>
                 <Card title="Canonical / hreflang"><p v-for="(item,index) in report.canonicals" :key="index" class="break-all text-xs">{{ item.href || '(пустой)' }} {{ item.inHead ? '' : 'вне head' }}</p><p v-for="(item,index) in report.hreflang" :key="index" class="break-all text-xs">{{ item.hreflang }}: {{ item.href }}</p></Card>
                 <Button variant="secondary" size="sm" @click="openSeoApp(tab.id,'sitemap')">Открыть единый sitemap ↗</Button>

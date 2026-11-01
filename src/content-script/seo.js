@@ -125,11 +125,6 @@ export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = f
             document: document.characterSet || ''
         },
         ssl: collectSsl(),
-        // Заполняется по кнопке в popup: site:-запросы к поисковикам выполняются через background.
-        searchIndexation: {
-            yandex: { found: null, status: 'idle' },
-            google: { found: null, status: 'idle' }
-        },
         jsonLdBlocks: document.querySelectorAll('script[type="application/ld+json"]').length,
         hreflang: [...document.querySelectorAll('link[rel="alternate"][hreflang]')].map((link) => ({
             hreflang: link.hreflang,
