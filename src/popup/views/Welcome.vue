@@ -18,11 +18,11 @@ import { needsApiAuthorization } from '../../utils/apiAuthorizationState.js'
 const props = defineProps({ step: { type: String, required: true }, settings: { type: Object, required: true } })
 const emit = defineEmits(['completed'])
 const projectsUrl = ref(props.settings.projectsUrl || ''), accessUrl = ref(props.settings.accessUrl || '')
+const busy = ref(false), error = ref(''), apiAuthorizationRequired = ref(false), capabilities = ref(null)
 const pin = ref('')
 const securityTab = ref('biometric')
 const securityTabs = computed(() => capabilities.value?.available ? [['biometric', 'Биометрия'], ['pin', 'PIN-код']] : [['pin', 'PIN-код']])
 watch(securityTabs, tabs => { if (!tabs.some(([value]) => value === securityTab.value)) securityTab.value = tabs[0][0] })
-const busy = ref(false), error = ref(''), apiAuthorizationRequired = ref(false), capabilities = ref(null)
 const stepOrder = ['security', 'projects', 'accesses']
 const stepNumber = computed(() => stepOrder.indexOf(props.step) + 1)
 const stepTitle = computed(() => ({ security: 'Добро пожаловать', projects: 'Подключите API проектов', accesses: 'Личные доступы и сервисы' })[props.step] || 'Настройка')
