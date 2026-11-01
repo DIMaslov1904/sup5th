@@ -1,4 +1,5 @@
 import { extensionApi, isFirefox } from '../platform/extensionApi.js'
+import seoScript from '../content-script/seo.js?script&iife'
 import { createSeoSidePanel } from './seoSidePanel.js'
 import { injectExtensionScript } from '../platform/scriptInjection.js'
 import { seoAppUrl } from './seoSections.js'
@@ -23,4 +24,3 @@ export const downloadText = (text, filename, type = 'text/plain') => {
     const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
-import seoScript from '../content-script/seo.js?script&iife'

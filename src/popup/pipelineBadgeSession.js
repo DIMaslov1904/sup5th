@@ -1,5 +1,4 @@
 import { getPipelineLinks } from '../utils/pipelineLinks.js'
-export { getPipelineLinks } from '../utils/pipelineLinks.js'
 
 // SVGs and auth suppression stay in this document. Only confirmed absence is persisted.
 export const createPipelineBadgeSession = (fetchBadge = fetch, isEnabled = () => true, missing = { get: async () => false, set: async () => {} }) => {

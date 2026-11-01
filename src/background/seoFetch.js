@@ -1,5 +1,6 @@
 import { extensionApi } from '../platform/extensionApi.js'
 import { observeSeoRequest, seoResponseHeaders } from './seoRequestTrace.js'
+import { hasOrigin } from '../utils/hostPermissions.js'
 export const fetchSeoResource = async ({ url, method = 'GET', timeout = 20000, maxBytes = 200000, trace = false, fresh = false, htmlOnly = false, manualRedirect = false }, sender = {}) => {
     const empty = { ok: false, status: 0, url: '', headers: {}, text: '', ttfb: null }
     let parsed
@@ -49,4 +50,3 @@ export const fetchSeoResource = async ({ url, method = 'GET', timeout = 20000, m
     } catch (error) { return { ...empty, error: error.message, failure: controller.signal.aborted ? 'timeout' : 'network' } }
     finally { clearTimeout(timer); observer?.dispose() }
 }
-import { hasOrigin } from '../utils/hostPermissions.js'

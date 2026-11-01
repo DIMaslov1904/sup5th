@@ -76,22 +76,6 @@ const parseSupportDate = (value) => {
     return Number.isNaN(date.getTime()) ? null : date
 }
 
-const formatDuration = (minutes) => {
-    let seconds = Math.max(0, Math.floor(minutes * 60))
-    let result = ''
-    const days = Math.floor(seconds / 86400)
-    if (days) result += `${days} дн `
-    seconds -= days * 86400
-    const hours = Math.floor(seconds / 3600)
-    if (hours) result += `${hours} ч `
-    seconds -= hours * 3600
-    const remainderMinutes = Math.floor(seconds / 60)
-    if (remainderMinutes) result += `${remainderMinutes} м `
-    seconds -= remainderMinutes * 60
-    if (seconds) result += `${seconds} с`
-    return result.trim() || '0 с'
-}
-
 const setField = (input, value) => {
     input.value = value
     input.dispatchEvent(new Event('input', { bubbles: true }))

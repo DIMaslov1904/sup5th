@@ -5,7 +5,7 @@ import { startAdminAuth, copyProjectAccessText, getProjectAccessField, getServic
 import { saveApiSettings } from './apiSettings.js'
 import { getSshCommand } from '../utils/ssh.js'
 
-export const BIOMETRIC_PAGES_KEY = 'biometricPageRequests'
+const BIOMETRIC_PAGES_KEY = 'biometricPageRequests'
 const pagePath = 'src/biometric/index.html', lifetime = 5 * 60000
 const copyFields = ['login', 'password', 'text', 'ftpUrl', 'ftpLogin', 'ftpPassword', 'ssh']
 const validText = value => typeof value === 'string' && value.length > 0 && value.length <= 2048

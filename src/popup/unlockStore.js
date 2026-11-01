@@ -4,7 +4,6 @@
 import { reactive } from 'vue'
 import { isFirefox } from '../platform/extensionApi.js'
 import { runBiometricPage, BIOMETRIC_ACTION_HANDLED } from '../utils/biometricPage.js'
-export { BIOMETRIC_ACTION_HANDLED } from '../utils/biometricPage.js'
 import {
     getCredentialSecurityStatus,
     unlockCredentialVaultWithHello,
@@ -53,7 +52,7 @@ export const cancelUnlock = () => {
 
 // Разблокирует хранилище (если нужно) и выполняет действие
 export const ensureUnlocked = async (action, options) => {
-    const status = await getCredentialSecurityStatus(false, false)
+    const status = await getCredentialSecurityStatus()
     if (!status.enabled || status.unlocked) return action()
     if (status.mode === 'pin') {
         await showUnlock('pin', options)
@@ -96,7 +95,7 @@ export const runHelloUnlock = async () => {
     unlockState.loading = true
     unlockState.error = ''
     try {
-        const status = await getCredentialSecurityStatus(false, false)
+        const status = await getCredentialSecurityStatus()
         if (!isActive(request)) return
         const { key } = await unlockWithBiometricFlow({
             credentialId: status.credentialId,

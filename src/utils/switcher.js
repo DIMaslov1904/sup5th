@@ -6,7 +6,6 @@
  *   switcher("Ghbdtn Vbh!")                          // Привет Мир! (eng -> ru)
  *   switcher("Руддщ Цщкдв!", { type: "rueng" })      // Hello World!  (ru -> eng)
  *   switcher("Пример!", { type: "translit" })        // Primer!       (ru -> en транслит)
- *   switcher("Primer!", { type: "retranslit" })      // Пример!       (en транслит -> ru)
  */
 
 const config = {
@@ -103,14 +102,10 @@ const flip = (trans) => {
 }
 
 const flippedKeys = flip(config.dictionary.keys)
-// Е/Э and the case of signs are ambiguous in reverse; prefer е, ь and ъ.
-const flippedTranslit = { ...flip(config.dictionary.translit), e: 'е', E: 'Е', 'ʹ': 'ь', 'ʺ': 'ъ' }
-const retranslitPattern = new RegExp(Object.keys(flippedTranslit).sort((a, b) => b.length - a.length).join('|'), 'g')
-
 /**
  * Конвертирует строку между раскладками.
  * @param {string} str - исходная строка
- * @param {{ type?: 'engru'|'rueng'|'translit'|'retranslit' }} [settings]
+ * @param {{ type?: 'engru'|'rueng'|'translit' }} [settings]
  */
 export default function switcher(str, settings = {}) {
     if (typeof str !== 'string') throw new Error('Передана не строка')
@@ -129,8 +124,6 @@ export default function switcher(str, settings = {}) {
         case 'translit':
             mappingDict = config.dictionary.translit
             break
-        case 'retranslit':
-            return str.replace(retranslitPattern, symbol => flippedTranslit[symbol])
         default:
             mappingDict = flippedKeys
             break

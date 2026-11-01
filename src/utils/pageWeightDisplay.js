@@ -1,4 +1,4 @@
-export const formatBytes = bytes => {
+const formatBytes = bytes => {
     if (!Number.isFinite(bytes) || bytes < 0) return 'Не измерен'
     const units = ['Б', 'КБ', 'МБ', 'ГБ']
     const index = bytes ? Math.max(0, Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)) : 0

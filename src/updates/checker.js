@@ -1,13 +1,11 @@
 import { compareVersions, readRelease, RELEASE_API } from './release.js'
 
-export const UPDATE_INTERVAL = 24 * 60 * 60 * 1000
+const UPDATE_INTERVAL = 24 * 60 * 60 * 1000
 export const UPDATE_ALARM = 'extension-update-check'
 export const UPDATE_STATE_KEY = 'extensionUpdateState'
 
 /**
  * @typedef {object} UpdateStatus
- * @property {string} currentVersion
- * @property {'chromium' | 'firefox'} browser
  * @property {boolean} checking
  * @property {number | null} lastCheckedAt
  * @property {number | null} lastSuccessfulAt
@@ -15,7 +13,6 @@ export const UPDATE_STATE_KEY = 'extensionUpdateState'
  * @property {string} latestVersion
  * @property {boolean} updateAvailable
  * @property {string} downloadUrl
- * @property {string} releaseUrl
  */
 
 export const createUpdateChecker = ({ browser, currentVersion, read, write, alarms, fetch: request = fetch, now = Date.now }) => {
@@ -25,10 +22,10 @@ export const createUpdateChecker = ({ browser, currentVersion, read, write, alar
         const saved = await read()
         const latest = saved?.release
         const updateAvailable = Boolean(latest && compareVersions(latest.version, currentVersion) > 0)
-        return { currentVersion, browser, checking: Boolean(running), lastCheckedAt: saved?.lastCheckedAt || null,
+        return { checking: Boolean(running), lastCheckedAt: saved?.lastCheckedAt || null,
             lastSuccessfulAt: saved?.lastSuccessfulAt || null, error: saved?.error || '',
             latestVersion: latest?.version || '', updateAvailable,
-            downloadUrl: updateAvailable ? latest.downloadUrl : '', releaseUrl: latest?.releaseUrl || '' }
+            downloadUrl: updateAvailable ? latest.downloadUrl : '' }
     }
     const schedule = async () => {
         const saved = await read()

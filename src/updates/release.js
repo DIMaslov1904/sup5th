@@ -1,4 +1,4 @@
-export const RELEASES_URL = 'https://github.com/DIMaslov1904/sup5th/releases'
+const RELEASES_URL = 'https://github.com/DIMaslov1904/sup5th/releases'
 export const RELEASE_API = 'https://api.github.com/repos/DIMaslov1904/sup5th/releases/latest'
 
 const versionParts = value => {
@@ -30,5 +30,5 @@ export const readRelease = (release, browser) => {
         || asset.browser_download_url !== `${RELEASES_URL}/download/v${version}/${encodeURIComponent(asset.name)}`)) {
         throw new Error('Некорректная ссылка на пакет обновления')
     }
-    return { version, releaseUrl: release.html_url, downloadUrl: asset?.browser_download_url || '' }
+    return { version, downloadUrl: asset?.browser_download_url || '' }
 }

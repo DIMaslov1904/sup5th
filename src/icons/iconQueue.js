@@ -1,6 +1,6 @@
 import { ICON_RETRY_DELAY } from './iconPolicy.js'
 
-const emptyQueue = () => ({ pending: [], targets: [], total: 0, completed: 0, failed: 0, runId: '' })
+const emptyQueue = () => ({ pending: [], total: 0, completed: 0, failed: 0, runId: '' })
 
 // Network work runs outside the state lock; cancellation invalidates its result.
 export const createIconQueue = ({ repository, fetchIcon, schedule, notify, now = Date.now }) => {
@@ -27,7 +27,7 @@ export const createIconQueue = ({ repository, fetchIcon, schedule, notify, now =
         const retained = force ? [] : state.pending.filter(origin => targets.includes(origin))
         const additions = needed.filter(origin => !retained.includes(origin))
         const next = {
-            ...state, targets, pending: [...retained, ...additions],
+            ...state, pending: [...retained, ...additions],
             ...(force || !state.pending.length ? { total: needed.length, completed: 0, failed: 0, runId: crypto.randomUUID() } : { total: state.total + additions.length })
         }
         await repository.setState(next)
@@ -60,8 +60,7 @@ export const createIconQueue = ({ repository, fetchIcon, schedule, notify, now =
             try {
                 await repository.put({
                     origin: job.origin, ...(previous || {}), ...(result || {}),
-                    updatedAt: now(), retryAfter: failure ? now() + ICON_RETRY_DELAY : 0,
-                    error: failure ? String(failure.message).slice(0, 200) : ''
+                    retryAfter: failure ? now() + ICON_RETRY_DELAY : 0
                 })
             } catch (error) { failure = error }
             await repository.setState({ ...state, pending: state.pending.filter(origin => origin !== job.origin), completed: state.completed + 1, failed: state.failed + Number(Boolean(failure)) })

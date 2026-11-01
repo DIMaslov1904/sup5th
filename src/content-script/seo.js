@@ -5,7 +5,7 @@ import { loadSeoNetwork } from '../utils/seoNetwork.js'
 import { getSeoActions, setSeoAction } from './seoActions.js'
 import { captureHeadings, focusHeading } from './headingNavigation.js'
 import { collectPageWeight } from './pageWeight.js'
-import { collectCwv, collectCwvSync } from '../utils/cwv.js'
+import { collectCwv } from '../utils/cwv.js'
 import { AUDIT_DISCOVERY_LIMIT } from '../utils/seoAuditDiscovery.js'
 import { collectAuditTargets } from '../utils/seoAuditLinks.js'
 const documentId = [...crypto.getRandomValues(new Uint32Array(4))].join('-')
@@ -15,7 +15,7 @@ const documentId = [...crypto.getRandomValues(new Uint32Array(4))].join('-')
  * Сетевые запросы (robots.txt, sitemap, проверка ссылок) выполняются в
  * фоновом процессе через сообщение 'seo:fetch' — это обходит CSP страницы
  * и не нагружает вкладку.
- * Зарегистрирован через registerSeoHandler() в index.js.
+ * Внедряется в страницу как IIFE из utils/seoClient.js; обработчики сообщений — ниже.
  */
 
 const getMeta = (selector) => document.querySelector(selector)?.getAttribute('content')?.trim() || ''
@@ -33,8 +33,6 @@ const fetchViaBackground = async (url, options = {}) => {
         return { ...failed, ...data }
     } catch { return failed }
 }
-
-const hasCyrillic = (value) => /[а-яё]/i.test(value)
 
 // Mixed content: незащищённые ресурсы на HTTPS-странице.
 const insecureResourceSelectors = 'img[src], script[src], iframe[src], source[src], video[src], audio[src], embed[src], input[src], link[href], form[action]'
@@ -54,10 +52,8 @@ export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = f
     const dom = collectSeoDom(document, location.href)
     const headings = Object.fromEntries([1, 2, 3, 4, 5, 6].map((level) => [`h${level}`, getHeadings(level)]))
     const robotsUrl = new URL('/robots.txt', location.href).href
-    const pageInfo = { url: location.href, status: 0, ok: false, ttfb: null }
     const sitemapUrl = new URL('/sitemap.xml', location.href).href
-    const xRobots = ''
-    const indexing = collectIndexingRules(document, xRobots)
+    const indexing = collectIndexingRules(document)
 
     const title = document.title.trim()
     const description = getMeta('meta[name="description" i]')
@@ -92,39 +88,25 @@ export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = f
     return {
         ...dom,
         documentId,
-        indexingMeta: [...document.querySelectorAll('meta[name]')].map(el => ({ name: el.name, content: el.content })),
         actions: getSeoActions(),
         url: location.href,
         baseUrl: document.baseURI,
         baseDeclared: Boolean(document.querySelector('base[href]')),
         baseDisplay: document.querySelector('base[href]')?.href || new URL('/', location.href).href,
         scannedAt: Date.now(),
-        urlLength: location.href.length,
-        finalUrl: pageInfo.url || location.href,
-        redirected: Boolean(pageInfo.url && pageInfo.url !== location.href),
+        finalUrl: location.href,
+        redirected: false,
         title,
-        titleLength: title.length,
-        titleHasCyrillic: hasCyrillic(title),
         description,
-        descriptionLength: description.length,
-        descriptionHasCyrillic: hasCyrillic(description),
         keywords: getMeta('meta[name="keywords" i]'),
         canonical: document.querySelector('link[rel~="canonical" i]')?.href || '',
         ...indexing,
-        xRobots,
-        xRobotsAllowed: pageInfo.status ? indexing.xRobotsAllowed : null,
+        xRobotsAllowed: null,
         lang: document.documentElement.lang || '',
         viewport: Boolean(getMeta('meta[name="viewport" i]')),
         headings,
         h1Count: h1List.length,
         duplicateH1,
-        openGraph: {
-            title: getMeta('meta[property="og:title"]'),
-            description: getMeta('meta[property="og:description"]'),
-            image: getMeta('meta[property="og:image"]'),
-            type: getMeta('meta[property="og:type"]'),
-            url: getMeta('meta[property="og:url"]')
-        },
         twitter: {
             card: getMeta('meta[name="twitter:card" i]'),
             title: getMeta('meta[name="twitter:title" i]'),
@@ -136,17 +118,11 @@ export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = f
             document: document.characterSet || ''
         },
         ssl: collectSsl(),
-        jsonLdBlocks: document.querySelectorAll('script[type="application/ld+json"]').length,
         hreflang: [...document.querySelectorAll('link[rel="alternate"][hreflang]')].map((link) => ({
             hreflang: link.hreflang,
             href: link.href
         })),
-        response: {
-            pending: true,
-            status: pageInfo.status,
-            ok: pageInfo.ok,
-            ttfb: pageInfo.ttfb ?? null
-        },
+        response: { pending: true, status: 0, ok: false, ttfb: null },
         internalLinks,
         internalLinksTotal: internalLinkUrls.length,
         ...(includeAuditLinks ? { auditLinks: auditLinks.slice(0, AUDIT_DISCOVERY_LIMIT), auditLinksTotal: auditLinks.length } : {}),
@@ -174,29 +150,12 @@ export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = f
             external: [...document.links].filter((link) => link.hostname && link.hostname !== location.hostname).length,
             withoutText: dom.linkRows.filter(link => !link.accessibleName).length
         },
-        wordCount: (document.body?.innerText || '').trim().split(/\s+/).filter(Boolean).length,
-        htmlSize: document.documentElement.outerHTML.length,
         pageWeight: collectPageWeight(document),
-        cwv: collectCwvSync(document)
+        cwv: collectCwv()
     }
 }
 
-// Async CWV update with accurate CLS via PerformanceObserver
-let cwvUpdatePromise = null
-const updateCwvAsync = async (report) => {
-    if (cwvUpdatePromise) return cwvUpdatePromise
-    cwvUpdatePromise = (async () => {
-        try {
-            const cwv = await collectCwv(document)
-            return { ...report, cwv }
-        } catch {
-            return report
-        }
-    })()
-    return cwvUpdatePromise
-}
 export const scanSeo = () => loadSeoNetwork(collectSeoReport(), (url, method, options) => fetchViaBackground(url, { method, ...options }))
-export { updateCwvAsync }
 
 /** Регистрирует обработчик сообщений 'seo:scan' */
 const registerSeoHandler = () => {
@@ -221,16 +180,9 @@ const registerSeoHandler = () => {
             return false
         }
         if (message?.type === 'seo:cwv') {
-            // Async CWV update with accurate CLS
-            ; (async () => {
-                try {
-                    const cwv = await collectCwv(document)
-                    sendResponse({ ok: true, data: cwv })
-                } catch (error) {
-                    sendResponse({ ok: false, error: error.message })
-                }
-            })()
-            return true
+            try { sendResponse({ ok: true, data: collectCwv() }) }
+            catch (error) { sendResponse({ ok: false, error: error.message }) }
+            return false
         }
         if (message?.type !== 'seo:scan') return false
         scanSeo()

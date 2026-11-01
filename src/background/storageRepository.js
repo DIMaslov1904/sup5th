@@ -11,9 +11,9 @@ export const VAULT_KEY = 'credentialVault'
 export const UNLOCKED_KEY = 'unlockedCredentialVaultKey'
 export const AUTH_SESSIONS_KEY = 'pendingAdminAuthSessions'
 
-export const emptyData = () => ({
+const emptyData = () => ({
     projectApiStatus: '', accessApiStatus: '', accessAuthRequired: false, refreshErrors: [],
-    lastSuccessfulData: { projects: [], accesses: [], servicesCount: 0, projectsUpdatedAt: null, accessesUpdatedAt: null, projectsUrl: '', accessesUrl: '' }
+    lastSuccessfulData: { projects: [], accesses: [], projectsUpdatedAt: null, accessesUpdatedAt: null, projectsUrl: '', accessesUrl: '' }
 })
 
 // No legacy readers or migrations: incompatible data must be imported again.

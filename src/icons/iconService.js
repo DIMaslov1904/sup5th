@@ -14,7 +14,7 @@ const schedule = async active => {
 }
 const queue = createIconQueue({ repository: iconRepository, fetchIcon: createIconFetcher(iconRepository), schedule, notify: broadcast })
 let work
-export const resumeSiteIcons = () => {
+const resumeSiteIcons = () => {
     if (work) return work
     let failed = false
     work = (async () => {

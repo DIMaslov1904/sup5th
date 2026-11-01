@@ -95,7 +95,7 @@ export const toPublicData = (data) => {
             ...snapshot,
             projects: [...projectsByUrl.values()].map((project) => {
                 const count = findAccesses(project.url).length
-                return { ...project, hasAccess: count > 0, accessCount: count }
+                return { ...project, hasAccess: count > 0 }
             }),
             accesses: snapshot.accesses.map(publicAccess)
         }

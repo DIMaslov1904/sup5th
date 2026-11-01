@@ -6,13 +6,7 @@ export const DEFAULT_AUDIT_PAGE_LIMIT = 100
 export const AUDIT_HTML_LIMIT = 1024 * 1024
 export const normalizeAuditPageLimit = count => Number.isFinite(Number(count)) ? Math.max(1, Math.min(AUDIT_PAGE_LIMIT, Math.trunc(Number(count)))) : DEFAULT_AUDIT_PAGE_LIMIT
 export const normalizeAuditText = value => String(value || '').normalize('NFC').replace(/\s+/g, ' ').trim()
-export const createAuditSample = (data, count = DEFAULT_AUDIT_PAGE_LIMIT) => {
-    const limit = normalizeAuditPageLimit(count)
-    const current = normalizeUrl(data.url), origin = new URL(current).origin
-    const urls = [...new Set([current, ...(data.internalLinks || [])].map(value => normalizeUrl(value)).filter(value => value && new URL(value).origin === origin))]
-    return { urls: urls.slice(0, limit), limit, total: urls.length }
-}
-export const filterAuditPages = (results, filter = 'all') => filter === '4xx' ? results.filter(item => item.status >= 400 && item.status < 500)
+const filterAuditPages = (results, filter = 'all') => filter === '4xx' ? results.filter(item => item.status >= 400 && item.status < 500)
     : filter === '5xx' ? results.filter(item => item.status >= 500 && item.status < 600) : results
 export const inspectAuditPage = (url, info, parse = parseMetaHtml) => {
     const finalUrl = normalizeUrl(info.url) || normalizeUrl(url)

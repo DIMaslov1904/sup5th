@@ -6,7 +6,7 @@ import { getSecurityConfig, getUnlockedKey, readCredentialVault, vaultRevision, 
 import { findAccessesByUrl, getAdminUrl } from '../utils/projectUtils.js'
 import { hasOrigin } from '../utils/hostPermissions.js'
 
-export const getProjectAccessRecords = async (data, url, required = true) => {
+const getProjectAccessRecords = async (data, url, required = true) => {
     const records = findAccessesByUrl(data.lastSuccessfulData.accesses, url)
     const key = (await getSecurityConfig())?.enabled ? await getUnlockedKey({ required }) : null
     if (!key) return records

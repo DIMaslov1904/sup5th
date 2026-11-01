@@ -28,7 +28,7 @@ const enableProtection = async ({ key, identity, wrappedKey }) => {
     const data = await getStoredData(), services = await storageGet(SERVICES_KEY, [])
     const vaultKey = await importAesKey(base64ToBytes(key))
     const vault = { accesses: data.lastSuccessfulData.accesses.map(accessSecret), services: services.map(({ id, password }) => ({ id, password })) }
-    const config = { enabled: true, ...identity, wrappedKey, createdAt: Date.now() }
+    const config = { enabled: true, ...identity, wrappedKey }
     await sessionRemove(AUTH_SESSIONS_KEY)
     await storageSetMany({
         [DATA_KEY]: { ...data, lastSuccessfulData: { ...data.lastSuccessfulData, accesses: data.lastSuccessfulData.accesses.map(publicAccess) } },

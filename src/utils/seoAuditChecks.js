@@ -1,6 +1,7 @@
 import { evaluateRobotsFile, indexingRulesFromMeta } from './seoRules.js'
 import { summarizeAuditPages, normalizeAuditText } from './seoAuditPages.js'
-import { META_LENGTH_RANGES, CWV_THRESHOLDS } from './seoValidation.js'
+import { META_LENGTH_RANGES } from './seoValidation.js'
+import { CWV_THRESHOLDS } from './cwv.js'
 const check = (id, label, status, hint = '') => ({ id, label, status, hint })
 const lengthCheck = (field, value) => {
     const length = [...String(value || '').trim()].length, { min, max } = META_LENGTH_RANGES[field]
@@ -170,21 +171,21 @@ export const buildAuditChecks = (data, audit) => {
         // Individual CWV metric checks
         if (cwv.lcp) {
             const lcpStatus = cwv.lcp.rating === 'good' ? 'pass' : cwv.lcp.rating === 'poor' ? 'fail' : 'warning'
-            const hint = cwv.lcp.element ? `${(cwv.lcp.value / 1000).toFixed(2)}с — элемент: ${cwv.lcp.element}` : `${(cwv.lcp.value / 1000).toFixed(2)}с; ориентир ≤2.5с`
+            const hint = cwv.lcp.element ? `${(cwv.lcp.value / 1000).toFixed(2)}с — элемент: ${cwv.lcp.element}` : `${(cwv.lcp.value / 1000).toFixed(2)}с; ориентир ≤${CWV_THRESHOLDS.lcp.good / 1000}с`
             list.push(check('cwv-lcp', 'LCP: крупнейший контент', lcpStatus, hint))
         }
         if (cwv.cls != null) {
             const clsStatus = cwv.clsRating === 'good' ? 'pass' : cwv.clsRating === 'poor' ? 'fail' : 'warning'
-            list.push(check('cwv-cls', 'CLS: сдвиг макета', clsStatus, cwv.clsRating === 'good' ? `Сдвиг минимальный: ${cwv.cls.toFixed(3)}` : `Сдвиг макета: ${cwv.cls.toFixed(3)}; ориентир ≤0.05`))
+            list.push(check('cwv-cls', 'CLS: сдвиг макета', clsStatus, cwv.clsRating === 'good' ? `Сдвиг минимальный: ${cwv.cls.toFixed(3)}` : `Сдвиг макета: ${cwv.cls.toFixed(3)}; ориентир ≤${CWV_THRESHOLDS.cls.good}`))
         }
         if (cwv.inp) {
             const inpStatus = cwv.inp.rating === 'good' ? 'pass' : cwv.inp.rating === 'poor' ? 'fail' : 'warning'
             const note = cwv.inp.note ? ` (${cwv.inp.note})` : ''
-            list.push(check('cwv-inp', 'INP: отклик ввода', inpStatus, `${cwv.inp.value}мс${note}; ориентир ≤200мс`))
+            list.push(check('cwv-inp', 'INP: отклик ввода', inpStatus, `${cwv.inp.value}мс${note}; ориентир ≤${CWV_THRESHOLDS.inp.good}мс`))
         }
         if (cwv.fcp) {
             const fcpStatus = cwv.fcp.rating === 'good' ? 'pass' : cwv.fcp.rating === 'poor' ? 'fail' : 'warning'
-            list.push(check('cwv-fcp', 'FCP: первая отрисовка', fcpStatus, `${(cwv.fcp.value / 1000).toFixed(2)}с; ориентир ≤1.8с`))
+            list.push(check('cwv-fcp', 'FCP: первая отрисовка', fcpStatus, `${(cwv.fcp.value / 1000).toFixed(2)}с; ориентир ≤${CWV_THRESHOLDS.fcp.good / 1000}с`))
         }
     } else {
         list.push(check('cwv', 'Core Web Vitals', 'unknown', 'Метрики не собраны'))

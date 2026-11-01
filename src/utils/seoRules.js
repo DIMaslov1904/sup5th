@@ -4,7 +4,7 @@ const normalizeRobotsPath = value => String(value).replace(/%([\da-f]{2})|[^\x00
     const char = String.fromCharCode(parseInt(hex, 16))
     return /[a-z\d._~-]/i.test(char) ? char : '%' + hex.toUpperCase()
 })
-export const evaluateRobots = (content, pageUrl, agent = '*') => {
+const evaluateRobots = (content, pageUrl, agent = '*') => {
     const groups = []; let group = null, hasRules = false
     for (const raw of String(content || '').split(/\r?\n/)) {
         const line = raw.replace(/#.*/, '').trim(), colon = line.indexOf(':')

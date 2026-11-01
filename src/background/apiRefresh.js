@@ -8,20 +8,19 @@ import { sealJson } from '../utils/credentialCrypto.js'
 import { assignLocalIds, accessIdentity, serviceIdentity } from './recordIdentity.js'
 import { apiAuthorizationError, classifyApiAuthorization } from './apiAuthorization.js'
 import { REFRESH_PERIOD } from '../utils/dataRefreshPolicy.js'
-export { REFRESH_PERIOD } from '../utils/dataRefreshPolicy.js'
 
 export const PROJECTS_ALARM = 'projects-refresh'
-export const REFRESH_JOB_KEY = 'dataRefreshJob'
+const REFRESH_JOB_KEY = 'dataRefreshJob'
 let running = null, controller = null
 export const getRefreshJob = () => sessionGet(REFRESH_JOB_KEY, { running: false, state: 'idle' })
 export const saveRefreshJob = job => sessionSet(REFRESH_JOB_KEY, job)
 export const cancelRefresh = () => { controller?.abort(); running = null }
-export const logError = (type, error, generation) => mutateStorage(async () => {
+const logError = (type, error, generation) => mutateStorage(async () => {
     if (generation !== undefined) assertGeneration(generation)
     const entries = await storageGet(ERRORS_KEY, [])
     await storageSet(ERRORS_KEY, [{ type, message: error.message, createdAt: Date.now() }, ...entries].slice(0, 50))
 })
-export const requestRows = async (url, kind, signal) => {
+const requestRows = async (url, kind, signal) => {
     const timer = AbortSignal.timeout(30000)
     const response = await fetch(url, { headers: { Accept: 'application/json' }, credentials: 'include', redirect: 'follow', signal: signal ? AbortSignal.any([signal, timer]) : timer })
     const text = await response.text(), status = classifyApiAuthorization(response, text)
@@ -60,7 +59,7 @@ const saveRows = (type, rows, url, generation, securityRevision) => mutateStorag
     }
     assertGeneration(generation)
     if (type === 'accesses') assertVaultRevision(securityRevision)
-    const next = { ...data, lastSuccessfulData: { ...snapshot, [type]: values, [`${type}Url`]: url, [`${type}UpdatedAt`]: Date.now(), ...(services ? { servicesCount: services.length } : {}) } }
+    const next = { ...data, lastSuccessfulData: { ...snapshot, [type]: values, [`${type}Url`]: url, [`${type}UpdatedAt`]: Date.now() } }
     await storageSetMany({ [DATA_KEY]: next, ...(services ? { [SERVICES_KEY]: services } : {}), ...(encryptedVault ? { [VAULT_KEY]: encryptedVault } : {}) })
 })
 export const refreshAll = ({ scope = 'all', onlyIfDue = false } = {}) => {
@@ -83,7 +82,7 @@ export const refreshAll = ({ scope = 'all', onlyIfDue = false } = {}) => {
             if (!settings.projectsUrl && !settings.accessUrl) throw new Error('Сначала сохраните адрес API')
             return { ...data, refreshed: {} }
         }
-        const job = { id, running: true, state: 'loading', scope, startedAt: Date.now(), completed: 0, total: types.length, errors: [] }
+        const job = { id, running: true, state: 'loading', completed: 0, total: types.length, errors: [] }
         const publish = () => mutateStorage(async () => { assertGeneration(generation); await saveRefreshJob({ ...job }) })
         await publish()
         const refreshed = {}, securityRevision = vaultRevision(), statuses = {}
@@ -129,8 +128,6 @@ export const refreshAll = ({ scope = 'all', onlyIfDue = false } = {}) => {
     return work
 }
 export const scheduleRefresh = async () => {
-    // Remove the old schedule when upgrading from weekly refreshes.
-    await extensionApi.alarms.clear('weekly-projects-refresh')
     const settings = await readApiSettings()
     if (!settings.projectsUrl && !settings.accessUrl) return extensionApi.alarms.clear(PROJECTS_ALARM)
     const periodInMinutes = REFRESH_PERIOD / 60000

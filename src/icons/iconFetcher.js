@@ -47,7 +47,7 @@ export const createIconFetcher = repository => {
                 const dataUrl = await decodeIconMessage({ type: 'normalize', dataUrl: await blobDataUrl(file.blob) })
                 signal.throwIfAborted()
                 const image = await (await fetch(dataUrl)).blob()
-                return { image, sourceUrl: file.url }
+                return { image }
             } catch (error) { signal.throwIfAborted(); failure = error }
         }
         throw failure || new Error('Иконка сайта не найдена')

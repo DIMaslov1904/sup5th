@@ -5,11 +5,9 @@ export const PROJECT_SHORTCUTS_LIMIT = 7
 export const normalizeProjectShortcuts = value => ({
     enabled: value?.enabled === true,
     pinned: [...new Set((Array.isArray(value?.pinned) ? value.pinned : []).map(siteKey).filter(Boolean))].slice(0, PROJECT_SHORTCUTS_LIMIT),
-    // Migrate the old popularity log once, preserving the latest visit per project.
-    recent: value?.enabled === true ? [...new Set((Array.isArray(value?.recent) ? value.recent :
-        (Array.isArray(value?.visits) ? [...value.visits].filter(event => event && Number.isFinite(event.at))
-            .reverse().sort((a, b) => b.at - a.at).map(event => event.url) : []))
-        .map(siteKey).filter(Boolean))].slice(0, PROJECT_SHORTCUTS_LIMIT) : []
+    recent: value?.enabled === true
+        ? [...new Set((Array.isArray(value?.recent) ? value.recent : []).map(siteKey).filter(Boolean))].slice(0, PROJECT_SHORTCUTS_LIMIT)
+        : []
 })
 export const selectProjectShortcuts = (projects, value) => {
     const state = normalizeProjectShortcuts(value)
