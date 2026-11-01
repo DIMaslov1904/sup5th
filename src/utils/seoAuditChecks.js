@@ -14,7 +14,8 @@ const canonicalCheck = data => {
     return check('canonical', 'Canonical в DOM', valid ? 'pass' : 'fail', valid ? `${tags[0].href} — адрес указан, ответ целевой страницы не проверялся` : 'Нужен один непустой HTTP(S) URL без фрагмента в head')
 }
 export const buildAuditChecks = (data, audit) => {
-    const pages = summarizeAuditPages(audit.results), current = audit.results.find(item => item.url === audit.sample.urls[0])
+    const pages = summarizeAuditPages(audit.pageResults || audit.results), targets = summarizeAuditPages(audit.results)
+    const current = (audit.pageResults || audit.results).find(item => item.url === new URL(data.url).href.split('#')[0])
     const http = current?.response, headerKnown = http?.ok && http.status === 200 && /^(?:text\/html|application\/xhtml\+xml)(?:;|$)/i.test(http.headers['content-type'] || '')
     const tags = data.indexingMeta || (data.metaTags || []).filter(item => !item.attribute || item.attribute === 'name')
     const meta = indexingRulesFromMeta(tags), headers = http?.xRobotsTags || http?.headers?.['x-robots-tag'] || ''
@@ -39,7 +40,7 @@ export const buildAuditChecks = (data, audit) => {
         check('http', 'HTTP повторного GET-запроса', !current || !['ok', 'broken', 'server'].includes(current.outcome) ? 'unknown' : current.outcome !== 'ok' ? 'fail' : current.status === 200 ? 'pass' : 'warning', current?.label || 'Ответ не получен'),
         check('redirect', 'Конечный URL повторного запроса', !http?.status ? 'unknown' : current.redirected ? 'warning' : 'pass', http?.status ? current.finalUrl : 'Ответ не получен'),
         check('representation', 'DOM и HTML повторного GET: метаданные', current?.metaState !== 'complete' ? 'unknown' : current.title === normalizeAuditText(data.title) && current.description === normalizeAuditText(data.description) ? 'pass' : 'warning', current?.metaState !== 'complete' ? 'Полный HTML не получен' : current.title === normalizeAuditText(data.title) && current.description === normalizeAuditText(data.description) ? 'Title и Description совпадают' : 'Title/Description различаются; проверьте JavaScript, авторизацию и защиту сайта'),
-        check('links-http', 'HTTP-ошибки в проверенной выборке', pages.broken || pages.serverErrors ? 'fail' : pages.uncertain || audit.partial || audit.results.length < audit.sample.urls.length ? 'unknown' : 'pass', `404/410: ${pages.broken}; 5xx: ${pages.serverErrors}; неизвестно: ${pages.uncertain}; проверено: ${audit.results.length}/${audit.sample.urls.length}`),
+        check('links-http', 'HTTP-ошибки проверенных URL', targets.broken || targets.serverErrors ? 'fail' : targets.uncertain || audit.partial || audit.results.length < audit.sample.total || audit.sample.limited || audit.crawl?.complete === false ? 'unknown' : 'pass', `404/410: ${targets.broken}; 5xx: ${targets.serverErrors}; неизвестно: ${targets.uncertain}; проверено: ${audit.results.length}/${audit.sample.total}`),
         check('links-text', 'Ссылки: текст или подпись в DOM', !links.length ? 'na' : links.some(item => !(item.accessibleName ?? item.text)?.trim()) ? 'warning' : 'pass', `Без текста/подписи: ${links.filter(item => !(item.accessibleName ?? item.text)?.trim()).length}`),
         check('images-alt', 'Изображения: атрибут alt в DOM', !images.total ? 'na' : images.withoutAlt ? 'warning' : 'pass', `Изображений: ${images.total}; без атрибута alt: ${images.withoutAlt}`),
         check('lang', 'Атрибут lang в DOM', data.lang ? 'pass' : 'warning', data.lang || 'Не указан'),

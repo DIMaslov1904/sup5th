@@ -1,6 +1,6 @@
 import { classifyLinkCheck } from './linkCheckStatus.js'
 import { parseMetaHtml } from './seoRules.js'
-import { normalizeAuditUrl as normalizeUrl } from './seoAuditDiscovery.js'
+import { auditUrlKind, normalizeAuditUrl as normalizeUrl } from './seoAuditLinks.js'
 export const AUDIT_PAGE_LIMIT = 5000
 export const DEFAULT_AUDIT_PAGE_LIMIT = 100
 export const AUDIT_HTML_LIMIT = 1024 * 1024
@@ -17,14 +17,17 @@ export const filterAuditPages = (results, filter = 'all') => filter === '4xx' ? 
 export const inspectAuditPage = (url, info, parse = parseMetaHtml) => {
     const finalUrl = normalizeUrl(info.url) || normalizeUrl(url)
     const response = { status: info.status || 0, ok: info.ok === true, url: finalUrl, headers: info.headers || {}, ttfb: info.ttfb ?? null, failure: info.failure, truncated: info.truncated === true, xRobotsTags: info.xRobotsTags, chain: info.chain || [] }
-    const result = { url, finalUrl, response, status: response.status, ok: response.ok, ...classifyLinkCheck(info), redirected: info.status ? finalUrl !== normalizeUrl(url) || response.chain.some(hop => hop.redirectUrl) : null, ttfb: response.ttfb, metaState: 'unavailable', metaReason: '', title: '', description: '' }
+    const result = { url, finalUrl, response, status: response.status, ok: response.ok, ...classifyLinkCheck(info), redirected: info.status ? finalUrl !== normalizeUrl(url) || response.chain.some(hop => hop.redirectUrl) : null, ttfb: response.ttfb, metaState: 'unavailable', metaReason: '', title: '', description: '', excludedRedirect: info.excludedRedirect }
     const mime = String(response.headers['content-type'] || '').split(';')[0].trim().toLowerCase()
+    result.kind = /^(?:text\/html|application\/xhtml\+xml)$/.test(mime) ? 'page' : mime.startsWith('image/') ? 'image'
+        : /(?:pdf|officedocument|msword|ms-excel|ms-powerpoint|opendocument|zip|octet-stream)/.test(mime) ? 'document'
+        : mime ? 'resource' : auditUrlKind(url)
     if (!info.ok || info.status !== 200) result.metaReason = 'Полный HTML-ответ HTTP 200 не получен'
     else if (!['text/html', 'application/xhtml+xml'].includes(mime)) { result.metaState = mime ? 'non-html' : 'unavailable'; result.metaReason = mime ? `Тип ответа: ${mime}` : 'Тип ответа не указан' }
     else if (info.truncated) result.metaReason = 'HTML обрезан при загрузке'
     else if (new URL(finalUrl).origin !== new URL(url).origin) result.metaReason = 'Конечный URL вне области проверки'
     else {
-        try { const meta = parse(info.text || '', finalUrl); Object.assign(result, { metaState: 'complete', title: normalizeAuditText(meta.title), description: normalizeAuditText(meta.description), indexingMeta: meta.indexingMeta || [], internalLinks: meta.internalLinks || [] }) }
+        try { const meta = parse(info.text || '', finalUrl); Object.assign(result, { metaState: 'complete', title: normalizeAuditText(meta.title), description: normalizeAuditText(meta.description), h1s: meta.h1s || [], indexingMeta: meta.indexingMeta || [], internalLinks: meta.internalLinks || [], auditLinks: meta.auditLinks }) }
         catch { result.metaReason = 'Не удалось прочитать метаданные HTML' }
     }
     return result

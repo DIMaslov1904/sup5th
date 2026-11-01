@@ -41,6 +41,7 @@ export const observeSeoRequest = ({ webRequest, extensionUrl, url, method }) => 
     }
     try {
         listen(webRequest.onBeforeRequest, before)
+        listen(webRequest.onHeadersReceived, record, ['responseHeaders'])
         listen(webRequest.onBeforeRedirect, record, ['responseHeaders'])
         listen(webRequest.onResponseStarted, record, ['responseHeaders'])
         listen(webRequest.onCompleted, record, ['responseHeaders'])

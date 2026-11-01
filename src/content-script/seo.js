@@ -6,6 +6,7 @@ import { getSeoActions, setSeoAction } from './seoActions.js'
 import { captureHeadings, focusHeading } from './headingNavigation.js'
 import { collectPageWeight } from './pageWeight.js'
 import { AUDIT_DISCOVERY_LIMIT } from '../utils/seoAuditDiscovery.js'
+import { collectAuditTargets } from '../utils/seoAuditLinks.js'
 const documentId = [...crypto.getRandomValues(new Uint32Array(4))].join('-')
 /**
  * SEO-анализ текущей страницы.
@@ -34,7 +35,7 @@ const fetchViaBackground = async (url, options = {}) => {
 
 const hasCyrillic = (value) => /[а-яё]/i.test(value)
 
-export const collectSeoReport = ({ internalLinkLimit = 50 } = {}) => {
+export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = false } = {}) => {
     const dom = collectSeoDom(document, location.href)
     const headings = Object.fromEntries([1, 2, 3, 4, 5, 6].map((level) => [`h${level}`, getHeadings(level)]))
     const robotsUrl = new URL('/robots.txt', location.href).href
@@ -59,6 +60,7 @@ export const collectSeoReport = ({ internalLinkLimit = 50 } = {}) => {
     }).filter(Boolean))]
     const linkLimit = Number.isFinite(Number(internalLinkLimit)) ? Math.max(0, Math.min(AUDIT_DISCOVERY_LIMIT - 1, Math.trunc(Number(internalLinkLimit)))) : 50
     const internalLinks = internalLinkUrls.slice(0, linkLimit)
+    const auditLinks = includeAuditLinks ? collectAuditTargets(document, location.href) : []
 
     captureHeadings()
     return {
@@ -110,6 +112,7 @@ export const collectSeoReport = ({ internalLinkLimit = 50 } = {}) => {
         },
         internalLinks,
         internalLinksTotal: internalLinkUrls.length,
+        ...(includeAuditLinks ? { auditLinks: auditLinks.slice(0, AUDIT_DISCOVERY_LIMIT), auditLinksTotal: auditLinks.length } : {}),
         robotsFile: {
             url: robotsUrl,
             exists: false, status: 0, content: '', allowed: null, pending: true

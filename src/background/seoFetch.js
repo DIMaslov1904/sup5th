@@ -1,6 +1,6 @@
 import { extensionApi } from '../platform/extensionApi.js'
 import { observeSeoRequest, seoResponseHeaders } from './seoRequestTrace.js'
-export const fetchSeoResource = async ({ url, method = 'GET', timeout = 20000, maxBytes = 200000, trace = false, fresh = false }, sender = {}) => {
+export const fetchSeoResource = async ({ url, method = 'GET', timeout = 20000, maxBytes = 200000, trace = false, fresh = false, htmlOnly = false, manualRedirect = false }, sender = {}) => {
     const empty = { ok: false, status: 0, url: '', headers: {}, text: '', ttfb: null }
     let parsed
     try { parsed = new URL(url) } catch { return empty }
@@ -14,10 +14,21 @@ export const fetchSeoResource = async ({ url, method = 'GET', timeout = 20000, m
     const timer = setTimeout(() => controller.abort(), Math.min(Math.max(Number(timeout) || 20000, 1000), 30000))
     const limit = Math.min(Math.max(Number(maxBytes) || 200000, 1000), 8 * 1024 * 1024)
     const started = performance.now()
-    const observer = trace ? observeSeoRequest({ webRequest: extensionApi.webRequest, extensionUrl: extensionApi.runtime.getURL(''), url: parsed.href, method }) : null
+    const observer = trace || manualRedirect ? observeSeoRequest({ webRequest: extensionApi.webRequest, extensionUrl: extensionApi.runtime.getURL(''), url: parsed.href, method }) : null
     try {
-        const response = await fetch(parsed.href, { method, credentials: 'omit', redirect: 'follow', ...(trace || fresh ? { cache: 'no-store' } : {}), signal: controller.signal })
+        const response = await fetch(parsed.href, { method, credentials: 'omit', redirect: manualRedirect ? 'manual' : 'follow', ...(trace || fresh ? { cache: 'no-store' } : {}), signal: controller.signal })
         const ttfb = Math.round(performance.now() - started)
+        if (manualRedirect && (response.type === 'opaqueredirect' || [301, 302, 303, 307, 308].includes(response.status))) {
+            const observed = observer?.result(response) || {}, hop = observed.chain?.at(-1)
+            const headers = { ...(hop?.headers || {}), ...seoResponseHeaders(Object.fromEntries(response.headers.entries())) }
+            return { ok: false, status: hop?.status || response.status, url: parsed.href, headers, text: '', ttfb,
+                ...observed, redirectUrl: headers.location || hop?.redirectUrl || '', failure: headers.location || hop?.redirectUrl ? undefined : 'redirect' }
+        }
+        const contentType = response.headers.get('content-type') || ''
+        if (htmlOnly && contentType && !/^(?:text\/html|application\/xhtml\+xml)(?:;|$)/i.test(contentType)) {
+            await response.body?.cancel()
+            return { ok: response.ok, status: response.status, url: response.url || parsed.href, headers: seoResponseHeaders(Object.fromEntries(response.headers.entries())), text: '', ttfb, ...(observer?.result(response) || {}) }
+        }
         let stream = response.body
         // HTTP Content-Encoding is decoded by fetch; .xml.gz served as a file needs decoding here.
         if (stream && /\.gz(?:\?|$)/i.test(response.url || parsed.href) && !/gzip/i.test(response.headers.get('content-encoding') || '')) {

@@ -7,6 +7,14 @@ export const textStatistics = (text) => {
     }
     return { words: words.length, characters: text.length, withoutSpaces: text.replace(/\s/g, '').length, top: top(words), bigrams: top(words.slice(1).map((word, i) => `${words[i]} ${word}`)) }
 }
+const textWithoutAnchors = doc => {
+    if (!doc.body) return ''
+    const filter = doc.defaultView?.NodeFilter || globalThis.NodeFilter
+    const walker = doc.createTreeWalker(doc.body, filter.SHOW_TEXT, node => node.parentElement?.closest('a,script,style,template,noscript') ? filter.FILTER_REJECT : filter.FILTER_ACCEPT)
+    const parts = []
+    while (walker.nextNode()) parts.push(walker.currentNode.data)
+    return parts.join('')
+}
 export const collectSeoDom = (doc, pageUrl) => {
     const host = new URL(pageUrl).hostname
     const metaTags = [...doc.querySelectorAll('meta')].map(el => ({
@@ -27,8 +35,6 @@ export const collectSeoDom = (doc, pageUrl) => {
     })
     const body = doc.body?.innerText || doc.body?.textContent || ''
     const anchors = [...doc.querySelectorAll('a')].map(el => el.innerText || el.textContent).join(' ')
-    const clone = doc.body?.cloneNode(true)
-    clone?.querySelectorAll('a,script,style,template,noscript').forEach(el => el.remove())
     return {
         metaTags, titles: [...doc.querySelectorAll('title')].map(el => ({ text: el.textContent.trim(), inHead: Boolean(el.closest('head')) })),
         canonicals: [...doc.querySelectorAll('link[rel~="canonical" i]')].map(el => ({ href: el.href, raw: el.getAttribute('href'), inHead: Boolean(el.closest('head')) })),
@@ -36,6 +42,6 @@ export const collectSeoDom = (doc, pageUrl) => {
         linkRows, imageRows, jsonLd,
         microdata: [...doc.querySelectorAll('[itemscope]')].map(el => ({ type: el.getAttribute('itemtype') || '', properties: [...el.querySelectorAll('[itemprop]')].map(p => ({ name: p.getAttribute('itemprop'), value: p.getAttribute('content') || p.getAttribute('href') || p.textContent.trim() })) })),
         rdfa: [...doc.querySelectorAll('[typeof]')].map(el => ({ type: el.getAttribute('typeof'), text: el.textContent.trim().slice(0, 500) })),
-        statistics: { ...textStatistics(body), withoutAnchors: textStatistics(clone?.textContent || ''), anchors: textStatistics(anchors), imageText: textStatistics(imageRows.map(el => `${el.alt || ''} ${el.title || ''}`).join(' ')), selection: textStatistics(doc.getSelection?.()?.toString() || '') }
+        statistics: { ...textStatistics(body), withoutAnchors: textStatistics(textWithoutAnchors(doc)), anchors: textStatistics(anchors), imageText: textStatistics(imageRows.map(el => `${el.alt || ''} ${el.title || ''}`).join(' ')), selection: textStatistics(doc.getSelection?.()?.toString() || '') }
     }
 }
