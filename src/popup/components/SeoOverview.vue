@@ -16,6 +16,17 @@ const page = computed(() => {
         { label: 'IP сервера', value: props.serverIpLoading ? 'Определяем…' : props.serverIp || 'Не получен' },
         { label: 'HTTP', value: data.response.pending ? 'Проверяем…' : data.response.status || 'Не получен', ...(data.response.pending ? {} : evaluateHttpStatus(data.response.status, data.redirected)) },
         { label: 'Редирект', value: data.response.pending ? 'Проверяем…' : data.redirected ? data.finalUrl : 'Нет' },
+        {
+            label: 'Протокол',
+            value: data.ssl?.https ? 'HTTPS' : 'HTTP',
+            ...(data.ssl?.https ? { status: 'success', hint: 'Страница открыта по HTTPS' } : { status: 'danger', hint: 'Страница открыта по HTTP — передаваемые данные не защищены' })
+        },
+        {
+            label: 'Mixed content',
+            value: data.ssl?.https ? (data.ssl.mixedContent ? `${data.ssl.mixedContent} незащищённых ресурсов` : 'Не найден') : '—',
+            ...(data.ssl?.mixedContent ? { status: 'warning', hint: 'Часть ресурсов (img, script, iframe и др.) загружается по HTTP' } : {})
+        },
+        { label: 'Кодировка', ...charsetRow(data) },
         { label: 'Проверено', value: new Date(data.scannedAt).toLocaleString('ru-RU') },
         { label: 'TTFB повторного запроса', value: data.response.ttfb == null ? 'Не измерен' : data.response.ttfb + ' мс' },
         ...pageWeightRows(data.pageWeight)
@@ -59,6 +70,14 @@ const page = computed(() => {
     return rows
 })
 
+const charsetRow = data => {
+    const meta = data.charset?.document || data.charset?.meta || '', http = data.charset?.http || ''
+    if (!meta && !http) return { value: 'Не объявлена', status: 'warning', hint: 'Meta charset и HTTP charset не найдены; браузер определяет кодировку эвристически' }
+    const value = [meta && `meta: ${meta}`, http && `HTTP: ${http}`].filter(Boolean).join(' · ')
+    return data.charset?.consistent === false
+        ? { label: 'Кодировка', value, status: 'danger', hint: 'Объявления кодировки в meta и HTTP не совпадают' }
+        : { label: 'Кодировка', value }
+}
 const primary = computed(() => primaryMetadata(props.report))
 const advanced = computed(() => [
     { label: 'Язык', value: props.report.lang || 'Не указан' },

@@ -6,12 +6,67 @@ const lengthCheck = (field, value) => {
     const length = [...String(value || '').trim()].length, { min, max } = META_LENGTH_RANGES[field]
     return check(`${field}-length`, `${field === 'title' ? 'Title' : 'Description'}: длина (ориентир)`, !length ? 'na' : length >= min && length <= max ? 'pass' : 'warning', `${length} символов; ориентир ${min}–${max}`)
 }
-const canonicalCheck = data => {
+const withoutHash = url => { const copy = new URL(url); copy.hash = ''; return copy.href }
+const canonicalCheck = (data, finalUrl) => {
     const tags = data.canonicals || []
     if (!tags.length) return check('canonical', 'Canonical в DOM', 'warning', 'Не указан; необходимость зависит от дублей страницы')
     let valid = tags.length === 1 && tags[0].inHead !== false && Boolean(tags[0].raw?.trim())
     try { const url = new URL(tags[0].href); valid &&= /^https?:$/.test(url.protocol) && !url.username && !url.password && !url.hash } catch { valid = false }
-    return check('canonical', 'Canonical в DOM', valid ? 'pass' : 'fail', valid ? `${tags[0].href} — адрес указан, ответ целевой страницы не проверялся` : 'Нужен один непустой HTTP(S) URL без фрагмента в head')
+    if (!valid) return check('canonical', 'Canonical в DOM', 'fail', 'Нужен один непустой HTTP(S) URL без фрагмента в head')
+    let consistency = ''
+    try {
+        if (finalUrl && withoutHash(tags[0].href) !== withoutHash(finalUrl)) {
+            consistency = `Canonical не совпадает с конечным URL страницы (${withoutHash(finalUrl)}); проверьте консистентность. Ответ целевого адреса не проверялся.`
+        }
+    } catch { /* finalUrl некорректен — консистентность не оценить */ }
+    return check('canonical', 'Canonical в DOM', consistency ? 'warning' : 'pass', consistency || `${tags[0].href} — совпадает с конечным URL; ответ целевой страницы не проверялся`)
+}
+const h1Check = (data, h1) => {
+    const first = h1.map(item => item.text.trim()).find(Boolean) || ''
+    const problems = [], notes = []
+    if (!h1.length) problems.push('H1 отсутствует')
+    if (h1.length > 1) problems.push(`Всего H1: ${h1.length}`)
+    if (h1.some(item => !item.text.trim())) notes.push(`пустых H1: ${h1.filter(item => !item.text.trim()).length}`)
+    if (first) {
+        const length = [...first].length, { min, max } = META_LENGTH_RANGES.h1
+        if (length < min || length > max) problems.push(`Длина H1: ${length} симв.; ориентир ${min}–${max}`)
+        const title = String(data.title || '').trim().toLowerCase()
+        if (title && first.toLowerCase() === title) notes.push('H1 полностью совпадает с Title')
+        const topWords = (data.statistics?.top || []).map(item => String(item.word).toLowerCase()).slice(0, 10)
+        if (topWords.length && !topWords.some(word => first.toLowerCase().includes(word))) notes.push('H1 не содержит частотные слова страницы')
+    }
+    const status = h1.length === 1 && first ? problems.length ? 'warning' : 'pass' : 'warning'
+    return check('h1', 'H1 в DOM', status, [...problems, ...notes].join('; ') || first)
+}
+const charsetCheck = (data, http) => {
+    const meta = (data.charset?.document || data.charset?.meta || '').trim()
+    const httpCharset = String(http?.headers?.['content-type'] || '').match(/charset=([\w-]+)/i)?.[1]?.trim() || ''
+    if (!meta && !httpCharset) return check('charset', 'Кодировка', 'warning', 'Meta charset и HTTP charset не объявлены')
+    if (meta && httpCharset) {
+        const consistent = meta.toLowerCase() === httpCharset.toLowerCase()
+        return check('charset', 'Кодировка', !consistent ? 'fail' : /^utf-?8$/i.test(meta) ? 'pass' : 'warning', consistent
+            ? `Meta и HTTP совпадают: ${meta}${/^utf-?8$/i.test(meta) ? '' : '; рекомендуется UTF-8'}`
+            : `Несоответствие: meta ${meta}, HTTP ${httpCharset}`)
+    }
+    const known = meta || httpCharset
+    return check('charset', 'Кодировка', /^utf-?8$/i.test(known) ? 'unknown' : 'warning', `Объявлена только в ${meta ? 'meta' : 'HTTP'}: ${known}; вторая часть не подтверждена`)
+}
+const twitterCheck = data => {
+    const twitter = data.twitter
+    if (!twitter) return check('twitter', 'Twitter Cards', 'unknown', 'Мета twitter: не собраны')
+    const filled = Object.values(twitter).filter(Boolean).length
+    if (!twitter.card) return check('twitter', 'Twitter Cards', 'warning', 'twitter:card не указан; карточка формируется из Open Graph или не создаётся')
+    const missing = ['title', 'description', 'image'].filter(field => !twitter[field])
+    return check('twitter', 'Twitter Cards', missing.length ? 'warning' : 'pass', missing.length
+        ? `card: ${twitter.card}; не хватает: ${missing.join(', ')}` : `card: ${twitter.card}; все основные поля заполнены`)
+}
+const sslCheck = data => {
+    const ssl = data.ssl
+    if (!ssl) return check('ssl', 'HTTPS и mixed content', 'unknown', 'Данные протокола не собраны')
+    if (!ssl.https) return check('ssl', 'HTTPS и mixed content', 'fail', 'Страница открыта по HTTP')
+    return check('ssl', 'HTTPS и mixed content', ssl.mixedContent ? 'warning' : 'pass', ssl.mixedContent
+        ? `Страница по HTTPS, но найдено незащищённых ресурсов: ${ssl.mixedContent}`
+        : 'Страница по HTTPS, незащищённых ресурсов не найдено')
 }
 export const buildAuditChecks = (data, audit) => {
     const pages = summarizeAuditPages(audit.pageResults || audit.results), targets = summarizeAuditPages(audit.results)
@@ -23,6 +78,7 @@ export const buildAuditChecks = (data, audit) => {
     const h1 = (data.headingRows || []).filter(item => item.level === 1)
     const descriptions = (data.metaTags || []).filter(item => (!item.attribute || item.attribute === 'name') && item.name?.toLowerCase() === 'description')
     const titles = data.titles || [], links = data.linkRows || [], images = data.images || { total: 0, withoutAlt: 0 }
+    const finalUrl = current?.finalUrl || data.finalUrl || ''
     const titleProblems = [!data.title ? 'Title отсутствует или пустой' : '', titles.length > 1 ? `Тегов Title: ${titles.length}` : '', titles.some(item => item.inHead === false) ? 'Title вне head' : ''].filter(Boolean)
     const descriptionProblems = [descriptions.length > 1 ? `Тегов Description: ${descriptions.length}` : '', descriptions.some(item => item.inHead === false) ? 'Description вне head' : ''].filter(Boolean)
     const list = [
@@ -30,8 +86,11 @@ export const buildAuditChecks = (data, audit) => {
         lengthCheck('title', data.title),
         check('description', 'Description в DOM', descriptionProblems.length ? 'fail' : data.description ? 'pass' : 'warning', descriptionProblems.join('; ') || data.description || 'Не указан'),
         lengthCheck('description', data.description),
-        check('h1', 'H1 в DOM', h1.length === 1 && h1[0].text.trim() ? 'pass' : 'warning', `Всего H1: ${h1.length}; пустых: ${h1.filter(item => !item.text.trim()).length}`),
-        canonicalCheck(data),
+        h1Check(data, h1),
+        canonicalCheck(data, finalUrl),
+        charsetCheck(data, http),
+        twitterCheck(data),
+        sslCheck(data),
         check('index-meta', 'Общий meta robots: нет noindex', meta.robotsAllowed ? 'pass' : 'fail', meta.robots || 'Директива не указана'),
         check('index-xrobots', 'X-Robots-Tag: нет общего noindex', indexing.xRobotsAllowed === false ? 'fail' : headerKnown && indexing.xRobotsAllowed !== null ? 'pass' : 'unknown', indexing.xRobotsAllowed === null ? 'Объединённые заголовки: область действия noindex неизвестна' : http?.headers?.['x-robots-tag'] || (headerKnown ? 'Директива не указана' : 'HTML-ответ страницы не подтверждён')),
         ...meta.indexingAgents.map(item => check(`index-${item.agent}`, `DOM: нет noindex для ${item.agent}`, item.allowed ? 'pass' : 'fail', item.allowed ? 'В метатегах DOM запрета нет' : 'В метатегах DOM найден noindex')),

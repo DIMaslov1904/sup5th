@@ -36,6 +36,20 @@ const fetchViaBackground = async (url, options = {}) => {
 
 const hasCyrillic = (value) => /[а-яё]/i.test(value)
 
+// Mixed content: незащищённые ресурсы на HTTPS-странице.
+const insecureResourceSelectors = 'img[src], script[src], iframe[src], source[src], video[src], audio[src], embed[src], input[src], link[href], form[action]'
+const collectSsl = () => {
+    const https = location.protocol === 'https:'
+    if (!https) return { https: false, mixedContent: 0 }
+    const mixedContent = [...document.querySelectorAll(insecureResourceSelectors)].filter(el => {
+        const attribute = el.getAttribute('src') || el.getAttribute('href') || el.getAttribute('action') || ''
+        try { return new URL(attribute, document.baseURI).protocol === 'http:' } catch { return false }
+    }).length
+    return { https: true, mixedContent }
+}
+const declaredCharset = () => document.querySelector('meta[charset]')?.getAttribute('charset')?.trim()
+    || getMeta('meta[http-equiv="Content-Type" i]').match(/charset=([\w-]+)/i)?.[1]?.trim() || ''
+
 export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = false } = {}) => {
     const dom = collectSeoDom(document, location.href)
     const headings = Object.fromEntries([1, 2, 3, 4, 5, 6].map((level) => [`h${level}`, getHeadings(level)]))
@@ -99,6 +113,22 @@ export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = f
             image: getMeta('meta[property="og:image"]'),
             type: getMeta('meta[property="og:type"]'),
             url: getMeta('meta[property="og:url"]')
+        },
+        twitter: {
+            card: getMeta('meta[name="twitter:card" i]'),
+            title: getMeta('meta[name="twitter:title" i]'),
+            description: getMeta('meta[name="twitter:description" i]'),
+            image: getMeta('meta[name="twitter:image" i]')
+        },
+        charset: {
+            meta: declaredCharset(),
+            document: document.characterSet || ''
+        },
+        ssl: collectSsl(),
+        // Заполняется по кнопке в popup: site:-запросы к поисковикам выполняются через background.
+        searchIndexation: {
+            yandex: { found: null, status: 'idle' },
+            google: { found: null, status: 'idle' }
         },
         jsonLdBlocks: document.querySelectorAll('script[type="application/ld+json"]').length,
         hreflang: [...document.querySelectorAll('link[rel="alternate"][hreflang]')].map((link) => ({
@@ -182,7 +212,7 @@ const registerSeoHandler = () => {
         }
         if (message?.type === 'seo:cwv') {
             // Async CWV update with accurate CLS
-            ;(async () => {
+            ; (async () => {
                 try {
                     const cwv = await collectCwv(document)
                     sendResponse({ ok: true, data: cwv })
