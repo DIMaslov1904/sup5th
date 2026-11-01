@@ -60,6 +60,15 @@ const twitterCheck = data => {
     return check('twitter', 'Twitter Cards', missing.length ? 'warning' : 'pass', missing.length
         ? `card: ${twitter.card}; не хватает: ${missing.join(', ')}` : `card: ${twitter.card}; все основные поля заполнены`)
 }
+const faviconCheck = data => {
+    const favicon = data.favicon
+    if (!favicon || typeof favicon !== 'object') return check('favicon', 'Favicon', 'unknown', 'Данные favicon не собраны')
+    const types = [favicon.ico ? 'favicon (.ico)' : '', favicon.apple ? 'apple-touch-icon' : '', favicon.mask ? 'mask-icon' : ''].filter(Boolean)
+    const sizes = Array.isArray(favicon.sizes) && favicon.sizes.length ? ` · sizes: ${favicon.sizes.join(', ')}` : ''
+    if (favicon.ico && favicon.apple) return check('favicon', 'Favicon', 'pass', `Найдены основные типы: ${types.join(', ')}${sizes}`)
+    if (types.length) return check('favicon', 'Favicon', 'warning', `Найден только: ${types.join(', ')}; рекомендуется добавить ${favicon.ico ? 'apple-touch-icon' : 'favicon (.ico)'}`)
+    return check('favicon', 'Favicon', 'warning', 'Favicon не найден в head; браузеры и поисковики используют /favicon.ico по умолчанию')
+}
 const sslCheck = data => {
     const ssl = data.ssl
     if (!ssl) return check('ssl', 'HTTPS и mixed content', 'unknown', 'Данные протокола не собраны')
@@ -91,6 +100,7 @@ export const buildAuditChecks = (data, audit) => {
         charsetCheck(data, http),
         twitterCheck(data),
         sslCheck(data),
+        faviconCheck(data),
         check('index-meta', 'Общий meta robots: нет noindex', meta.robotsAllowed ? 'pass' : 'fail', meta.robots || 'Директива не указана'),
         check('index-xrobots', 'X-Robots-Tag: нет общего noindex', indexing.xRobotsAllowed === false ? 'fail' : headerKnown && indexing.xRobotsAllowed !== null ? 'pass' : 'unknown', indexing.xRobotsAllowed === null ? 'Объединённые заголовки: область действия noindex неизвестна' : http?.headers?.['x-robots-tag'] || (headerKnown ? 'Директива не указана' : 'HTML-ответ страницы не подтверждён')),
         ...meta.indexingAgents.map(item => check(`index-${item.agent}`, `DOM: нет noindex для ${item.agent}`, item.allowed ? 'pass' : 'fail', item.allowed ? 'В метатегах DOM запрета нет' : 'В метатегах DOM найден noindex')),

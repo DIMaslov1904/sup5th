@@ -63,7 +63,18 @@ export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = f
     const description = getMeta('meta[name="description" i]')
     const h1List = headings.h1
     const duplicateH1 = h1List.filter((heading, index) => h1List.indexOf(heading) !== index)
-    const faviconLink = document.querySelector('link[rel~="icon"]')?.href || ''
+    // Полнота favicon: основной icon, apple-touch-icon, mask-icon и объявления sizes
+    const collectFavicon = () => {
+        const relTokens = link => [...(link.relList || [])].map(token => token.toLowerCase())
+        const links = [...document.querySelectorAll('link[rel]')]
+        const iconLinks = links.filter(link => relTokens(link).includes('icon'))
+        return {
+            ico: iconLinks.length > 0,
+            apple: links.some(link => relTokens(link).some(token => token.startsWith('apple-touch-icon'))),
+            mask: links.some(link => relTokens(link).includes('mask-icon')),
+            sizes: iconLinks.map(link => link.getAttribute('sizes') || '').filter(Boolean)
+        }
+    }
 
     // Уникальные внутренние ссылки (для расширенного аудита на отдельной странице)
     const currentUrl = new URL(location.href); currentUrl.hash = ''
@@ -151,7 +162,7 @@ export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = f
             url: new URL('/llm.txt', location.href).href,
             exists: false, status: 0, size: null, pending: true
         },
-        favicon: faviconLink,
+        favicon: collectFavicon(),
         images: {
             total: document.images.length,
             withoutAlt: [...document.images].filter((image) => !image.hasAttribute('alt')).length,
