@@ -5,12 +5,14 @@ import Button from './ui/Button.vue'
 import { securityStatus, refreshSecurityStatus, refreshJob, activeSupportTicket } from '../backgroundState.js'
 import { lockCredentialVault } from '../data/projectData.js'
 import { ensureUnlocked } from '../unlockStore.js'
-import { ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { openTicket, searchTicketNumber } from '../../utils/ticketNavigation.js'
 import Notification from './ui/Notification.vue'
 const modelItemMenu = defineModel()
 const search = defineModel('search', { type: String, default: '' })
 const emit = defineEmits(['search', 'ticket'])
+const searchInput = ref(null)
+onMounted(() => nextTick(() => searchInput.value?.$el?.focus()).catch(() => {}))
 const locking = ref(false), lockError = ref('')
 const openingTicket = ref(false), ticketError = ref('')
 const openCurrentTicket = async () => {
@@ -58,7 +60,7 @@ const toggleLock = async () => {
                 <svg class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-ui-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
                     <circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" />
                 </svg>
-                <Input v-model="search" type="search" aria-label="Поиск сервисов и проектов" placeholder="Поиск проектов и сервисов" autocomplete="off"
+                <Input ref="searchInput" v-model="search" type="search" aria-label="Поиск сервисов и проектов" placeholder="Поиск проектов и сервисов" autocomplete="off"
                     class="pr-2 pl-8 text-xs"
                     @click="emit('search')" @keydown.enter.prevent="emit('search')" @paste="pasteSearch" />
             </label>
