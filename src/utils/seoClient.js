@@ -4,13 +4,10 @@ import { createSeoSidePanel } from './seoSidePanel.js'
 import { injectExtensionScript } from '../platform/scriptInjection.js'
 import { seoAppUrl } from './seoSections.js'
 import { createSeoMessenger } from './seoMessaging.js'
+import { callBackground } from './backgroundClient.js'
 const sidePanel = createSeoSidePanel(extensionApi, { firefox: isFirefox })
 export const canPinSeoPage = sidePanel.supported
 export const pinSeoPage = sidePanel.open
-export const callBackground = (type, payload = {}) => extensionApi.runtime.sendMessage({ type, payload }).then(response => {
-    if (!response?.ok) throw new Error(response?.error || 'Нет ответа от расширения')
-    return response.data
-})
 export const fetchSeo = (url, method = 'GET', maxBytes, options = {}) => callBackground('seo:fetch', { url, method, maxBytes, ...options })
 export const sendSeoToTab = createSeoMessenger({
     sendMessage: (...args) => extensionApi.tabs.sendMessage(...args),

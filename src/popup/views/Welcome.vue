@@ -11,9 +11,8 @@ import Input from '../components/ui/Input.vue'
 import Card from '../components/ui/Card.vue'
 import Message from '../components/ui/Message.vue'
 import Notification from '../components/ui/Notification.vue'
-import BiometricProviderHelp from '../components/BiometricProviderHelp.vue'
+import SecurityProtectionForm from '../components/SecurityProtectionForm.vue'
 import CopyAccessApiCode from '../components/CopyAccessApiCode.vue'
-import Tabs from '../components/ui/Tabs.vue'
 import { needsApiAuthorization } from '../../utils/apiAuthorizationState.js'
 
 const props = defineProps({ step: { type: String, required: true }, settings: { type: Object, required: true } })
@@ -84,15 +83,7 @@ onMounted(async () => {
                 <p class="text-xs text-ui-muted">Защитите сохранённые пароли. Настройку можно пропустить и вернуться к ней позже в разделе «Защита».</p>
                 <Message v-if="securityStatus.enabled" type="success">Защита уже включена.</Message>
                 <template v-else>
-                    <Tabs v-model="securityTab" :items="securityTabs" label="Способ защиты" wrap />
-                    <template v-if="securityTab === 'biometric'">
-                        <Button :loading="busy" @click="enable">Настроить биометрию</Button>
-                        <BiometricProviderHelp />
-                    </template>
-                    <form v-else class="grid gap-2" @submit.prevent="enablePin">
-                        <Input v-model="pin" type="password" maxlength="6" autocomplete="off" spellcheck="false" placeholder="PIN-код · 6 символов" :disabled="busy" />
-                        <Button type="submit" variant="secondary" :loading="busy" :disabled="pin.length !== 6">Включить PIN-код</Button>
-                    </form>
+                    <SecurityProtectionForm v-model:tab="securityTab" v-model:pin="pin" :tabs="securityTabs" :loading="busy" @enable="enable" @enable-pin="enablePin" />
                 </template>
                 <Button variant="ghost" :disabled="busy" @click="run(() => advance('projects'))">{{ securityStatus.enabled ? 'Далее' : 'Пропустить' }}</Button>
             </div>

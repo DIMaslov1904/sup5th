@@ -12,6 +12,9 @@ export interface PopupResults {
     'data:settings:set': ApiSettings
     'support:ticket:get': ActiveSupportTicket | null
     'support:ticket:reset': null
+    'support:ticket:open': { opened: boolean }
+    'seo:fetch': unknown
+    'seo:downloadImage': { id: number }
     'data:projects:get': unknown
     'data:projects:authorize': { opened: boolean }
     'data:accesses:authorize': { opened: boolean }
@@ -29,6 +32,7 @@ export interface PopupResults {
     'project:copyAccess': string
     'project:details': unknown
     'project:accessField': string
+    'project:accessFields': { [field: string]: string }
     'security:status': unknown
     'security:enableHello': unknown
     'security:enablePin': unknown

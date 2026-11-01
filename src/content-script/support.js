@@ -1,6 +1,7 @@
 import { startTicketCreation } from './supportTicket.js'
 import { startSupportWorkTracking } from './supportWorkTracking.js'
 import { startSupportAuth } from './supportAuth.js'
+import { setInputValue } from './inputValue.js'
 
 startSupportAuth()
 startTicketCreation()
@@ -76,11 +77,6 @@ const parseSupportDate = (value) => {
     return Number.isNaN(date.getTime()) ? null : date
 }
 
-const setField = (input, value) => {
-    input.value = value
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-    input.dispatchEvent(new Event('change', { bubbles: true }))
-}
 
 const toLocalValue = (parsed) => `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`
 
@@ -174,8 +170,8 @@ const enhanceTimePair = (targetDoc, startInput, endInput) => {
         const start = existingStart || new Date()
         const end = new Date(start.getTime() + totalMinutes * 60000)
         updatingFields = true
-        if (!existingStart) setField(startInput, formatSupportDate(start))
-        setField(endInput, formatSupportDate(end))
+        if (!existingStart) setInputValue(startInput, formatSupportDate(start))
+        setInputValue(endInput, formatSupportDate(end))
         updatingFields = false
         renderDates()
     }

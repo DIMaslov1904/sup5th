@@ -1,27 +1,23 @@
 import { extensionApi } from '../platform/extensionApi.js'
 import { POPUP_PORT_NAME, POPUP_STATE_KEY, POPUP_RETENTION_MS, closedPopupState, defaultPopupState, normalizePopupState, restorePopupState } from '../utils/popupState.js'
 import { POPUP_EXPIRY_ALARM, SEO_SESSION_KEY, seoContextKey } from '../utils/seoSessionState.js'
-import { storageReady, sessionSet } from './storageRepository.js'
+import { sessionEntries, sessionGet, sessionRemove, storageReady, sessionSet } from './storageRepository.js'
 import { writeSeoSessionCache } from '../utils/sessionQuota.js'
+import { createSerialQueue } from '../utils/serialQueue.js'
 
 // Serialize reconnects so a new popup reads the previous disconnect's snapshot.
 export const registerPopupSession = () => {
-    let pending = Promise.resolve()
     const ports = new Set()
-    const enqueue = (action) => {
-        pending = pending.then(() => storageReady).then(action).catch((error) => console.error('[popup] session state', error))
-    }
+    const serial = createSerialQueue()
+    const enqueue = action => serial(() => storageReady.then(action)).catch(error => console.error('[popup] session state', error))
 
-    const readSeo = async () => {
-        const saved = (await extensionApi.storage.session.get(SEO_SESSION_KEY))[SEO_SESSION_KEY] || {}
-        return Object.fromEntries(Object.entries(saved).filter(([, entry]) => !entry.expiresAt || entry.expiresAt > Date.now()))
-    }
+    const readSeo = () => sessionEntries(SEO_SESSION_KEY, { keepWithoutExpiry: true })
     const writeSeo = async entries => {
         await writeSeoSessionCache(extensionApi.storage.session, entries)
     }
     const expire = async () => {
-        const saved = (await extensionApi.storage.session.get(POPUP_STATE_KEY))[POPUP_STATE_KEY]
-        if (saved?.expiresAt <= Date.now()) await extensionApi.storage.session.remove(POPUP_STATE_KEY)
+        const saved = await sessionGet(POPUP_STATE_KEY)
+        if (saved?.expiresAt <= Date.now()) await sessionRemove(POPUP_STATE_KEY)
         await writeSeo(await readSeo())
     }
     extensionApi.alarms.onAlarm.addListener(alarm => {
@@ -61,7 +57,7 @@ export const registerPopupSession = () => {
             const closedAt = Date.now(), saved = closedPopupState(state, closedAt)
             enqueue(async () => {
                 if (saved) await sessionSet(POPUP_STATE_KEY, saved)
-                else await extensionApi.storage.session.remove(POPUP_STATE_KEY)
+                else await sessionRemove(POPUP_STATE_KEY)
                 if (ports.size) return
                 const entries = await readSeo(), expiresAt = closedAt + POPUP_RETENTION_MS
                 Object.values(entries).forEach(entry => { entry.expiresAt = expiresAt })
@@ -76,9 +72,8 @@ export const registerPopupSession = () => {
                 const entries = await readSeo()
                 Object.values(entries).forEach(entry => { entry.expiresAt = null })
                 await writeSeo(entries)
-                const result = await extensionApi.storage.session.get(POPUP_STATE_KEY)
-                state = restorePopupState(result[POPUP_STATE_KEY])
-                await extensionApi.storage.session.remove(POPUP_STATE_KEY)
+                state = restorePopupState(await sessionGet(POPUP_STATE_KEY))
+                await sessionRemove(POPUP_STATE_KEY)
             } catch (error) {
                 console.warn('[popup] restore state', error)
             }

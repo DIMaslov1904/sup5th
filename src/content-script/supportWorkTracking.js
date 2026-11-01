@@ -1,5 +1,6 @@
 import { extensionApi } from '../platform/extensionApi.js'
 import { applyWorkDefaults, readSupportWorkState, workLogText } from './supportWorkState.js'
+import { createSerialQueue } from '../utils/serialQueue.js'
 
 const observedDocuments = new WeakSet()
 
@@ -7,7 +8,8 @@ export const startSupportWorkTracking = targetDoc => {
     if (observedDocuments.has(targetDoc)) return
     observedDocuments.add(targetDoc)
     const initialized = new WeakSet()
-    let pendingStart = null, lastSignature = '', timer, sending = Promise.resolve()
+    let pendingStart = null, lastSignature = '', timer
+    const send = createSerialQueue()
 
     const check = () => {
         const wrapper = targetDoc.querySelector('#ticket-wrapper')
@@ -29,7 +31,7 @@ export const startSupportWorkTracking = targetDoc => {
         lastSignature = signature
         if (confirmedStart) pendingStart = null
         const payload = { ...state, confirmedStart, observedAt: Date.now() }
-        sending = sending.then(async () => {
+        send(async () => {
             const response = await extensionApi.runtime.sendMessage({ type: 'support:ticket:observe', payload })
             if (!response?.ok) throw new Error(response?.error || 'Не удалось сохранить состояние тикета')
         }).catch(error => {

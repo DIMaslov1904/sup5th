@@ -1,4 +1,5 @@
 import { compareVersions, readRelease, RELEASE_API } from './release.js'
+import { ensureAlarm } from '../platform/alarms.js'
 
 const UPDATE_INTERVAL = 24 * 60 * 60 * 1000
 export const UPDATE_ALARM = 'extension-update-check'
@@ -30,8 +31,7 @@ export const createUpdateChecker = ({ browser, currentVersion, read, write, alar
     const schedule = async () => {
         const saved = await read()
         const when = Math.max(now() + 60000, (saved?.lastCheckedAt || 0) + UPDATE_INTERVAL)
-        const alarm = await alarms.get(UPDATE_ALARM)
-        if (!alarm || Math.abs(alarm.scheduledTime - when) > 60000 || alarm.periodInMinutes) await alarms.create(UPDATE_ALARM, { when })
+        await ensureAlarm(alarms, UPDATE_ALARM, { when })
     }
     const performCheck = async (force, revision) => {
         const previous = await read()

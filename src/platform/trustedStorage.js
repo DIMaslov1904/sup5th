@@ -1,33 +1,20 @@
 import { extensionApi, isFirefox } from './extensionApi.js'
+import { createDatabase } from './idb.js'
 
 // Firefox cannot restrict storage.local to trusted extension contexts. Keep the
 // actual records in extension-origin IndexedDB; storage.local carries revisions
 // only, so existing onChanged listeners never expose values to content scripts.
-let database
+const privateDatabase = createDatabase({
+    name: 'sup5th-private-data', version: 1,
+    upgrade: database => database.createObjectStore('records')
+})
 const openDatabase = () => {
     if (!location.href.startsWith(extensionApi.runtime.getURL(''))) throw new Error('Хранилище доступно только страницам расширения')
-    if (!database) database = new Promise((resolve, reject) => {
-        const request = indexedDB.open('sup5th-private-data', 1)
-        request.onupgradeneeded = () => request.result.createObjectStore('records')
-        request.onsuccess = () => {
-            request.result.onversionchange = () => { request.result.close(); database = null }
-            resolve(request.result)
-        }
-        request.onerror = () => { database = null; reject(request.error) }
-    })
-    return database
+    return privateDatabase.open()
 }
 const transact = async (mode, action) => {
-    const db = await openDatabase()
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction('records', mode)
-        let result
-        const request = action(transaction.objectStore('records'))
-        if (request) request.onsuccess = () => { result = request.result }
-        transaction.oncomplete = () => resolve(result)
-        transaction.onerror = () => reject(transaction.error)
-        transaction.onabort = () => reject(transaction.error || new Error('Запись хранилища прервана'))
-    })
+    await openDatabase()
+    return privateDatabase.transact('records', mode, action)
 }
 const notify = keys => keys.length ? extensionApi.storage.local.set(Object.fromEntries(keys.map(key => [key, { revision: crypto.randomUUID() }]))) : Promise.resolve()
 const privateLocal = {

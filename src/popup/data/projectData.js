@@ -1,38 +1,5 @@
 // @ts-check
-import { extensionApi } from '../../platform/extensionApi.js'
-
-const BACKGROUND_TIMEOUT = 35000
-
-/**
- * @template {keyof import('../../types/messages.js').PopupResults} T
- * @param {T} type
- * @param {object} [payload]
- * @returns {Promise<import('../../types/messages.js').PopupResults[T]>}
- */
-const callBackground = (type, payload = {}) => new Promise((resolve, reject) => {
-    let settled = false
-    const timeoutId = setTimeout(() => {
-        if (settled) return
-        settled = true
-        reject(new Error('Фоновый процесс расширения не ответил. Перезагрузите расширение в настройках браузера.'))
-    }, BACKGROUND_TIMEOUT)
-
-    extensionApi.runtime.sendMessage({ type, payload }).then(/** @param {import('../../types/extension.js').RuntimeResponse<import('../../types/messages.js').PopupResults[T]>} response */(response) => {
-        if (settled) return
-        settled = true
-        clearTimeout(timeoutId)
-        if (!response?.ok) {
-            reject(new Error(response?.error || 'Неизвестная ошибка расширения'))
-            return
-        }
-        resolve(response.data)
-    }).catch(error => {
-        if (settled) return
-        settled = true
-        clearTimeout(timeoutId)
-        reject(new Error(`Фоновый процесс расширения недоступен: ${error.message}`))
-    })
-})
+import { callBackground } from '../../utils/backgroundClient.js'
 
 export const loadApiSettings = () => callBackground('data:settings:get')
 /** @param {string} repository */
@@ -88,6 +55,10 @@ export const loadProjectDetails = (url) =>
 /** @param {string} url @param {string} accessId @param {import('../../types/extension.js').AccessField} field */
 export const getProjectAccessField = (url, accessId, field) =>
     callBackground('project:accessField', { url, accessId, field })
+
+/** @param {string} url @param {string} accessId @param {import('../../types/extension.js').AccessField[]} fields */
+export const getProjectAccessFields = (url, accessId, fields) =>
+    callBackground('project:accessFields', { url, accessId, fields })
 
 export const getCredentialSecurityStatus = () => callBackground('security:status')
 

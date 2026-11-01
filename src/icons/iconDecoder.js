@@ -1,13 +1,9 @@
 import { extensionApi } from '../platform/extensionApi.js'
-import { findIconCandidates, normalizeIcon } from './iconDom.js'
+import { decodeIconPayload } from './iconPayload.js'
+import { createSerialQueue } from '../utils/serialQueue.js'
 const path = 'src/offscreen/index.html'
 let creating
-let operations = Promise.resolve()
-const serial = action => {
-    const result = operations.then(action)
-    operations = result.catch(() => {})
-    return result
-}
+const serial = createSerialQueue()
 const ensureDecoder = async () => {
     if (creating) return creating
     creating = (async () => {
@@ -18,12 +14,7 @@ const ensureDecoder = async () => {
 }
 
 export const decodeIconMessage = payload => serial(async () => {
-    if (typeof document !== 'undefined') {
-        if (payload.type === 'candidates') return findIconCandidates(payload.html, payload.url)
-        if (payload.type !== 'normalize') throw new Error('Неизвестная операция иконки')
-        const response = await fetch(payload.dataUrl)
-        return blobDataUrl(await normalizeIcon(await response.blob()))
-    }
+    if (typeof document !== 'undefined') return decodeIconPayload(payload)
     await ensureDecoder()
     let timer
     const response = await Promise.race([
@@ -41,9 +32,3 @@ export const closeIconDecoder = () => serial(async () => {
     if (contexts.length) await extensionApi.offscreen.closeDocument()
 })
 
-export const blobDataUrl = async blob => {
-    const bytes = new Uint8Array(await blob.arrayBuffer())
-    let binary = ''
-    for (let offset = 0; offset < bytes.length; offset += 8192) binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192))
-    return `data:${blob.type || 'application/octet-stream'};base64,${btoa(binary)}`
-}

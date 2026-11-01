@@ -1,5 +1,5 @@
 // @ts-check
-import { extensionApi } from '../platform/extensionApi.js'
+import { callBackground } from './backgroundClient.js'
 
 /** @param {string | number | null | undefined} value */
 export const ticketDigits = value => String(value || '').replace(/\D/g, '')
@@ -12,7 +12,5 @@ export const searchTicketNumber = value => {
 export const openTicket = async value => {
     const number = String(value).trim().replace(/^0+/, '')
     if (!/^\d+$/.test(number)) throw new Error('Введите положительный целый номер тикета')
-    const response = await extensionApi.runtime.sendMessage({ type: 'support:ticket:open', payload: { number } })
-    if (!response?.ok) throw new Error(response?.error || 'Не удалось открыть тикет')
-    return response.data
+    return callBackground('support:ticket:open', { number }, { fallbackError: 'Не удалось открыть тикет' })
 }

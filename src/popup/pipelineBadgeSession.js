@@ -1,10 +1,11 @@
 import { getPipelineLinks } from '../utils/pipelineLinks.js'
+import { createSerialQueue } from '../utils/serialQueue.js'
 
 // SVGs and auth suppression stay in this document. Only confirmed absence is persisted.
 export const createPipelineBadgeSession = (fetchBadge = fetch, isEnabled = () => true, missing = { get: async () => false, set: async () => {} }) => {
     const cache = new Map()
     let authRequired = false
-    let queue = Promise.resolve()
+    const serial = createSerialQueue()
     const request = async url => {
         if (!isEnabled()) return { state: 'disabled' }
         if (authRequired) return { state: 'auth' }
@@ -45,10 +46,8 @@ export const createPipelineBadgeSession = (fetchBadge = fetch, isEnabled = () =>
         if (!isEnabled()) return Promise.resolve({ state: 'disabled' })
         if (authRequired || !links) return Promise.resolve({ state: authRequired ? 'auth' : 'invalid' })
         if (force || !cache.has(links.repository)) {
-            const result = queue.then(() => discover(links, force)).catch(() => ({ state: 'unknown' }))
+            const result = serial(() => discover(links, force)).catch(() => ({ state: 'unknown' }))
             cache.set(links.repository, result)
-            // A queued project must wait until the preceding auth check finishes.
-            queue = result.then(() => undefined)
         }
         return cache.get(links.repository)
     }

@@ -1,13 +1,14 @@
 import { evaluateRobotsFile, indexingRulesFromMeta } from './seoRules.js'
 import { summarizeAuditPages, normalizeAuditText } from './seoAuditPages.js'
 import { META_LENGTH_RANGES } from './seoValidation.js'
-import { CWV_THRESHOLDS } from './cwv.js'
+import { CWV_THRESHOLDS, cwvRatingStatus } from './cwv.js'
+import { withoutFragment } from './linkCheckStatus.js'
 const check = (id, label, status, hint = '') => ({ id, label, status, hint })
 const lengthCheck = (field, value) => {
     const length = [...String(value || '').trim()].length, { min, max } = META_LENGTH_RANGES[field]
     return check(`${field}-length`, `${field === 'title' ? 'Title' : 'Description'}: длина (ориентир)`, !length ? 'na' : length >= min && length <= max ? 'pass' : 'warning', `${length} символов; ориентир ${min}–${max}`)
 }
-const withoutHash = url => { const copy = new URL(url); copy.hash = ''; return copy.href }
+
 const canonicalCheck = (data, finalUrl) => {
     const tags = data.canonicals || []
     if (!tags.length) return check('canonical', 'Canonical в DOM', 'warning', 'Не указан; необходимость зависит от дублей страницы')
@@ -16,8 +17,8 @@ const canonicalCheck = (data, finalUrl) => {
     if (!valid) return check('canonical', 'Canonical в DOM', 'fail', 'Нужен один непустой HTTP(S) URL без фрагмента в head')
     let consistency = ''
     try {
-        if (finalUrl && withoutHash(tags[0].href) !== withoutHash(finalUrl)) {
-            consistency = `Canonical не совпадает с конечным URL страницы (${withoutHash(finalUrl)}); проверьте консистентность. Ответ целевого адреса не проверялся.`
+        if (finalUrl && withoutFragment(tags[0].href) !== withoutFragment(finalUrl)) {
+            consistency = `Canonical не совпадает с конечным URL страницы (${withoutFragment(finalUrl)}); проверьте консистентность. Ответ целевого адреса не проверялся.`
         }
     } catch { /* finalUrl некорректен — консистентность не оценить */ }
     return check('canonical', 'Canonical в DOM', consistency ? 'warning' : 'pass', consistency || `${tags[0].href} — совпадает с конечным URL; ответ целевой страницы не проверялся`)
@@ -170,21 +171,21 @@ export const buildAuditChecks = (data, audit) => {
 
         // Individual CWV metric checks
         if (cwv.lcp) {
-            const lcpStatus = cwv.lcp.rating === 'good' ? 'pass' : cwv.lcp.rating === 'poor' ? 'fail' : 'warning'
+            const lcpStatus = cwvRatingStatus(cwv.lcp.rating)
             const hint = cwv.lcp.element ? `${(cwv.lcp.value / 1000).toFixed(2)}с — элемент: ${cwv.lcp.element}` : `${(cwv.lcp.value / 1000).toFixed(2)}с; ориентир ≤${CWV_THRESHOLDS.lcp.good / 1000}с`
             list.push(check('cwv-lcp', 'LCP: крупнейший контент', lcpStatus, hint))
         }
         if (cwv.cls != null) {
-            const clsStatus = cwv.clsRating === 'good' ? 'pass' : cwv.clsRating === 'poor' ? 'fail' : 'warning'
+            const clsStatus = cwvRatingStatus(cwv.clsRating)
             list.push(check('cwv-cls', 'CLS: сдвиг макета', clsStatus, cwv.clsRating === 'good' ? `Сдвиг минимальный: ${cwv.cls.toFixed(3)}` : `Сдвиг макета: ${cwv.cls.toFixed(3)}; ориентир ≤${CWV_THRESHOLDS.cls.good}`))
         }
         if (cwv.inp) {
-            const inpStatus = cwv.inp.rating === 'good' ? 'pass' : cwv.inp.rating === 'poor' ? 'fail' : 'warning'
+            const inpStatus = cwvRatingStatus(cwv.inp.rating)
             const note = cwv.inp.note ? ` (${cwv.inp.note})` : ''
             list.push(check('cwv-inp', 'INP: отклик ввода', inpStatus, `${cwv.inp.value}мс${note}; ориентир ≤${CWV_THRESHOLDS.inp.good}мс`))
         }
         if (cwv.fcp) {
-            const fcpStatus = cwv.fcp.rating === 'good' ? 'pass' : cwv.fcp.rating === 'poor' ? 'fail' : 'warning'
+            const fcpStatus = cwvRatingStatus(cwv.fcp.rating)
             list.push(check('cwv-fcp', 'FCP: первая отрисовка', fcpStatus, `${(cwv.fcp.value / 1000).toFixed(2)}с; ориентир ≤${CWV_THRESHOLDS.fcp.good / 1000}с`))
         }
     } else {

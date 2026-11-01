@@ -1,6 +1,12 @@
 import { evaluateRobotsFile, indexingRulesFromMeta } from './seoRules.js'
 import { withoutFragment } from './linkCheckStatus.js'
 
+// Some servers reject HEAD (405/501) or fail it silently; retry those as GET.
+export const requestWithHeadFallback = async (request, url, options = {}) => {
+    const head = await request(url, 'HEAD', options)
+    return [0, 405, 501].includes(head.status) ? request(url, 'GET', options) : head
+}
+
 export const loadSeoNetwork = async (initial, fetchResource, onUpdate = () => { }) => {
     let report = initial, sitemapRevision = 0
     const publish = patch => { report = { ...report, ...patch }; onUpdate(report) }
@@ -8,11 +14,7 @@ export const loadSeoNetwork = async (initial, fetchResource, onUpdate = () => { 
         try { return await fetchResource(url, method, options) }
         catch { return { ok: false, status: 0, url, headers: {}, text: '', ttfb: null } }
     }
-    const head = async (url, trace = false) => {
-        let info = await request(url, 'HEAD', { trace })
-        if ([0, 405, 501].includes(info.status)) info = await request(url, 'GET', { trace })
-        return info
-    }
+    const head = (url, trace = false) => requestWithHeadFallback(request, url, { trace })
     const sitemap = async url => {
         const revision = ++sitemapRevision
         publish({ sitemap: { url, pending: true, status: 0, exists: false } })

@@ -1,11 +1,11 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { summarizeAuditPages } from '../utils/seoAuditPages.js'
+import { summarizeAuditPages, uniqueAuditPages } from '../utils/seoAuditPages.js'
 import Card from '../popup/components/ui/Card.vue'
 import Button from '../popup/components/ui/Button.vue'
 const props = defineProps({ results: { type: Array, default: () => [] } })
 const open = ref(new Set()), limits = ref({}), groupLimit = ref(25)
-const html = computed(() => [...new Map(props.results.filter(item => item.metaState === 'complete').map(item => [item.finalUrl, item])).values()])
+const html = computed(() => uniqueAuditPages(props.results))
 const summary = computed(() => summarizeAuditPages(props.results))
 const groups = computed(() => [
     { id: 'missing-title', label: 'Не заполнен Title', urls: html.value.filter(item => !item.title).map(item => item.finalUrl) },

@@ -1,6 +1,7 @@
 import { extensionApi } from '../platform/extensionApi.js'
 import { trustedLocal, restrictStorageAccess } from '../platform/trustedStorage.js'
 import { createSessionWriter } from '../utils/sessionQuota.js'
+import { createSerialQueue } from '../utils/serialQueue.js'
 export const SCHEMA_VERSION = 1
 export const DATA_KEY = 'projectData'
 export const SERVICES_KEY = 'services'
@@ -34,14 +35,16 @@ export const sessionGet = async (key, fallback = null) => { await storageReady; 
 const writeSession = createSessionWriter(extensionApi?.storage.session)
 export const sessionSet = async (key, value) => { await storageReady; await writeSession({ [key]: value }) }
 export const sessionRemove = async key => { await storageReady; await extensionApi.storage.session.remove(key) }
+/** Drops expired entries from a session map; `keepWithoutExpiry` keeps entries without a deadline. */
+export const pruneExpiredSessions = (entries, { keepWithoutExpiry = false } = {}) => Object.fromEntries(
+    Object.entries(entries).filter(([, entry]) => (keepWithoutExpiry && !entry.expiresAt) || entry.expiresAt > Date.now()))
+/** Reads a session map and drops expired entries. */
+export const sessionEntries = async (key, options) => pruneExpiredSessions(await sessionGet(key, {}), options)
 export const getStoredData = () => storageGet(DATA_KEY, emptyData())
 
-let pending = Promise.resolve(), generation = 0
-export const mutateStorage = action => {
-    const result = pending.then(() => storageReady).then(action)
-    pending = result.catch(() => {})
-    return result
-}
+let generation = 0
+const enqueueMutation = createSerialQueue()
+export const mutateStorage = action => enqueueMutation(() => storageReady.then(action))
 export const currentGeneration = () => generation
 export const invalidateOperations = () => ++generation
 export const assertGeneration = expected => {

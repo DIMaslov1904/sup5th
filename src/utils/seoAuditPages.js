@@ -26,8 +26,10 @@ export const inspectAuditPage = (url, info, parse = parseMetaHtml) => {
     }
     return result
 }
+/** One entry per final URL: only pages with a fully parsed HTML document. */
+export const uniqueAuditPages = results => [...new Map(results.filter(item => item.metaState === 'complete').map(item => [item.finalUrl, item])).values()]
 export const summarizeAuditPages = results => {
-    const pages = [...new Map(results.filter(item => item.metaState === 'complete').map(item => [item.finalUrl, item])).values()]
+    const pages = uniqueAuditPages(results)
     const groups = field => {
         const values = new Map()
         for (const item of pages) if (item[field]) { const urls = values.get(item[field]) || []; urls.push(item.finalUrl); values.set(item[field], urls) }

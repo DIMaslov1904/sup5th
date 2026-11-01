@@ -14,7 +14,7 @@ import { refreshAll, getRefreshJob, saveRefreshJob, cancelRefresh, scheduleRefre
 import { toPublicData } from './catalogueData.js'
 import { updateActiveTabIcon, updateBadgeForTab } from './actionBadge.js'
 import { getActiveSupportTicket, observeSupportTicket, resetActiveSupportTicket, registerSupportTicketTracking } from './supportTicketTracking.js'
-import { startAdminAuth, authContext, consumePendingAdminAuth, injectAuthForTab, forgetAuthTab, copyProjectAccessText, getProjectDetails, getProjectAccessField, getServices, getServiceField } from './projectAccess.js'
+import { startAdminAuth, authContext, consumePendingAdminAuth, injectAuthForTab, forgetAuthTab, copyProjectAccessText, getProjectDetails, getProjectAccessField, getProjectAccessFields, getServices, getServiceField } from './projectAccess.js'
 import { updateChecker, registerExtensionUpdates } from './extensionUpdates.js'
 import { openSupportTicket, supportAuthPage, forgetSupportAuthTab } from './supportAuth.js'
 
@@ -71,7 +71,7 @@ const handlers = {
     'data:projects:authorize': () => authorize('projects'), 'data:accesses:authorize': () => authorize('accesses'),
     'data:errors:get': () => storageGet(ERRORS_KEY, []), 'data:errors:clear': () => mutateStorage(() => storageSet(ERRORS_KEY, [])),
     'data:clear': clearAllData, 'auth:start': startAdminAuth, 'auth:context': authContext, 'auth:consume': consumePendingAdminAuth,
-    'project:details': getProjectDetails, 'project:accessField': getProjectAccessField, 'project:copyAccess': copyProjectAccessText,
+    'project:details': getProjectDetails, 'project:accessField': getProjectAccessField, 'project:accessFields': getProjectAccessFields, 'project:copyAccess': copyProjectAccessText,
     'security:status': getSecurityStatus, 'security:enableHello': enableHelloProtection,
     'security:enablePin': enablePinProtection, 'security:unlockPin': unlockWithPin,
     'security:unlockHelloKey': async payload => {

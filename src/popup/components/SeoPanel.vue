@@ -1,9 +1,10 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import { callBackground, sendSeoToTab, fetchSeo, openSeoApp, canPinSeoPage, pinSeoPage } from '../../utils/seoClient.js'
+import { sendSeoToTab, fetchSeo, openSeoApp, canPinSeoPage, pinSeoPage } from '../../utils/seoClient.js'
+import { callBackground } from '../../utils/backgroundClient.js'
 import { SEO_SECTIONS, normalizeSeoSection } from '../../utils/seoSections.js'
 import { evaluateHttpStatus } from '../../utils/seoValidation.js'
-import { loadSeoNetwork } from '../../utils/seoNetwork.js'
+import { loadSeoNetwork, requestWithHeadFallback } from '../../utils/seoNetwork.js'
 import { buildHeadingTree } from '../../utils/headingTree.js'
 import HeadingTree from './HeadingTree.vue'
 import { evaluateRobotsFile } from '../../utils/seoRules.js'
@@ -144,7 +145,7 @@ const checkLinks = async () => {
     try {
         for (let i = 0; i < urls.length && !cancelled; i += 5) {
             const batch = await Promise.all(urls.slice(i, i + 5).map(async url => {
-                let info = await fetchSeo(url, 'HEAD'); if (!info.ok && [0, 405, 501].includes(info.status)) info = await fetchSeo(url)
+                const info = await requestWithHeadFallback((target, method) => fetchSeo(target, method), url)
                 return [url, { ok: info.ok, status: info.status, url: info.url, ...classifyLinkCheck(info), redirected: Boolean(info.url && withoutFragment(info.url) !== withoutFragment(url)) }]
             }))
             if (cancelled || !alive) break

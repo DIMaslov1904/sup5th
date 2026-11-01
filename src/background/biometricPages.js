@@ -1,9 +1,10 @@
 import { extensionApi } from '../platform/extensionApi.js'
-import { sessionGet, sessionSet } from './storageRepository.js'
+import { pruneExpiredSessions, sessionGet, sessionSet } from './storageRepository.js'
 import { enableHelloProtection, getSecurityStatus } from './credentialVault.js'
-import { startAdminAuth, copyProjectAccessText, getProjectAccessField, getServiceField } from './projectAccess.js'
+import { startAdminAuth, copyProjectAccessText, getProjectAccessField, getProjectAccessFields, getServiceField } from './projectAccess.js'
 import { saveApiSettings } from './apiSettings.js'
 import { getSshCommand } from '../utils/ssh.js'
+import { createSerialQueue } from '../utils/serialQueue.js'
 
 const BIOMETRIC_PAGES_KEY = 'biometricPageRequests'
 const pagePath = 'src/biometric/index.html', lifetime = 5 * 60000
@@ -36,15 +37,14 @@ const executeIntent = async (intent, refreshData) => {
     if (intent.type === 'service-copy') return { kind: 'copy', value: await getServiceField(intent) }
     if (intent.field === 'text') return { kind: 'copy', value: await copyProjectAccessText(intent) }
     if (intent.field === 'ssh') {
-        const [host, login] = await Promise.all(['ftpUrl', 'ftpLogin'].map(field => getProjectAccessField({ ...intent, field })))
+        const { ftpUrl: host, ftpLogin: login } = await getProjectAccessFields({ ...intent, fields: ['ftpUrl', 'ftpLogin'] })
         return { kind: 'copy', value: getSshCommand(login, host) }
     }
     return { kind: 'copy', value: await getProjectAccessField(intent) }
 }
 
 export const createBiometricPageHandlers = ({ unlock, refreshData }) => {
-    let pending = Promise.resolve()
-    const serial = action => { const result = pending.then(action); pending = result.catch(() => { }); return result }
+    const serial = createSerialQueue()
     const read = () => sessionGet(BIOMETRIC_PAGES_KEY, {})
     const write = flows => sessionSet(BIOMETRIC_PAGES_KEY, flows)
     const open = payload => serial(async () => {
@@ -55,7 +55,7 @@ export const createBiometricPageHandlers = ({ unlock, refreshData }) => {
         const intent = validateIntent(payload.intent), id = crypto.randomUUID()
         const [returnTab] = await extensionApi.tabs.query({ active: true, currentWindow: true })
         const tab = await extensionApi.tabs.create({ url: `${extensionApi.runtime.getURL(pagePath)}?request=${id}`, active: true })
-        const flows = Object.fromEntries(Object.entries(await read()).filter(([, flow]) => flow.expiresAt > Date.now()))
+        const flows = pruneExpiredSessions(await read())
         flows[id] = { mode: payload.mode, intent, advanceSetup: payload.mode === 'enable' && payload.advanceSetup === true, refreshAfterUnlock: payload.refreshAfterUnlock !== false, tabId: tab.id, returnTabId: returnTab?.id, state: 'pending', expiresAt: Date.now() + lifetime }
         try { await write(flows) }
         catch (error) { await extensionApi.tabs.remove(tab.id).catch(() => { }); throw error }

@@ -5,12 +5,13 @@ import { createIconQueue } from './iconQueue.js'
 import { createIconFetcher } from './iconFetcher.js'
 import { closeIconDecoder } from './iconDecoder.js'
 import { hasOrigin } from '../utils/hostPermissions.js'
+import { ensureAlarm } from '../platform/alarms.js'
 
 const alarm = 'site-icons-resume'
 const broadcast = data => extensionApi.runtime.sendMessage({ type: 'icons:changed', ...data }).catch(() => {})
 const schedule = async active => {
     if (!active) { await extensionApi.alarms.clear(alarm); return }
-    if (!await extensionApi.alarms.get(alarm)) await extensionApi.alarms.create(alarm, { periodInMinutes: 0.5 })
+    await ensureAlarm(extensionApi.alarms, alarm, { periodInMinutes: 0.5 })
 }
 const queue = createIconQueue({ repository: iconRepository, fetchIcon: createIconFetcher(iconRepository), schedule, notify: broadcast })
 let work

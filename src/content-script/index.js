@@ -1,9 +1,6 @@
 import { extensionApi } from '../platform/extensionApi.js'
+import { setInputValue } from './inputValue.js'
 const visible = input => input.getClientRects().length > 0 && !input.disabled && !input.readOnly && getComputedStyle(input).visibility !== 'hidden'
-const setValue = (input, value) => {
-    Object.getOwnPropertyDescriptor(input.ownerDocument.defaultView.HTMLInputElement.prototype, 'value').set.call(input, value)
-    input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }))
-}
 const findLoginForm = () => {
     const passwords = [...document.querySelectorAll('input[type="password"]')].filter(input => visible(input) && input.autocomplete !== 'new-password')
     for (const password of passwords) {
@@ -31,7 +28,7 @@ const start = async () => {
         busy = true
         const response = await extensionApi.runtime.sendMessage({ type: 'auth:consume' }), auth = response?.ok ? response.data : null
         if (cancelled || !auth || Date.now() - auth.createdAt > 300000) { stop(); return }
-        setValue(fields.login, auth.login); setValue(fields.password, auth.password); stop()
+        setInputValue(fields.login, auth.login); setInputValue(fields.password, auth.password); stop()
         if (auth.cms === 'Tilda') return
         const submit = [...fields.scope.querySelectorAll('button,input[type="submit"]')].find(button => visible(button) &&
             (button.type === 'submit' || /^(войти|вход|sign in|log in|login|вход в систему)$/i.test(button.textContent.trim())))

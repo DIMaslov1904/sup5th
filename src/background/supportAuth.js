@@ -1,32 +1,24 @@
 import { extensionApi } from '../platform/extensionApi.js'
-import { SERVICES_KEY, storageGet, sessionGet, sessionSet, mutateStorage } from './storageRepository.js'
-import { getServiceField } from './projectAccess.js'
+import { SERVICES_KEY, storageGet, sessionEntries, sessionSet, mutateStorage } from './storageRepository.js'
+import { getServiceFields } from './projectAccess.js'
 import { vaultRevision, assertVaultRevision } from './credentialVault.js'
 import { SUPPORT_ORIGIN, SUPPORT_LOGIN_PATH, SUPPORT_EXPIRED_PATH, SUPPORT_INDEX_PATH, supportUrl, supportTicketTarget } from '../utils/supportAuth.js'
+import { openTabWithSession } from './tabSession.js'
 
 const SUPPORT_AUTH_KEY = 'pendingSupportAuth'
 const AUTH_LIFETIME = 300000
 const manual = message => ({ action: 'manual', message })
-const readSessions = async () => Object.fromEntries(Object.entries(await sessionGet(SUPPORT_AUTH_KEY, {}))
-    .filter(([, state]) => state.expiresAt > Date.now()))
+const readSessions = () => sessionEntries(SUPPORT_AUTH_KEY)
 const newSession = targetUrl => ({ targetUrl, attempted: false, restoring: false, expiresAt: Date.now() + AUTH_LIFETIME })
 
 export const openSupportTicket = async ({ number }) => {
     if (typeof number !== 'string' || !/^[1-9]\d*$/.test(number)) throw new Error('Введите положительный целый номер тикета')
     const targetUrl = `${SUPPORT_ORIGIN}${SUPPORT_INDEX_PATH}?app=ST#/requests/search/${number}/`
-    const tab = await extensionApi.tabs.create({ url: 'about:blank' })
-    try {
-        await mutateStorage(async () => {
-            const sessions = await readSessions()
-            sessions[tab.id] = newSession(targetUrl)
-            await sessionSet(SUPPORT_AUTH_KEY, sessions)
-        })
-        await extensionApi.tabs.update(tab.id, { url: targetUrl })
-    } catch (error) {
-        await forgetSupportAuthTab(tab.id)
-        await extensionApi.tabs.remove(tab.id).catch(() => {})
-        throw error
-    }
+    await openTabWithSession(targetUrl, tabId => mutateStorage(async () => {
+        const sessions = await readSessions()
+        sessions[tabId] = newSession(targetUrl)
+        await sessionSet(SUPPORT_AUTH_KEY, sessions)
+    }), forgetSupportAuthTab)
     return { opened: true }
 }
 
@@ -37,7 +29,7 @@ const supportCredentials = async () => {
         ? 'В «Сервисах» несколько доступов к support.5th.ru. Войдите вручную.'
         : 'В «Сервисах» нет полного доступа к https://support.5th.ru. Войдите вручную.')
     const expected = vaultRevision(), id = services[0].id
-    const [login, password] = await Promise.all([getServiceField({ id, field: 'login' }), getServiceField({ id, field: 'password' })])
+    const { login, password } = await getServiceFields({ id, fields: ['login', 'password'] })
     assertVaultRevision(expected)
     return { login, password }
 }

@@ -8,6 +8,7 @@ import { sealJson } from '../utils/credentialCrypto.js'
 import { assignLocalIds, accessIdentity, serviceIdentity } from './recordIdentity.js'
 import { apiAuthorizationError, classifyApiAuthorization } from './apiAuthorization.js'
 import { REFRESH_PERIOD } from '../utils/dataRefreshPolicy.js'
+import { ensureAlarm } from '../platform/alarms.js'
 
 export const PROJECTS_ALARM = 'projects-refresh'
 const REFRESH_JOB_KEY = 'dataRefreshJob'
@@ -43,8 +44,7 @@ const saveRows = (type, rows, url, generation, securityRevision) => mutateStorag
     let services = null, encryptedVault = null, values = rows
     if (type === 'accesses') {
         assertVaultRevision(securityRevision)
-        const protectedMode = (await getSecurityConfig())?.enabled
-        const key = protectedMode ? await getUnlockedKey() : null
+        const key = await getUnlockedKey()
         const vault = key ? await readCredentialVault(key) : null
         const previousSecrets = new Map(vault?.accesses.map(record => [record.id, record]) || [])
         const previousServices = await storageGet(SERVICES_KEY, [])
@@ -131,6 +131,5 @@ export const scheduleRefresh = async () => {
     const settings = await readApiSettings()
     if (!settings.projectsUrl && !settings.accessUrl) return extensionApi.alarms.clear(PROJECTS_ALARM)
     const periodInMinutes = REFRESH_PERIOD / 60000
-    const alarm = await extensionApi.alarms.get(PROJECTS_ALARM)
-    if (alarm?.periodInMinutes !== periodInMinutes) await extensionApi.alarms.create(PROJECTS_ALARM, { delayInMinutes: periodInMinutes, periodInMinutes })
+    await ensureAlarm(extensionApi.alarms, PROJECTS_ALARM, { delayInMinutes: periodInMinutes, periodInMinutes })
 }

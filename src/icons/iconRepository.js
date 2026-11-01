@@ -1,32 +1,14 @@
+import { createDatabase } from '../platform/idb.js'
 
-let database
-const openDatabase = () => {
-    if (database) return database
-    database = new Promise((resolve, reject) => {
-        const request = indexedDB.open('sup5th-site-icons', 1)
-        request.onupgradeneeded = () => {
-            request.result.createObjectStore('icons', { keyPath: 'origin' })
-            request.result.createObjectStore('state')
-        }
-        request.onsuccess = () => {
-            request.result.onversionchange = () => { request.result.close(); database = null }
-            resolve(request.result)
-        }
-        request.onerror = () => { database = null; reject(request.error) }
-    })
-    return database
-}
-
-const transact = async (storeName, mode, operation) => {
-    const db = await openDatabase()
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(storeName, mode)
-        const request = operation(transaction.objectStore(storeName))
-        transaction.oncomplete = () => resolve(request?.result)
-        transaction.onabort = () => reject(transaction.error || new Error('Не удалось сохранить кеш иконок'))
-        transaction.onerror = () => reject(transaction.error)
-    })
-}
+const database = createDatabase({
+    name: 'sup5th-site-icons', version: 1,
+    upgrade: db => {
+        db.createObjectStore('icons', { keyPath: 'origin' })
+        db.createObjectStore('state')
+    },
+    abortMessage: 'Не удалось сохранить кеш иконок'
+})
+const transact = (storeName, mode, operation) => database.transact(storeName, mode, operation)
 
 export const iconRepository = {
     get: origin => transact('icons', 'readonly', store => store.get(origin)),

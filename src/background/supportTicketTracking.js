@@ -2,6 +2,8 @@ import { extensionApi } from '../platform/extensionApi.js'
 import { mutateStorage, storageGet, storageSet, getStoredData } from './storageRepository.js'
 import { SUPPORT_TRACKING_KEY, SUPPORT_TIMER_ALARM, activeTicketFrom } from '../utils/supportTimer.js'
 import { setTicketTimerBadge, updateBadgeForTab } from './actionBadge.js'
+import { createSerialQueue } from '../utils/serialQueue.js'
+import { ensureAlarm } from '../platform/alarms.js'
 
 export const getActiveSupportTicket = async () => activeTicketFrom(await storageGet(SUPPORT_TRACKING_KEY))
 
@@ -37,7 +39,7 @@ export const resetActiveSupportTicket = () => mutateStorage(async () => {
 const refreshTimer = async () => {
     const active = await getActiveSupportTicket()
     if (active) {
-        if (!await extensionApi.alarms.get(SUPPORT_TIMER_ALARM)) await extensionApi.alarms.create(SUPPORT_TIMER_ALARM, { periodInMinutes: 1 })
+        await ensureAlarm(extensionApi.alarms, SUPPORT_TIMER_ALARM, { periodInMinutes: 1 })
     } else await extensionApi.alarms.clear(SUPPORT_TIMER_ALARM)
     if (active) await setTicketTimerBadge(undefined, active)
     else {
@@ -49,11 +51,8 @@ const refreshTimer = async () => {
 }
 
 export const registerSupportTicketTracking = ready => {
-    let pending = Promise.resolve()
-    const refresh = () => {
-        pending = pending.then(refreshTimer).catch(error => console.error('[support] timer badge', error))
-        return pending
-    }
+    const serial = createSerialQueue()
+    const refresh = () => serial(refreshTimer).catch(error => console.error('[support] timer badge', error))
     extensionApi.alarms.onAlarm.addListener(alarm => { if (alarm.name === SUPPORT_TIMER_ALARM) refresh() })
     extensionApi.storage.onChanged.addListener((changes, area) => {
         if (area === 'local' && changes[SUPPORT_TRACKING_KEY]) refresh()

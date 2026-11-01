@@ -1,5 +1,6 @@
 import { ICON_INPUT_LIMIT, ICON_REQUEST_GAP } from './iconPolicy.js'
-import { blobDataUrl, decodeIconMessage } from './iconDecoder.js'
+import { decodeIconMessage } from './iconDecoder.js'
+import { blobDataUrl } from './iconPayload.js'
 
 const wait = (ms, signal) => new Promise((resolve, reject) => {
     signal.throwIfAborted()

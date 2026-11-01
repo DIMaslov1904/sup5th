@@ -17,7 +17,8 @@ import Tabs from '../components/ui/Tabs.vue'
 import Preloader from '../components/ui/Preloader.vue'
 import IconCacheControls from '../components/IconCacheControls.vue'
 import MaintenanceCard from '../components/MaintenanceCard.vue'
-import BiometricProviderHelp from '../components/BiometricProviderHelp.vue'
+import SecurityProtectionForm from '../components/SecurityProtectionForm.vue'
+import ToggleSwitch from '../components/ui/ToggleSwitch.vue'
 import { useApiAutosave } from '../useApiAutosave.js'
 import CopyAccessApiCode from '../components/CopyAccessApiCode.vue'
 import ExtensionUpdates from '../components/ExtensionUpdates.vue'
@@ -122,17 +123,8 @@ const reset = () => {
                     <Button v-if="needsAuthorization(type)" size="sm" variant="ghost" class="mt-2" :disabled="Boolean(busy)" @click="authorize(type)">Открыть API / авторизацию</Button>
                 </Card>
                 <Card title="Доп. функции">
-                    <label class="mb-3 flex cursor-pointer items-center justify-between gap-3 text-[13px]">
-                        <span>Показывать последние проекты</span>
-                        <input type="checkbox" role="switch" aria-label="Показывать последние проекты" :checked="projectShortcuts.enabled" :disabled="Boolean(busy)" class="peer sr-only" @change="event => run('shortcuts', () => updateProjectShortcuts({kind:'configure',enabled:event.target.checked}))" />
-                        <span aria-hidden="true" class="relative h-5 w-9 shrink-0 rounded-full bg-ui-border transition-colors after:absolute after:top-0.5 after:left-0.5 after:size-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-ui-accent peer-checked:after:translate-x-4 peer-focus-visible:outline-2 peer-focus-visible:outline-ui-accent peer-disabled:opacity-50"></span>
-                    </label>
-                    <label class="flex cursor-pointer items-center justify-between gap-3 text-[13px]">
-                        <span>Показывать статус pipeline в проекте</span>
-                        <input type="checkbox" role="switch" :checked="pipelineBadgePreference.enabled" :disabled="!pipelineBadgePreference.ready || Boolean(busy)"
-                            aria-describedby="pipeline-badge-help" class="peer sr-only" @change="event => run('pipeline', () => setPipelineBadgeEnabled(event.target.checked))" />
-                        <span aria-hidden="true" class="relative h-5 w-9 shrink-0 rounded-full bg-ui-border transition-colors after:absolute after:top-0.5 after:left-0.5 after:size-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-ui-accent peer-checked:after:translate-x-4 peer-focus-visible:outline-2 peer-focus-visible:outline-ui-accent peer-disabled:opacity-50"></span>
-                    </label>
+                    <ToggleSwitch class="mb-3" label="Показывать последние проекты" :model-value="projectShortcuts.enabled" :disabled="Boolean(busy)" @update:model-value="value => run('shortcuts', () => updateProjectShortcuts({kind:'configure',enabled:value}))" />
+                    <ToggleSwitch label="Показывать статус pipeline в проекте" :model-value="pipelineBadgePreference.enabled" :disabled="!pipelineBadgePreference.ready || Boolean(busy)" described-by="pipeline-badge-help" @update:model-value="value => run('pipeline', () => setPipelineBadgeEnabled(value))" />
                 </Card>
             </template>
             <template v-if="section === 'data'">
@@ -152,15 +144,7 @@ const reset = () => {
                     <p v-if="securityStatus.mode === 'pin'" class="text-xs text-ui-muted">Способ защиты: PIN-код.</p>
                     <p v-if="securityStatus.keySource === 'credential-id'" class="text-xs text-ui-muted">Ключ доступа: {{ securityStatus.passkeyName }} · локальный режим совместимости.</p>
                     <template v-if="!securityStatus.enabled">
-                        <Tabs v-model="securityTab" :items="securityTabs" label="Способ защиты" wrap />
-                        <template v-if="securityTab === 'biometric'">
-                            <Button :disabled="Boolean(busy)" variant="secondary" @click="enable">Включить биометрию устройства</Button>
-                            <BiometricProviderHelp />
-                        </template>
-                        <form v-else class="grid gap-2" @submit.prevent="enablePin">
-                            <Input v-model="pin" type="password" maxlength="6" autocomplete="off" spellcheck="false" placeholder="PIN-код · 6 символов" :disabled="busy === 'security'" />
-                            <Button type="submit" variant="secondary" :disabled="busy === 'security' || pin.length !== 6">Включить PIN-код</Button>
-                        </form>
+                        <SecurityProtectionForm v-model:tab="securityTab" v-model:pin="pin" :tabs="securityTabs" :disabled="Boolean(busy)" biometric-label="Включить биометрию устройства" biometric-variant="secondary" @enable="enable" @enable-pin="enablePin" />
                     </template>
                     <template v-else><Button v-if="!securityStatus.unlocked" :disabled="Boolean(busy)" @click="unlock">Разблокировать</Button><template v-else><Button variant="secondary" :disabled="Boolean(busy)" @click="lock">Заблокировать</Button><Button variant="danger" :disabled="Boolean(busy)" @click="disable">Отключить защиту</Button></template></template>
                     <p v-if="!caps.available" class="text-xs text-ui-warning">WebAuthn недоступен в этом браузере — доступен PIN-код.</p>

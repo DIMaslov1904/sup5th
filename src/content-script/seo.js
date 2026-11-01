@@ -20,8 +20,6 @@ const documentId = [...crypto.getRandomValues(new Uint32Array(4))].join('-')
 
 const getMeta = (selector) => document.querySelector(selector)?.getAttribute('content')?.trim() || ''
 
-const getHeadings = (level) => [...document.querySelectorAll(`h${level}`)]
-    .map((element) => element.textContent.trim())
 
 // Запрос выполняется в background (нет ограничений CSP страницы)
 const fetchViaBackground = async (url, options = {}) => {
@@ -50,14 +48,14 @@ const declaredCharset = () => document.querySelector('meta[charset]')?.getAttrib
 
 export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = false } = {}) => {
     const dom = collectSeoDom(document, location.href)
-    const headings = Object.fromEntries([1, 2, 3, 4, 5, 6].map((level) => [`h${level}`, getHeadings(level)]))
+
     const robotsUrl = new URL('/robots.txt', location.href).href
     const sitemapUrl = new URL('/sitemap.xml', location.href).href
     const indexing = collectIndexingRules(document)
 
     const title = document.title.trim()
     const description = getMeta('meta[name="description" i]')
-    const h1List = headings.h1
+    const h1List = dom.headingRows.filter(row => row.level === 1).map(row => row.text)
     const duplicateH1 = h1List.filter((heading, index) => h1List.indexOf(heading) !== index)
     // Полнота favicon: основной icon, apple-touch-icon, mask-icon и объявления sizes
     const collectFavicon = () => {
@@ -104,7 +102,6 @@ export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = f
         xRobotsAllowed: null,
         lang: document.documentElement.lang || '',
         viewport: Boolean(getMeta('meta[name="viewport" i]')),
-        headings,
         h1Count: h1List.length,
         duplicateH1,
         twitter: {
@@ -140,15 +137,9 @@ export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = f
         },
         favicon: collectFavicon(),
         images: {
-            total: document.images.length,
-            withoutAlt: [...document.images].filter((image) => !image.hasAttribute('alt')).length,
-            emptyAlt: [...document.images].filter((image) => image.hasAttribute('alt') && !image.alt.trim()).length
-        },
-        links: {
-            total: document.links.length,
-            internal: [...document.links].filter((link) => link.hostname === location.hostname).length,
-            external: [...document.links].filter((link) => link.hostname && link.hostname !== location.hostname).length,
-            withoutText: dom.linkRows.filter(link => !link.accessibleName).length
+            total: dom.imageRows.length,
+            withoutAlt: dom.imageRows.filter((image) => image.alt === null).length,
+            emptyAlt: dom.imageRows.filter((image) => image.alt !== null && !image.alt.trim()).length
         },
         pageWeight: collectPageWeight(document),
         cwv: collectCwv()

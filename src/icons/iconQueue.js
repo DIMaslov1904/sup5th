@@ -1,15 +1,12 @@
 import { ICON_RETRY_DELAY } from './iconPolicy.js'
+import { createSerialQueue } from '../utils/serialQueue.js'
 
 const emptyQueue = () => ({ pending: [], total: 0, completed: 0, failed: 0, runId: '' })
 
 // Network work runs outside the state lock; cancellation invalidates its result.
 export const createIconQueue = ({ repository, fetchIcon, schedule, notify, now = Date.now }) => {
-    let pendingMutation = Promise.resolve(), running = null, controller = null
-    const serial = action => {
-        const result = pendingMutation.then(action)
-        pendingMutation = result.catch(() => {})
-        return result
-    }
+    let running = null, controller = null
+    const serial = createSerialQueue()
     const status = async () => {
         const state = await repository.getState() || emptyQueue()
         return { active: state.pending.length > 0, total: state.total, completed: state.completed, failed: state.failed }

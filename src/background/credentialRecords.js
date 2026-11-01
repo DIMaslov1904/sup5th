@@ -4,5 +4,5 @@ export const publicAccess = access => ({
     hasFtp: Boolean(access.ftp?.url || access.hasFtp), ftpUrl: access.ftp?.url || access.ftpUrl || '',
     ftpHasLogin: Boolean(access.ftp?.login || access.ftpHasLogin), ftpHasPassword: Boolean(access.ftp?.password || access.ftpHasPassword)
 })
-export const publicService = ({ password, ...service }) => ({ ...service, hasLogin: Boolean(service.login), hasPassword: Boolean(password) })
+export const publicService = ({ password, ...service }) => ({ ...service, hasLogin: Boolean(service.login), hasPassword: Boolean(password || service.hasPassword) })
 export const accessSecret = ({ id, password, ftp }) => ({ id, password, ftp: ftp || null })

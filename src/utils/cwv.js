@@ -55,6 +55,9 @@ const collectFcp = () => {
     return entry ? { value: Math.round(entry.startTime), rating: rating(entry.startTime, CWV_THRESHOLDS.fcp) } : null
 }
 
+const RATING_STATUS = { good: 'pass', 'needs-fix': 'warning', poor: 'fail', unknown: 'unknown' }
+export const cwvRatingStatus = rating => RATING_STATUS[rating] || 'unknown'
+
 export const collectCwv = () => {
     const cls = collectCls()
     return { lcp: collectLcp(), cls, clsRating: rating(cls, CWV_THRESHOLDS.cls), inp: collectInp(), fcp: collectFcp() }

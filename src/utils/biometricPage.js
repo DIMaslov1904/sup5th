@@ -1,11 +1,8 @@
 import { extensionApi } from '../platform/extensionApi.js'
+import { callBackground } from './backgroundClient.js'
 
 export const BIOMETRIC_ACTION_HANDLED = Symbol('biometric-action-handled')
-export const biometricPageCall = async (type, payload) => {
-    const response = await extensionApi.runtime.sendMessage({ type: `security:page:${type}`, payload })
-    if (!response?.ok) throw new Error(response?.error || 'Страница биометрии недоступна')
-    return response.data
-}
+export const biometricPageCall = (type, payload) => callBackground(`security:page:${type}`, payload, { fallbackError: 'Страница биометрии недоступна' })
 
 // A closed toolbar popup must not cancel the operation owned by the new page.
 export const runBiometricPage = async (mode, options = {}) => {
