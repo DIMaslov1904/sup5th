@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import { sendSeoToTab, fetchSeo, openSeoApp, canPinSeoPage, pinSeoPage } from '../../utils/seoClient.js'
+import { sendSeoToTab, withActiveTab, fetchSeo, openSeoApp, canPinSeoPage, pinSeoPage } from '../../utils/seoClient.js'
 import { callBackground } from '../../utils/backgroundClient.js'
 import { SEO_SECTIONS, normalizeSeoSection } from '../../utils/seoSections.js'
 import { evaluateHttpStatus } from '../../utils/seoValidation.js'
@@ -68,7 +68,7 @@ const scan = async () => {
     try {
         const context = await sendSeoToTab(props.tab?.id, 'seo:context')
         sessionContext = { tabId: props.tab.id, url: context.url, documentId: context.documentId }
-        const data = await sendSeoToTab(props.tab?.id, 'seo:dom')
+        const data = await withActiveTab(props.tab?.id, () => sendSeoToTab(props.tab?.id, 'seo:dom'))
         if (alive) {
             report.value = data; checked.value = {}; visible.value = 100
             enrich(data)

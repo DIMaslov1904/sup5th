@@ -28,8 +28,9 @@ export const paginateAuditResults = (results, page = 1, pageSize = 25) => {
     return { items: results.slice(start, start + size), page: current, count, start: results.length ? start + 1 : 0, end: Math.min(start + size, results.length) }
 }
 const csvCell = value => `"${String(value ?? '').replace(/"/g, '""')}"`
-export const auditResultsCsv = results => '\uFEFF' + [
-    ['URL', 'HTTP', 'Тип', 'Конечный URL', 'Страницы-источники', 'Sitemap', 'Результат'],
+export const auditResultsCsv = (results, directionOf = null) => '\uFEFF' + [
+    ['URL', 'HTTP', 'Тип', 'Конечный URL', ...(directionOf ? ['Направление'] : []), 'Страницы-источники', 'Sitemap', 'Результат'],
     ...results.map(item => [item.url, item.status || '', AUDIT_KIND_LABELS[item.kind] || '', item.finalUrl,
+        ...(directionOf ? [directionOf(item) || ''] : []),
         (item.sources || []).join('\n'), (item.sitemaps || []).join('\n'), item.label])
 ].map(row => row.map(csvCell).join(';')).join('\r\n')

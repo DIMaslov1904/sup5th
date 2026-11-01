@@ -1,18 +1,21 @@
 <script setup>
-import { computed, onUnmounted, ref, shallowRef } from 'vue'
+import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { extensionApi } from '../platform/extensionApi.js'
-import { sendSeoToTab, fetchSeo } from '../utils/seoClient.js'
+import { sendSeoToTab, withActiveTab, fetchSeo } from '../utils/seoClient.js'
 import { createAuditControl, runSeoAuditRequests } from '../utils/seoAuditRunner.js'
 import { normalizeAuditPageLimit, AUDIT_PAGE_LIMIT, DEFAULT_AUDIT_PAGE_LIMIT } from '../utils/seoAuditPages.js'
 import { AUDIT_MODES } from '../utils/seoAuditLinks.js'
 import { buildAuditChecks } from '../utils/seoAuditChecks.js'
+import { buildAuditIssues } from '../utils/seoAuditIssues.js'
 import { withoutFragment } from '../utils/linkCheckStatus.js'
 import Button from '../popup/components/ui/Button.vue'
 import Select from '../popup/components/ui/Select.vue'
 import Notification from '../popup/components/ui/Notification.vue'
+import Tabs from '../popup/components/ui/Tabs.vue'
 import SeoAuditSummary from './SeoAuditSummary.vue'
-import SeoAuditChecks from './SeoAuditChecks.vue'
-import SeoAuditResults from './SeoAuditResults.vue'
+import SeoAuditIssues from './SeoAuditIssues.vue'
+import SeoAuditFocus from './SeoAuditFocus.vue'
+import SeoAuditLinks from './SeoAuditLinks.vue'
 import SeoAuditFiles from './SeoAuditFiles.vue'
 import SeoAuditPageIssues from './SeoAuditPageIssues.vue'
 import SeoAuditExclusions from './SeoAuditExclusions.vue'
@@ -31,6 +34,27 @@ const normalizeLimits = () => {
     crawlPageLimit.value = Math.max(minimumCrawlLimit.value, normalizeAuditPageLimit(crawlPageLimit.value))
 }
 const checks = computed(() => report.value && audit.value ? buildAuditChecks(report.value, audit.value) : [])
+const issues = computed(() => report.value && audit.value ? buildAuditIssues(report.value, audit.value, checks.value) : [])
+const section = ref('summary')
+const focusId = ref('')
+const focusIssue = computed(() => focusId.value ? issues.value.find(issue => issue.id === focusId.value) || null : null)
+const openIssue = issue => { if (issue?.urlCount) focusId.value = issue.id }
+const closeIssue = () => { focusId.value = '' }
+const issueCount = computed(() => issues.value.filter(issue => issue.severity !== 'info').length)
+const excludedCount = computed(() => audit.value?.exclusions?.items?.length || 0)
+const sections = computed(() => {
+    const items = [
+        ['summary', 'Сводка'],
+        ['issues', issueCount.value ? `Ошибки · ${issueCount.value}` : 'Ошибки'],
+        ['links', `Ссылки · ${audit.value?.results.length || 0}`],
+        ['pages', `Страницы · ${audit.value?.pageResults.length || 0}`],
+        ['files', 'Файлы']
+    ]
+    if (excludedCount.value) items.push(['exclusions', `Исключения · ${excludedCount.value}`])
+    return items
+})
+watch(sections, value => { if (!value.some(([key]) => key === section.value)) section.value = 'summary' })
+watch(section, () => { focusId.value = '' })
 let alive = true, revision = 0, controller, control
 const stopAudit = () => { controller?.abort(); state.value = 'stopping' }
 const togglePause = () => {
@@ -47,11 +71,12 @@ const runAudit = async () => {
     normalizeLimits()
     const auditMode = mode.value
     state.value = 'scanning'; message.value = ''; notice.value = ''; audit.value = null; report.value = null
+    section.value = 'summary'; focusId.value = ''
     progress.value = { current: 0, total: 0, started: 0, crawl: { started: 0 } }
     try {
         const tab = props.tab?.id ? await extensionApi.tabs.get(props.tab.id) : (await extensionApi.tabs.query({ active: true, lastFocusedWindow: true }))[0]
         if (!tab?.id || !/^https?:\/\//.test(tab.url || '')) throw new Error('Откройте проверяемый сайт')
-        const data = await sendSeoToTab(tab.id, 'seo:dom', { internalLinkLimit: 0 })
+        const data = await withActiveTab(tab.id, () => sendSeoToTab(tab.id, 'seo:dom', { includeAuditLinks: true }))
         if (!alive || current !== revision) return
         report.value = data
         if (!signal.aborted) state.value = 'checking'
@@ -115,12 +140,26 @@ const runAudit = async () => {
         </div>
         <template v-if="audit && report">
             <p v-if="notice" role="status" class="ui-panel text-xs text-ui-warning">{{ notice }}</p>
-            <SeoAuditSummary :report="report" :audit="audit" :checks="checks" :busy="busy" />
-            <SeoAuditResults :key="revision" :results="audit.results" :mode="audit.mode" />
-            <SeoAuditExclusions :key="revision" :exclusions="audit.exclusions" />
-            <SeoAuditPageIssues :key="revision" :results="audit.pageResults" />
-            <SeoAuditChecks :checks="checks" />
-            <SeoAuditFiles :report="report" :audit="audit" />
+            <Tabs v-model="section" :items="sections" label="Разделы SEO-аудита" wrap />
+            <template v-if="section === 'summary'">
+                <SeoAuditSummary :report="report" :audit="audit" :checks="checks" :busy="busy" />
+            </template>
+            <template v-else-if="section === 'issues'">
+                <SeoAuditFocus v-if="focusIssue" :issue="focusIssue" :audit="audit" @back="closeIssue" />
+                <SeoAuditIssues v-else :issues="issues" @select="openIssue" />
+            </template>
+            <template v-else-if="section === 'links'">
+                <SeoAuditLinks :key="revision" :results="audit.results" :mode="audit.mode" :page-url="report.url" />
+            </template>
+            <template v-else-if="section === 'pages'">
+                <SeoAuditPageIssues :key="revision" :results="audit.pageResults" />
+            </template>
+            <template v-else-if="section === 'files'">
+                <SeoAuditFiles :report="report" :audit="audit" />
+            </template>
+            <template v-else-if="section === 'exclusions'">
+                <SeoAuditExclusions :key="revision" :exclusions="audit.exclusions" />
+            </template>
         </template>
         <p v-else-if="!busy" class="text-xs text-ui-muted">Выберите режим проверки и запустите аудит. Результат покажет ошибки, рекомендации и страницы, на которых найдена каждая ссылка.</p>
     </section>

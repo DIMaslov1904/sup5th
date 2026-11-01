@@ -13,6 +13,28 @@ export const sendSeoToTab = createSeoMessenger({
     sendMessage: (...args) => extensionApi.tabs.sendMessage(...args),
     inject: tabId => injectExtensionScript(tabId, seoScript)
 })
+
+// A frozen (background) tab never answers tabs.sendMessage or scripting.executeScript,
+// so wake it by activating the tab for the duration of the first scan.
+export const withActiveTab = async (tabId, action) => {
+    let previous = null
+    let needsWake = false
+    try {
+        ;[previous] = await extensionApi.tabs.query({ active: true, currentWindow: true })
+        const tab = await extensionApi.tabs.get(tabId)
+        needsWake = tab?.frozen === true || tab?.discarded === true
+        if (needsWake) {
+            await extensionApi.tabs.update(tabId, { active: true })
+            await new Promise(resolve => setTimeout(resolve, 300))
+        }
+    } catch { /* the message timeout below reports the real failure */ }
+    try { return await action() }
+    finally {
+        if (needsWake && previous?.id && previous.id !== tabId) {
+            try { await extensionApi.tabs.update(previous.id, { active: true }) } catch { /* nothing to restore */ }
+        }
+    }
+}
 export const openSeoApp = (tabId, tool = 'seo', section = '') => extensionApi.tabs.create({
     url: seoAppUrl(extensionApi.runtime.getURL('src/options/index.html'), tabId, tool, section)
 })

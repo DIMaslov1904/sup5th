@@ -38,7 +38,7 @@ export const runSeoAuditRequests = async (data, fetchResource, {
 } = {}) => {
     mode = normalizeAuditMode(mode)
     const exclusions = createAuditIndexability(data.url, { enabled: excludeNonIndexable })
-    const pool = createAuditDiscovery(data, AUDIT_DISCOVERY_LIMIT, { mode, seedLinks: false, accept: exclusions.beforeRequest }), results = new Map(), pageResults = new Map()
+    const pool = createAuditDiscovery(data, AUDIT_DISCOVERY_LIMIT, { mode, seedLinks: true, accept: exclusions.beforeRequest }), results = new Map(), pageResults = new Map()
     const started = new Set(), completed = new Set(), crawlStarted = new Set(), robotsUrl = new URL('/robots.txt', data.url).href
     const origin = new URL(data.url).origin
     let finished = false, targetsPending = true, crawlPending = mode === 'external', sitemapPending = true, sitemapSeen = 0
