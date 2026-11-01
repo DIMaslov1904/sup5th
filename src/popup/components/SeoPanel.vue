@@ -67,6 +67,13 @@ const scan = async () => {
         if (alive) {
             report.value = data; checked.value = {}; visible.value = 100
             enrich(data)
+            // Async CWV update with accurate CLS
+            try {
+                const cwv = await sendSeoToTab(props.tab?.id, 'seo:cwv')
+                if (alive && cwv?.ok) {
+                    report.value = { ...report.value, cwv: cwv.data }
+                }
+            } catch { /* CWV update failed, keep initial values */ }
         }
     }
     catch (e) { if (alive) error.value = e.message }

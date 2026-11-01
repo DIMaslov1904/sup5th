@@ -5,6 +5,7 @@ import { loadSeoNetwork } from '../utils/seoNetwork.js'
 import { getSeoActions, setSeoAction } from './seoActions.js'
 import { captureHeadings, focusHeading } from './headingNavigation.js'
 import { collectPageWeight } from './pageWeight.js'
+import { collectCwv, collectCwvSync } from '../utils/cwv.js'
 import { AUDIT_DISCOVERY_LIMIT } from '../utils/seoAuditDiscovery.js'
 import { collectAuditTargets } from '../utils/seoAuditLinks.js'
 const documentId = [...crypto.getRandomValues(new Uint32Array(4))].join('-')
@@ -135,10 +136,27 @@ export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = f
         },
         wordCount: (document.body?.innerText || '').trim().split(/\s+/).filter(Boolean).length,
         htmlSize: document.documentElement.outerHTML.length,
-        pageWeight: collectPageWeight(document)
+        pageWeight: collectPageWeight(document),
+        cwv: collectCwvSync(document)
     }
 }
+
+// Async CWV update with accurate CLS via PerformanceObserver
+let cwvUpdatePromise = null
+const updateCwvAsync = async (report) => {
+    if (cwvUpdatePromise) return cwvUpdatePromise
+    cwvUpdatePromise = (async () => {
+        try {
+            const cwv = await collectCwv(document)
+            return { ...report, cwv }
+        } catch {
+            return report
+        }
+    })()
+    return cwvUpdatePromise
+}
 export const scanSeo = () => loadSeoNetwork(collectSeoReport(), (url, method, options) => fetchViaBackground(url, { method, ...options }))
+export { updateCwvAsync }
 
 /** Регистрирует обработчик сообщений 'seo:scan' */
 const registerSeoHandler = () => {
@@ -161,6 +179,18 @@ const registerSeoHandler = () => {
             try { sendResponse({ ok: true, data: collectSeoReport(message.payload || {}) }) }
             catch (error) { sendResponse({ ok: false, error: error.message }) }
             return false
+        }
+        if (message?.type === 'seo:cwv') {
+            // Async CWV update with accurate CLS
+            ;(async () => {
+                try {
+                    const cwv = await collectCwv(document)
+                    sendResponse({ ok: true, data: cwv })
+                } catch (error) {
+                    sendResponse({ ok: false, error: error.message })
+                }
+            })()
+            return true
         }
         if (message?.type !== 'seo:scan') return false
         scanSeo()

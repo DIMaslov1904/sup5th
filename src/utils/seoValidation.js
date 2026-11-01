@@ -1,7 +1,25 @@
 // Editorial heuristics, not search-engine limits. Snippets depend on width and query.
 export const META_LENGTH_RANGES = {
     title: { min: 30, max: 65, low: 20, high: 80 },
-    description: { min: 70, max: 160, low: 50, high: 200 }
+    description: { min: 70, max: 160, low: 50, high: 200 },
+    h1: { min: 5, max: 100 }
+}
+
+// Core Web Vitals thresholds (Google recommendations)
+export const CWV_THRESHOLDS = {
+    lcp: { good: 2500, poor: 4000 },       // milliseconds
+    cls: { good: 0.05, poor: 0.25 },        // cumulative layout shift
+    inp: { good: 200, poor: 500 },          // milliseconds
+    fcp: { good: 1800, poor: 3000 }         // milliseconds
+}
+
+const cwvRatingLabel = (rating) => {
+    switch (rating) {
+        case 'good': return 'Хорошо'
+        case 'needs-fix': return 'Требует улучшения'
+        case 'poor': return 'Плохо'
+        default: return 'Не измерено'
+    }
 }
 export const evaluateMetaLength = (value, field) => {
     const length = [...String(value || '').trim()].length
