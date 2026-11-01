@@ -24,6 +24,12 @@ export const randomBytes = (length) => crypto.getRandomValues(new Uint8Array(len
 export const importAesKey = (rawKey, usages = ['encrypt', 'decrypt']) =>
     crypto.subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, usages)
 
+/** KEK из PIN-кода: PBKDF2-SHA256 с высокой стоимостью, PIN не хранится. */
+export const derivePinKey = async (pin, salt, iterations = 600000) => {
+    const material = await crypto.subtle.importKey('raw', encoder.encode(pin), 'PBKDF2', false, ['deriveKey'])
+    return crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
+}
+
 export const sealBytes = async (plaintext, key) => {
     const iv = randomBytes(12)
     const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext)

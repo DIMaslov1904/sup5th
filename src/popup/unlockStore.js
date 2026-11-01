@@ -7,7 +7,8 @@ import { runBiometricPage, BIOMETRIC_ACTION_HANDLED } from '../utils/biometricPa
 export { BIOMETRIC_ACTION_HANDLED } from '../utils/biometricPage.js'
 import {
     getCredentialSecurityStatus,
-    unlockCredentialVaultWithHello
+    unlockCredentialVaultWithHello,
+    unlockCredentialVaultWithPin
 } from './data/projectData.js'
 import { unlockWithBiometricFlow } from '../utils/biometricHello.js'
 
@@ -54,6 +55,10 @@ export const cancelUnlock = () => {
 export const ensureUnlocked = async (action, options) => {
     const status = await getCredentialSecurityStatus(false, false)
     if (!status.enabled || status.unlocked) return action()
+    if (status.mode === 'pin') {
+        await showUnlock('pin', options)
+        return action()
+    }
     if (isFirefox) {
         const result = await runBiometricPage('unlock', options)
         return options?.intent ? result : action()
@@ -66,6 +71,22 @@ export const copyUnlockedText = async (action, options) => {
     const value = await ensureUnlocked(action, options)
     if (value === BIOMETRIC_ACTION_HANDLED) return value
     await navigator.clipboard.writeText(String(value ?? ''))
+}
+
+// Разблокировка PIN-кодом: авторазблокировка при 6 символах — из UnlockModal.
+export const runPinUnlock = async pin => {
+    if (unlockState.loading || !settle || typeof pin !== 'string' || pin.length !== 6) return
+    const request = settle
+    unlockState.loading = true
+    unlockState.error = ''
+    try {
+        await unlockCredentialVaultWithPin(pin, { refreshAfterUnlock: request.refreshAfterUnlock })
+        finishUnlock(request)
+    } catch (error) {
+        if (isActive(request)) unlockState.error = error.message
+    } finally {
+        if (isActive(request)) unlockState.loading = false
+    }
 }
 
 // Разблокировка через провайдер passkey: PRF или локальный режим совместимости.

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { saveApiSettings, refreshAll, authorizeProjectsApi, authorizeAccessApi } from '../data/projectData.js'
+import { saveApiSettings, refreshAll, authorizeProjectsApi, authorizeAccessApi, enablePinProtection } from '../data/projectData.js'
 import { getBiometricCapabilities } from '../../utils/biometricHello.js'
 import { enableCredentialProtection } from '../biometricActions.js'
 import { securityStatus, refreshSecurityStatus, refreshJob } from '../backgroundState.js'
@@ -17,6 +17,7 @@ import { needsApiAuthorization } from '../../utils/apiAuthorizationState.js'
 const props = defineProps({ step: { type: String, required: true }, settings: { type: Object, required: true } })
 const emit = defineEmits(['completed'])
 const projectsUrl = ref(props.settings.projectsUrl || ''), accessUrl = ref(props.settings.accessUrl || '')
+const pin = ref('')
 const busy = ref(false), error = ref(''), apiAuthorizationRequired = ref(false), capabilities = ref(null)
 const stepOrder = ['security', 'projects', 'accesses']
 const stepNumber = computed(() => stepOrder.indexOf(props.step) + 1)
@@ -53,6 +54,11 @@ const enable = () => run(async () => {
     await refreshSecurityStatus()
     await advance('projects')
 })
+const enablePin = () => run(async () => {
+    await enablePinProtection(pin.value)
+    await refreshSecurityStatus()
+    await advance('projects')
+})
 const authorize = () => run(() => props.step === 'projects' ? authorizeProjectsApi() : authorizeAccessApi())
 onMounted(async () => {
     try { capabilities.value = await getBiometricCapabilities() }
@@ -66,15 +72,18 @@ onMounted(async () => {
         </button>
         <header class="mb-6"><p class="text-xs font-semibold tracking-wider text-ui-accent">SUP 5th · Настройка</p><h1 class="mt-2 text-xl font-semibold">{{ stepTitle }}</h1><p class="mt-2 text-xs text-ui-muted">Шаг {{ stepNumber }} из 3</p></header>
         <ol aria-label="Этапы настройки" class="mb-6 grid grid-cols-3 gap-2 text-xs">
-            <li v-for="(label,index) in ['Биометрия','Проекты','Доступы']" :key="label" :aria-current="stepNumber === index + 1 ? 'step' : undefined" class="border-t-2 pt-2" :class="stepNumber >= index + 1 ? 'border-ui-accent text-ui-text' : 'border-ui-border text-ui-muted'">{{ label }}</li>
+            <li v-for="(label,index) in ['Безопасность','Проекты','Доступы']" :key="label" :aria-current="stepNumber === index + 1 ? 'step' : undefined" class="border-t-2 pt-2" :class="stepNumber >= index + 1 ? 'border-ui-accent text-ui-text' : 'border-ui-border text-ui-muted'">{{ label }}</li>
         </ol>
-        <Card v-if="step === 'security'" title="Биометрия устройства">
+        <Card v-if="step === 'security'" title="Безопасность доступов">
             <div class="grid gap-4">
-                <p class="text-xs text-ui-muted">Биометрия защищает сохранённые пароли. Настройку можно пропустить и вернуться к ней позже в разделе «Защита».</p>
-                <Message v-if="securityStatus.enabled" type="success">Биометрическая защита уже включена.</Message>
+                <p class="text-xs text-ui-muted">Защитите сохранённые пароли биометрией устройства или PIN-кодом. Настройку можно пропустить и вернуться к ней позже в разделе «Защита».</p>
+                <Message v-if="securityStatus.enabled" type="success">Защита уже включена.</Message>
                 <template v-else>
-                    <Button :loading="busy" :disabled="!capabilities?.available" @click="enable">Настроить биометрию</Button>
-                    <p v-if="capabilities && !capabilities.available" class="text-xs text-ui-muted">WebAuthn сейчас недоступен. Этот шаг можно пропустить.</p>
+                    <Button v-if="capabilities?.available" :loading="busy" @click="enable">Настроить биометрию</Button>
+                    <form class="grid gap-2" @submit.prevent="enablePin">
+                        <Input v-model="pin" type="password" maxlength="6" autocomplete="off" spellcheck="false" placeholder="PIN-код · 6 символов" :disabled="busy" />
+                        <Button type="submit" variant="secondary" :loading="busy" :disabled="pin.length !== 6">Включить PIN-код</Button>
+                    </form>
                     <BiometricProviderHelp />
                 </template>
                 <Button variant="ghost" :disabled="busy" @click="run(() => advance('projects'))">{{ securityStatus.enabled ? 'Далее' : 'Пропустить' }}</Button>

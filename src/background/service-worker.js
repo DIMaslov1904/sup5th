@@ -8,7 +8,7 @@ import { downloadSeoImage } from './imageDownload.js'
 import { syncSiteIcons, getSiteIconStatus, cancelSiteIcons, clearSiteIcons } from '../icons/iconService.js'
 import { registerPopupSession } from './popupSession.js'
 import { storageReady, SCHEMA_VERSION, SERVICES_KEY, ERRORS_KEY, storageGet, storageSet, getStoredData, mutateStorage, invalidateOperations } from './storageRepository.js'
-import { getSecurityStatus, enableHelloProtection, unlockWithHelloKey, lockCredentialVault, disableCredentialProtection, registerVaultIdleLock } from './credentialVault.js'
+import { getSecurityStatus, enableHelloProtection, unlockWithHelloKey, enablePinProtection, unlockWithPin, lockCredentialVault, disableCredentialProtection, registerVaultIdleLock } from './credentialVault.js'
 import { readApiSettings, saveApiSettings } from './apiSettings.js'
 import { refreshAll, getRefreshJob, saveRefreshJob, cancelRefresh, scheduleRefresh, PROJECTS_ALARM } from './apiRefresh.js'
 import { toPublicData } from './catalogueData.js'
@@ -73,9 +73,10 @@ const handlers = {
     'data:clear': clearAllData, 'auth:start': startAdminAuth, 'auth:context': authContext, 'auth:consume': consumePendingAdminAuth,
     'project:details': getProjectDetails, 'project:accessField': getProjectAccessField, 'project:copyAccess': copyProjectAccessText,
     'security:status': getSecurityStatus, 'security:enableHello': enableHelloProtection,
+    'security:enablePin': enablePinProtection, 'security:unlockPin': unlockWithPin,
     'security:unlockHelloKey': async payload => {
         const status = await unlockWithHelloKey(payload)
-        if (payload.refreshAfterUnlock !== false) loadData({ onlyIfDue: true }).catch(() => {})
+        if (payload.refreshAfterUnlock !== false) loadData({ onlyIfDue: true }).catch(() => { })
         return status
     },
     'security:lock': lockCredentialVault, 'security:disable': disableCredentialProtection

@@ -31,7 +31,9 @@ export interface PopupResults {
     'project:accessField': string
     'security:status': unknown
     'security:enableHello': unknown
+    'security:enablePin': unknown
     'security:unlockHelloKey': unknown
+    'security:unlockPin': unknown
     'security:lock': unknown
     'security:disable': unknown
 }

@@ -17,7 +17,7 @@ const callBackground = (type, payload = {}) => new Promise((resolve, reject) => 
         reject(new Error('Фоновый процесс расширения не ответил. Перезагрузите расширение в настройках браузера.'))
     }, BACKGROUND_TIMEOUT)
 
-    extensionApi.runtime.sendMessage({ type, payload }).then(/** @param {import('../../types/extension.js').RuntimeResponse<import('../../types/messages.js').PopupResults[T]>} response */ (response) => {
+    extensionApi.runtime.sendMessage({ type, payload }).then(/** @param {import('../../types/extension.js').RuntimeResponse<import('../../types/messages.js').PopupResults[T]>} response */(response) => {
         if (settled) return
         settled = true
         clearTimeout(timeoutId)
@@ -94,8 +94,14 @@ export const getCredentialSecurityStatus = () => callBackground('security:status
 /** @param {Awaited<ReturnType<typeof import('../../utils/biometricHello.js').enableBiometricProtectionFlow>>} payload */
 export const enableHelloProtection = (payload) => callBackground('security:enableHello', payload)
 
+/** @param {string} pin */
+export const enablePinProtection = (pin) => callBackground('security:enablePin', { pin })
+
 /** @param {string} key @param {{ refreshAfterUnlock?: boolean }} [options] */
 export const unlockCredentialVaultWithHello = (key, { refreshAfterUnlock = true } = {}) => callBackground('security:unlockHelloKey', { key, refreshAfterUnlock })
+
+/** @param {string} pin @param {{ refreshAfterUnlock?: boolean }} [options] */
+export const unlockCredentialVaultWithPin = (pin, { refreshAfterUnlock = true } = {}) => callBackground('security:unlockPin', { pin, refreshAfterUnlock })
 
 export const lockCredentialVault = () => callBackground('security:lock')
 

@@ -1,7 +1,7 @@
 <script setup>
 import { extensionApi } from '../../platform/extensionApi.js'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { loadApiSettings, loadProjectData, refreshAll, loadErrorLog, clearErrorLog, clearAllData, authorizeProjectsApi, authorizeAccessApi, lockCredentialVault, disableCredentialProtection } from '../data/projectData.js'
+import { loadApiSettings, loadProjectData, refreshAll, loadErrorLog, clearErrorLog, clearAllData, authorizeProjectsApi, authorizeAccessApi, lockCredentialVault, disableCredentialProtection, enablePinProtection } from '../data/projectData.js'
 import { getBiometricCapabilities } from '../../utils/biometricHello.js'
 import { enableCredentialProtection, unlockCredentialProtection } from '../biometricActions.js'
 import { securityStatus, refreshJob, refreshSecurityStatus, activeSupportTicket } from '../backgroundState.js'
@@ -28,6 +28,7 @@ import { needsApiAuthorization } from '../../utils/apiAuthorizationState.js'
 const section = ref('connection'), settings = ref({ projectsUrl: '', accessUrl: '' }), data = ref(null), errors = ref([])
 const savedSettings = ref({ projectsUrl: '', accessUrl: '' })
 const loaded = ref(false), busy = ref(''), message = ref({ type: 'info', text: '' }), caps = ref({ available: false })
+const pin = ref('')
 const sections = [['connection','Подключение'],['data','Загрузка'],['security','Защита'],['maintenance','Обслуживание'],['updates','Обновления']]
 const snapshot = computed(() => data.value?.lastSuccessfulData)
 const needsAuthorization = type => {
@@ -83,6 +84,11 @@ const authorize = type => run('authorize', async () => {
     return type === 'projects' ? authorizeProjectsApi() : authorizeAccessApi()
 })
 const enable = () => run('security', async () => { await enableCredentialProtection(); await refreshSecurityStatus() }, 'Биометрическая защита включена')
+const enablePin = () => run('security', async () => {
+    await enablePinProtection(pin.value)
+    await refreshSecurityStatus()
+    pin.value = ''
+}, 'PIN-защита включена')
 const unlock = () => run('security', async () => {
     await unlockCredentialProtection(securityStatus.value); await refreshSecurityStatus()
 }, 'Хранилище разблокировано')
@@ -102,7 +108,7 @@ const reset = () => {
         <ExtensionUpdates v-if="section === 'updates'" />
         <Preloader v-else-if="!loaded" label="Загрузка настроек…" />
         <template v-else>
-            <template v-if="section === 'connection'">                
+            <template v-if="section === 'connection'">
                 <Card v-for="[type,title,field] in [['projects','Проекты','projectsUrl'],['accesses','Личные доступы и сервисы','accessUrl']]" :key="type" :title="title">
                     <Input :model-value="settings[field]" :aria-label="`URL API: ${title}`" :aria-invalid="Boolean(autosave.states[field].error)" :aria-describedby="autosave.states[field].status !== 'idle' ? `api-${field}-status` : undefined" placeholder="URL веб-приложения Apps Script" :disabled="Boolean(busy)" @update:model-value="value => autosave.update(field, value)" @blur="autosave.flush(field)" @keydown.enter.prevent="autosave.flush(field)" />
                     <p v-if="autosave.states[field].status !== 'idle'" :id="`api-${field}-status`" role="status" aria-live="polite" class="mt-2 text-xs" :class="autosave.states[field].error ? 'text-ui-danger' : 'text-ui-muted'">{{ autosave.states[field].error || saveLabels[autosave.states[field].status] }}</p>
@@ -139,11 +145,18 @@ const reset = () => {
             <Card v-if="section === 'security'" title="Защита паролей">
                 <div class="grid gap-3">
                     <p class="text-xs text-ui-muted">{{ securityStatus.enabled ? (securityStatus.unlocked ? 'Хранилище разблокировано.' : 'Хранилище заблокировано.') : 'Защита выключена. Пароли хранятся локально без шифрования.' }}</p>
+                    <p v-if="securityStatus.mode === 'pin'" class="text-xs text-ui-muted">Способ защиты: PIN-код.</p>
                     <p v-if="securityStatus.keySource === 'credential-id'" class="text-xs text-ui-muted">Ключ доступа: {{ securityStatus.passkeyName }} · локальный режим совместимости.</p>
-                    <Button v-if="!securityStatus.enabled" :disabled="Boolean(busy) || !caps.available" variant="secondary" @click="enable">Включить биометрию устройства</Button>
+                    <template v-if="!securityStatus.enabled">
+                        <Button :disabled="Boolean(busy) || !caps.available" variant="secondary" @click="enable">Включить биометрию устройства</Button>
+                        <form class="grid gap-2" @submit.prevent="enablePin">
+                            <Input v-model="pin" type="password" maxlength="6" autocomplete="off" spellcheck="false" placeholder="PIN-код · 6 символов" :disabled="busy === 'security'" />
+                            <Button type="submit" variant="secondary" :disabled="busy === 'security' || pin.length !== 6">Включить PIN-код</Button>
+                        </form>
+                    </template>
                     <template v-else><Button v-if="!securityStatus.unlocked" :disabled="Boolean(busy)" @click="unlock">Разблокировать</Button><template v-else><Button variant="secondary" :disabled="Boolean(busy)" @click="lock">Заблокировать</Button><Button variant="danger" :disabled="Boolean(busy)" @click="disable">Отключить защиту</Button></template></template>
-                    <p v-if="!caps.available" class="text-xs text-ui-warning">WebAuthn недоступен в этом браузере.</p>
-                    <BiometricProviderHelp v-if="!securityStatus.enabled" />
+                    <p v-if="!caps.available" class="text-xs text-ui-warning">WebAuthn недоступен в этом браузере — доступен PIN-код.</p>
+                    <BiometricProviderHelp v-if="!securityStatus.enabled && caps.available" />
                 </div>
             </Card>
             <template v-if="section === 'maintenance'">

@@ -1,6 +1,6 @@
 import { extensionApi } from '../platform/extensionApi.js'
 import { trustedLocal } from '../platform/trustedStorage.js'
-import { base64ToBytes, importAesKey, openJson, sealJson } from '../utils/credentialCrypto.js'
+import { base64ToBytes, bytesToBase64, derivePinKey, importAesKey, openBytes, openJson, randomBytes, sealBytes, sealJson } from '../utils/credentialCrypto.js'
 import { publicAccess, publicService, accessSecret } from './credentialRecords.js'
 import { DATA_KEY, SERVICES_KEY, SECURITY_KEY, VAULT_KEY, UNLOCKED_KEY, AUTH_SESSIONS_KEY, getStoredData, storageGet, storageSetMany, sessionGet, sessionSet, sessionRemove, mutateStorage } from './storageRepository.js'
 
@@ -12,7 +12,7 @@ export const getUnlockedKey = async ({ required = true } = {}) => {
     if (!(await getSecurityConfig())?.enabled) return null
     const session = await sessionGet(UNLOCKED_KEY)
     if (session?.key) return importAesKey(base64ToBytes(session.key))
-    if (required) throw new Error('Хранилище заблокировано. Подтвердите вход биометрией устройства.')
+    if (required) throw new Error('Хранилище заблокировано. Разблокируйте его для продолжения.')
     return null
 }
 export const readCredentialVault = async key => {
@@ -23,6 +23,19 @@ export const readCredentialVault = async key => {
 export const getSecurityStatus = async () => {
     const config = await getSecurityConfig()
     return config?.enabled ? { ...config, unlocked: Boolean((await sessionGet(UNLOCKED_KEY))?.key) } : { enabled: false, mode: 'off', unlocked: true }
+}
+const enableProtection = async ({ key, identity, wrappedKey }) => {
+    const data = await getStoredData(), services = await storageGet(SERVICES_KEY, [])
+    const vaultKey = await importAesKey(base64ToBytes(key))
+    const vault = { accesses: data.lastSuccessfulData.accesses.map(accessSecret), services: services.map(({ id, password }) => ({ id, password })) }
+    const config = { enabled: true, ...identity, wrappedKey, createdAt: Date.now() }
+    await sessionRemove(AUTH_SESSIONS_KEY)
+    await storageSetMany({
+        [DATA_KEY]: { ...data, lastSuccessfulData: { ...data.lastSuccessfulData, accesses: data.lastSuccessfulData.accesses.map(publicAccess) } },
+        [SERVICES_KEY]: services.map(publicService), [SECURITY_KEY]: config, [VAULT_KEY]: await sealJson(vault, vaultKey)
+    })
+    await sessionSet(UNLOCKED_KEY, { key })
+    return getSecurityStatus()
 }
 export const enableHelloProtection = payload => mutateStorage(async () => {
     if ((await getSecurityConfig())?.enabled) throw new Error('Защита уже включена')
@@ -36,30 +49,40 @@ export const enableHelloProtection = payload => mutateStorage(async () => {
             : (!credentialId || base64ToBytes(prfSalt || '').length !== 32))) throw new Error('Некорректные параметры биометрии')
     if (transports !== undefined && (!Array.isArray(transports) || transports.length > 8 ||
         transports.some(value => typeof value !== 'string' || value.length > 32))) throw new Error('Некорректные транспорты passkey')
-    const data = await getStoredData(), services = await storageGet(SERVICES_KEY, [])
-    const key = await importAesKey(base64ToBytes(rawVaultKey))
-    const vault = { accesses: data.lastSuccessfulData.accesses.map(accessSecret), services: services.map(({ id, password }) => ({ id, password })) }
     const identity = compatible
-        ? { keySource, credentialIdHash, keySalt, passkeyName }
-        : { credentialId, prfSalt, ...(transports !== undefined ? { transports } : {}) }
-    const config = { enabled: true, mode: 'hello', ...identity, wrappedKey, createdAt: Date.now() }
-    await sessionRemove(AUTH_SESSIONS_KEY)
-    await storageSetMany({
-        [DATA_KEY]: { ...data, lastSuccessfulData: { ...data.lastSuccessfulData, accesses: data.lastSuccessfulData.accesses.map(publicAccess) } },
-        [SERVICES_KEY]: services.map(publicService), [SECURITY_KEY]: config, [VAULT_KEY]: await sealJson(vault, key)
-    })
-    await sessionSet(UNLOCKED_KEY, { key: rawVaultKey })
-    return getSecurityStatus()
+        ? { mode: 'hello', keySource, credentialIdHash, keySalt, passkeyName }
+        : { mode: 'hello', credentialId, prfSalt, ...(transports !== undefined ? { transports } : {}) }
+    return enableProtection({ key: rawVaultKey, identity, wrappedKey })
 })
-export const unlockWithHelloKey = async ({ key }) => {
+export const enablePinProtection = ({ pin }) => mutateStorage(async () => {
+    if ((await getSecurityConfig())?.enabled) throw new Error('Защита уже включена')
+    if (typeof pin !== 'string' || pin.length !== 6) throw new Error('PIN-код должен состоять из 6 символов')
+    const pinSalt = randomBytes(16), rawVaultKey = randomBytes(32)
+    const kek = await derivePinKey(pin, pinSalt)
+    const wrappedKey = await sealBytes(rawVaultKey, kek)
+    return enableProtection({ key: bytesToBase64(rawVaultKey), identity: { mode: 'pin', keySource: 'pin', pinSalt: bytesToBase64(pinSalt) }, wrappedKey })
+})
+const unlockWithKey = async key => {
     const expected = revision
-    if (!(await getSecurityConfig())?.enabled || typeof key !== 'string' || base64ToBytes(key).length !== 32) throw new Error('Биометрия не настроена или ключ повреждён')
     await readCredentialVault(await importAesKey(base64ToBytes(key)))
     return mutateStorage(async () => {
         assertVaultRevision(expected)
         await sessionSet(UNLOCKED_KEY, { key })
         return getSecurityStatus()
     })
+}
+export const unlockWithHelloKey = async ({ key }) => {
+    if (!(await getSecurityConfig())?.enabled || typeof key !== 'string' || base64ToBytes(key).length !== 32) throw new Error('Биометрия не настроена или ключ повреждён')
+    return unlockWithKey(key)
+}
+export const unlockWithPin = async ({ pin }) => {
+    const config = await getSecurityConfig()
+    if (!config?.enabled || config.mode !== 'pin' || typeof pin !== 'string') throw new Error('PIN-защита не настроена')
+    const kek = await derivePinKey(pin, base64ToBytes(config.pinSalt))
+    let rawKey
+    try { rawKey = await openBytes(config.wrappedKey, kek) }
+    catch { throw new Error('Неверный PIN-код') }
+    return unlockWithKey(bytesToBase64(rawKey))
 }
 export const lockCredentialVault = async () => {
     revision++ // Invalidate operations before waiting for the storage queue.
