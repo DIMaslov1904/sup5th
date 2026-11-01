@@ -166,6 +166,10 @@ export const buildAuditChecks = (data, audit) => {
     const sitemap = audit.sitemap
     list.push(check('sitemap', 'Обработка обнаруженных sitemap', sitemap.state === 'missing' ? 'warning' : sitemap.state === 'invalid' ? 'fail' : sitemap.state === 'unknown' || !sitemap.complete ? 'unknown' : 'pass', sitemap.state === 'missing' ? 'Sitemap не найден; файл не обязателен для каждого сайта' : `Прочитано XML-файлов: ${sitemap.files.length}; ошибок: ${sitemap.errors.length}`))
     list.push(check('sitemap-current', 'Текущий URL в обработанных sitemap', sitemap.containsCurrent ? 'pass' : sitemap.state === 'missing' ? 'na' : !sitemap.complete ? 'unknown' : 'warning', sitemap.containsCurrent ? 'URL найден' : sitemap.complete ? 'URL не найден; проверьте необходимость его включения' : 'Полная проверка не выполнена'))
+    const llmTxt = data.llmTxt
+    list.push(check('llm-txt', 'Файл llm.txt', !llmTxt || llmTxt.pending ? 'unknown' : llmTxt.exists ? 'pass' : 'warning', !llmTxt || llmTxt.pending
+        ? 'Файл ещё не проверен'
+        : llmTxt.exists ? `Найден в корне сайта${llmTxt.size ? ` · ${llmTxt.size} симв.` : ''}; полезен для LLM-краулеров` : 'Не найден в корне сайта; не обязателен, но помогает LLM-краулерам понять сайт'))
     return list
 }
 export const summarizeAuditChecks = checks => Object.fromEntries(['pass', 'fail', 'warning', 'unknown', 'na'].map(status => [status, checks.filter(item => item.status === status).length]))

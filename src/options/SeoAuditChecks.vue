@@ -12,7 +12,7 @@ const definitions = [
     { label: 'Мета-теги', match: id => /^(?:title|description|duplicates-|canonical|charset|twitter)/.test(id) },
     { label: 'Контент и изображения', match: id => ['h1', 'images-alt', 'lang', 'viewport'].includes(id) },
     { label: 'Индексация', match: id => /^(?:index-|crawl-)/.test(id) },
-    { label: 'Sitemap', match: id => id.startsWith('sitemap') },
+    { label: 'Sitemap', match: id => id.startsWith('sitemap') || id === 'llm-txt' },
     { label: 'Core Web Vitals', match: id => /^(?:cwv|cwv-)/.test(id) }
 ]
 const groups = computed(() => definitions.map(group => {

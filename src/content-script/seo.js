@@ -147,6 +147,10 @@ export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = f
             url: sitemapUrl,
             exists: false, status: 0, pending: true
         },
+        llmTxt: {
+            url: new URL('/llm.txt', location.href).href,
+            exists: false, status: 0, size: null, pending: true
+        },
         favicon: faviconLink,
         images: {
             total: document.images.length,

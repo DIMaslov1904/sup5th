@@ -47,6 +47,10 @@ export const loadSeoNetwork = async (initial, fetchResource, onUpdate = () => { 
             if (/^https?:$/.test(target.protocol) && target.href !== defaultSitemap) await sitemap(target.href)
         } catch { /* Ignore a malformed Sitemap declaration; robots rules remain available. */ }
     })()
-    await Promise.all([pageWork, robotsWork, sitemap(defaultSitemap)])
+    const llmWork = (async () => {
+        const url = new URL('/llm.txt', initial.url).href, info = await request(url)
+        publish({ llmTxt: { url, exists: info.ok, status: info.status, size: info.text ? info.text.length : null, pending: false } })
+    })()
+    await Promise.all([pageWork, robotsWork, sitemap(defaultSitemap), llmWork])
     return report
 }
