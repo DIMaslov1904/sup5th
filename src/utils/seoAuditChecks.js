@@ -69,6 +69,24 @@ const faviconCheck = data => {
     if (types.length) return check('favicon', 'Favicon', 'warning', `Найден только: ${types.join(', ')}; рекомендуется добавить ${favicon.ico ? 'apple-touch-icon' : 'favicon (.ico)'}`)
     return check('favicon', 'Favicon', 'warning', 'Favicon не найден в head; браузеры и поисковики используют /favicon.ico по умолчанию')
 }
+// X-Robots-Tag на каждом хопе цепочки редиректа (заголовки собираются в seoRequestTrace/createAuditFetch)
+const xRobotsChainCheck = (current, data) => {
+    const chain = [...(current?.response?.chain || current?.chain || data?.response?.chain || [])]
+    const hops = chain.filter(hop => hop?.url)
+    const redirected = hops.some(hop => hop.redirectUrl) || hops.length > 1
+    if (!redirected) return check('xrobots-chain', 'X-Robots-Tag на всех хопах редиректа', 'na', 'Редиректы не обнаружены; X-Robots-Tag финального ответа проверяется отдельной проверкой')
+    const detect = hop => {
+        const explicit = Array.isArray(hop.xRobotsTags) && hop.xRobotsTags.length ? hop.xRobotsTags : null
+        const header = hop.headers?.['x-robots-tag'] ?? ''
+        return explicit || (String(header) ? [header] : [])
+    }
+    const flagged = hops.filter(hop => detect(hop).some(value => /noindex/i.test(value)))
+    if (flagged.length) return check('xrobots-chain', 'X-Robots-Tag на всех хопах редиректа', 'warning', `noindex найден на ${flagged.length} из ${hops.length} хопов (${flagged.map(hop => `${hop.status} ${hop.url}`).join('; ')})`)
+    const confirmed = hops.filter(hop => detect(hop).length).length
+    return check('xrobots-chain', 'X-Robots-Tag на всех хопах редиректа', confirmed === hops.length ? 'pass' : 'unknown', confirmed === hops.length
+        ? `noindex не найден ни на одном из ${hops.length} хопов`
+        : `Заголовки подтверждены на ${confirmed} из ${hops.length} хопов; полная цепочка не отслежена`)
+}
 const sslCheck = data => {
     const ssl = data.ssl
     if (!ssl) return check('ssl', 'HTTPS и mixed content', 'unknown', 'Данные протокола не собраны')
@@ -102,6 +120,7 @@ export const buildAuditChecks = (data, audit) => {
         sslCheck(data),
         faviconCheck(data),
         check('index-meta', 'Общий meta robots: нет noindex', meta.robotsAllowed ? 'pass' : 'fail', meta.robots || 'Директива не указана'),
+        xRobotsChainCheck(current, data),
         check('index-xrobots', 'X-Robots-Tag: нет общего noindex', indexing.xRobotsAllowed === false ? 'fail' : headerKnown && indexing.xRobotsAllowed !== null ? 'pass' : 'unknown', indexing.xRobotsAllowed === null ? 'Объединённые заголовки: область действия noindex неизвестна' : http?.headers?.['x-robots-tag'] || (headerKnown ? 'Директива не указана' : 'HTML-ответ страницы не подтверждён')),
         ...meta.indexingAgents.map(item => check(`index-${item.agent}`, `DOM: нет noindex для ${item.agent}`, item.allowed ? 'pass' : 'fail', item.allowed ? 'В метатегах DOM запрета нет' : 'В метатегах DOM найден noindex')),
         ...serverIndexing.indexingAgents.map(item => check(`index-server-${item.agent}`, `HTML / HTTP GET: нет noindex для ${item.agent}`, item.allowed === false ? 'fail' : item.allowed !== null && headerKnown && current?.metaState === 'complete' ? 'pass' : 'unknown', item.allowed === false ? 'В HTML или HTTP-ответе найден noindex' : item.allowed === null ? 'Границы X-Robots-Tag недоступны; действие для робота неизвестно' : headerKnown && current?.metaState === 'complete' ? 'В полученных директивах запрета нет' : 'Полный HTML-ответ не подтверждён')),

@@ -11,7 +11,7 @@ const definitions = [
     { label: 'Ответы сервера и ссылки', match: id => ['http', 'redirect', 'representation', 'ssl'].includes(id) || id.startsWith('links-') },
     { label: 'Мета-теги', match: id => /^(?:title|description|duplicates-|canonical|charset|twitter)/.test(id) },
     { label: 'Контент и изображения', match: id => ['h1', 'images-alt', 'lang', 'viewport', 'favicon'].includes(id) },
-    { label: 'Индексация', match: id => /^(?:index-|crawl-)/.test(id) },
+    { label: 'Индексация', match: id => /^(?:index-|crawl-)/.test(id) || id === 'xrobots-chain' },
     { label: 'Sitemap', match: id => id.startsWith('sitemap') || id === 'llm-txt' },
     { label: 'Core Web Vitals', match: id => /^(?:cwv|cwv-)/.test(id) }
 ]
