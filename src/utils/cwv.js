@@ -1,6 +1,8 @@
 // Core Web Vitals collection via the Performance API.
-// A report is a snapshot of the current navigation: no observer outlives the
-// scan, so repeated scans neither accumulate work nor miss buffered entries.
+// LCP, CLS, INP and long tasks are delivered only to PerformanceObserver, even
+// with `buffered: true`; getEntriesByType returns nothing for these types.
+// Observers live for the lifetime of the injected content script and keep
+// running totals, so repeated scans neither add listeners nor lose entries.
 
 // Google thresholds: good ≤ good, needs improvement ≤ poor, poor above.
 export const CWV_THRESHOLDS = {
@@ -25,29 +27,38 @@ const describeElement = element => {
     } catch { return null }
 }
 
-const collectLcp = () => {
-    const entries = performance.getEntriesByType('largest-contentful-paint')
-    const last = entries[entries.length - 1]
-    if (!last) return null
-    return { value: Math.round(last.startTime), rating: rating(last.startTime, CWV_THRESHOLDS.lcp), element: describeElement(last.element) }
+let observersStarted = false
+let lcpEntries = []
+let clsValue = 0
+let maxEventDuration = 0
+let maxTaskDuration = 0
+
+const observe = (type, onEntries) => {
+    try {
+        new PerformanceObserver(list => onEntries(list.getEntries())).observe({ type, buffered: true })
+    } catch { /* entry type is not supported by this browser */ }
 }
 
-// Layout shifts are read from the timeline; `hadRecentInput` excludes induced shifts.
-const collectCls = () => {
-    let cls = 0
-    for (const entry of performance.getEntriesByType('layout-shift')) if (!entry.hadRecentInput) cls += entry.value
-    return Math.round(cls * 1000) / 1000
+const startObservers = () => {
+    if (observersStarted || typeof PerformanceObserver === 'undefined') return
+    observersStarted = true
+    observe('largest-contentful-paint', entries => { lcpEntries.push(...entries) })
+    observe('layout-shift', entries => {
+        for (const entry of entries) if (!entry.hadRecentInput) clsValue += entry.value
+    })
+    observe('event', entries => {
+        for (const entry of entries) maxEventDuration = Math.max(maxEventDuration, entry.duration)
+    })
+    observe('longtask', entries => {
+        for (const entry of entries) maxTaskDuration = Math.max(maxTaskDuration, entry.duration)
+    })
 }
 
-const collectInp = () => {
-    let max = 0
-    for (const entry of performance.getEntriesByType('event')) max = Math.max(max, entry.duration)
-    if (max > 0) return { value: Math.round(max), rating: rating(max, CWV_THRESHOLDS.inp) }
-    // INP entries are not always exposed; the longest task is the closest estimate.
-    for (const entry of performance.getEntriesByType('longtask')) max = Math.max(max, entry.duration)
-    return max > 0
-        ? { value: Math.round(max), rating: rating(max, CWV_THRESHOLDS.inp), note: 'Approximated from longtask entries (INP not directly available)' }
-        : null
+// Buffered observer callbacks arrive on a later task, so the first scan waits
+// briefly before reading the collected totals.
+export const waitForCwv = () => {
+    startObservers()
+    return new Promise(resolve => setTimeout(resolve, 150))
 }
 
 const collectFcp = () => {
@@ -55,10 +66,20 @@ const collectFcp = () => {
     return entry ? { value: Math.round(entry.startTime), rating: rating(entry.startTime, CWV_THRESHOLDS.fcp) } : null
 }
 
+export const collectCwv = () => {
+    startObservers()
+    const last = lcpEntries[lcpEntries.length - 1]
+    const lcp = last
+        ? { value: Math.round(last.startTime), rating: rating(last.startTime, CWV_THRESHOLDS.lcp), element: describeElement(last.element) }
+        : null
+    const cls = Math.round(clsValue * 1000) / 1000
+    const inp = maxEventDuration > 0
+        ? { value: Math.round(maxEventDuration), rating: rating(maxEventDuration, CWV_THRESHOLDS.inp) }
+        : maxTaskDuration > 0
+            ? { value: Math.round(maxTaskDuration), rating: rating(maxTaskDuration, CWV_THRESHOLDS.inp), note: 'Approximated from longtask entries (INP not directly available)' }
+            : null
+    return { lcp, cls, clsRating: rating(cls, CWV_THRESHOLDS.cls), inp, fcp: collectFcp() }
+}
+
 const RATING_STATUS = { good: 'pass', 'needs-fix': 'warning', poor: 'fail', unknown: 'unknown' }
 export const cwvRatingStatus = rating => RATING_STATUS[rating] || 'unknown'
-
-export const collectCwv = () => {
-    const cls = collectCls()
-    return { lcp: collectLcp(), cls, clsRating: rating(cls, CWV_THRESHOLDS.cls), inp: collectInp(), fcp: collectFcp() }
-}
