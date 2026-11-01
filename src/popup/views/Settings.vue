@@ -1,6 +1,6 @@
 <script setup>
 import { extensionApi } from '../../platform/extensionApi.js'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { loadApiSettings, loadProjectData, refreshAll, loadErrorLog, clearErrorLog, clearAllData, authorizeProjectsApi, authorizeAccessApi, lockCredentialVault, disableCredentialProtection, enablePinProtection } from '../data/projectData.js'
 import { getBiometricCapabilities } from '../../utils/biometricHello.js'
 import { enableCredentialProtection, unlockCredentialProtection } from '../biometricActions.js'
@@ -29,6 +29,9 @@ const section = ref('connection'), settings = ref({ projectsUrl: '', accessUrl: 
 const savedSettings = ref({ projectsUrl: '', accessUrl: '' })
 const loaded = ref(false), busy = ref(''), message = ref({ type: 'info', text: '' }), caps = ref({ available: false })
 const pin = ref('')
+const securityTab = ref('biometric')
+const securityTabs = computed(() => caps.value?.available ? [['biometric', 'Биометрия'], ['pin', 'PIN-код']] : [['pin', 'PIN-код']])
+watch(securityTabs, tabs => { if (!tabs.some(([value]) => value === securityTab.value)) securityTab.value = tabs[0][0] })
 const sections = [['connection','Подключение'],['data','Загрузка'],['security','Защита'],['maintenance','Обслуживание'],['updates','Обновления']]
 const snapshot = computed(() => data.value?.lastSuccessfulData)
 const needsAuthorization = type => {
@@ -148,15 +151,18 @@ const reset = () => {
                     <p v-if="securityStatus.mode === 'pin'" class="text-xs text-ui-muted">Способ защиты: PIN-код.</p>
                     <p v-if="securityStatus.keySource === 'credential-id'" class="text-xs text-ui-muted">Ключ доступа: {{ securityStatus.passkeyName }} · локальный режим совместимости.</p>
                     <template v-if="!securityStatus.enabled">
-                        <Button :disabled="Boolean(busy) || !caps.available" variant="secondary" @click="enable">Включить биометрию устройства</Button>
-                        <form class="grid gap-2" @submit.prevent="enablePin">
+                        <Tabs v-model="securityTab" :items="securityTabs" label="Способ защиты" wrap />
+                        <template v-if="securityTab === 'biometric'">
+                            <Button :disabled="Boolean(busy)" variant="secondary" @click="enable">Включить биометрию устройства</Button>
+                            <BiometricProviderHelp />
+                        </template>
+                        <form v-else class="grid gap-2" @submit.prevent="enablePin">
                             <Input v-model="pin" type="password" maxlength="6" autocomplete="off" spellcheck="false" placeholder="PIN-код · 6 символов" :disabled="busy === 'security'" />
                             <Button type="submit" variant="secondary" :disabled="busy === 'security' || pin.length !== 6">Включить PIN-код</Button>
                         </form>
                     </template>
                     <template v-else><Button v-if="!securityStatus.unlocked" :disabled="Boolean(busy)" @click="unlock">Разблокировать</Button><template v-else><Button variant="secondary" :disabled="Boolean(busy)" @click="lock">Заблокировать</Button><Button variant="danger" :disabled="Boolean(busy)" @click="disable">Отключить защиту</Button></template></template>
                     <p v-if="!caps.available" class="text-xs text-ui-warning">WebAuthn недоступен в этом браузере — доступен PIN-код.</p>
-                    <BiometricProviderHelp v-if="!securityStatus.enabled && caps.available" />
                 </div>
             </Card>
             <template v-if="section === 'maintenance'">

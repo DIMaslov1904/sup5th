@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { saveApiSettings, refreshAll, authorizeProjectsApi, authorizeAccessApi, enablePinProtection } from '../data/projectData.js'
 import { getBiometricCapabilities } from '../../utils/biometricHello.js'
 import { enableCredentialProtection } from '../biometricActions.js'
@@ -12,12 +12,16 @@ import Message from '../components/ui/Message.vue'
 import Notification from '../components/ui/Notification.vue'
 import BiometricProviderHelp from '../components/BiometricProviderHelp.vue'
 import CopyAccessApiCode from '../components/CopyAccessApiCode.vue'
+import Tabs from '../components/ui/Tabs.vue'
 import { needsApiAuthorization } from '../../utils/apiAuthorizationState.js'
 
 const props = defineProps({ step: { type: String, required: true }, settings: { type: Object, required: true } })
 const emit = defineEmits(['completed'])
 const projectsUrl = ref(props.settings.projectsUrl || ''), accessUrl = ref(props.settings.accessUrl || '')
 const pin = ref('')
+const securityTab = ref('biometric')
+const securityTabs = computed(() => capabilities.value?.available ? [['biometric', 'Биометрия'], ['pin', 'PIN-код']] : [['pin', 'PIN-код']])
+watch(securityTabs, tabs => { if (!tabs.some(([value]) => value === securityTab.value)) securityTab.value = tabs[0][0] })
 const busy = ref(false), error = ref(''), apiAuthorizationRequired = ref(false), capabilities = ref(null)
 const stepOrder = ['security', 'projects', 'accesses']
 const stepNumber = computed(() => stepOrder.indexOf(props.step) + 1)
@@ -76,15 +80,18 @@ onMounted(async () => {
         </ol>
         <Card v-if="step === 'security'" title="Безопасность доступов">
             <div class="grid gap-4">
-                <p class="text-xs text-ui-muted">Защитите сохранённые пароли биометрией устройства или PIN-кодом. Настройку можно пропустить и вернуться к ней позже в разделе «Защита».</p>
+                <p class="text-xs text-ui-muted">Защитите сохранённые пароли. Настройку можно пропустить и вернуться к ней позже в разделе «Защита».</p>
                 <Message v-if="securityStatus.enabled" type="success">Защита уже включена.</Message>
                 <template v-else>
-                    <Button v-if="capabilities?.available" :loading="busy" @click="enable">Настроить биометрию</Button>
-                    <form class="grid gap-2" @submit.prevent="enablePin">
+                    <Tabs v-model="securityTab" :items="securityTabs" label="Способ защиты" wrap />
+                    <template v-if="securityTab === 'biometric'">
+                        <Button :loading="busy" @click="enable">Настроить биометрию</Button>
+                        <BiometricProviderHelp />
+                    </template>
+                    <form v-else class="grid gap-2" @submit.prevent="enablePin">
                         <Input v-model="pin" type="password" maxlength="6" autocomplete="off" spellcheck="false" placeholder="PIN-код · 6 символов" :disabled="busy" />
                         <Button type="submit" variant="secondary" :loading="busy" :disabled="pin.length !== 6">Включить PIN-код</Button>
                     </form>
-                    <BiometricProviderHelp />
                 </template>
                 <Button variant="ghost" :disabled="busy" @click="run(() => advance('projects'))">{{ securityStatus.enabled ? 'Далее' : 'Пропустить' }}</Button>
             </div>
