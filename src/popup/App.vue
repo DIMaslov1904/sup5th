@@ -3,9 +3,11 @@ import { extensionApi } from '../platform/extensionApi.js'
 import { defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { POPUP_PORT_NAME } from '../utils/popupState.js'
 import { createSeoSessionClient } from './seoSessionClient.js'
+import { saveApiSettings } from './data/projectData.js'
 import Layout from './components/Layout.vue'
 import UnlockModal from './components/UnlockModal.vue'
 import TicketModal from './components/TicketModal.vue'
+import Intro from './views/Intro.vue'
 import Site from './views/Site.vue'
 import Projects from './views/Projects.vue'
 import Settings from './views/Settings.vue'
@@ -39,6 +41,10 @@ const openCatalogue = () => {
   view.value = 'projects'
 }
 watch(search, openCatalogue)
+
+const applySetupStep = step => saveApiSettings({ setupStep: step }).catch(reason => { setupError.value = reason.message })
+const startWithoutSetup = () => applySetupStep('done')
+const openSetup = () => applySetupStep('security')
 
 const saveUiState = () => {
   if (!stateReady.value || !statePort) return
@@ -95,7 +101,8 @@ onUnmounted(() => {
 })
 </script>
 <template>
-  <Welcome v-if="setupReady && setupStep !== 'done'" :step="setupStep" :settings="setupSettings" @completed="openCatalogue" />
+  <Intro v-if="setupReady && setupStep === 'intro'" @skip="startWithoutSetup" @setup="openSetup" />
+  <Welcome v-else-if="setupReady && setupStep !== 'done'" :step="setupStep" :settings="setupSettings" @completed="openCatalogue" />
   <Layout v-else-if="stateReady && setupReady" v-model="view" v-model:search="search" @search="openCatalogue" @ticket="ticketOpen = true">
     <Transition name="ui-view" mode="out-in"><div :key="view" class="flex flex-[1_0_auto] flex-col">
     <Site v-if="view === 'site'" />

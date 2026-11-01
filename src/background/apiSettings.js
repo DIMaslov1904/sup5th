@@ -15,7 +15,6 @@ export const saveApiSettings = patch => mutateStorage(async () => {
     }
     if (patch.setupStep !== undefined) {
         if (!SETUP_STEPS.includes(patch.setupStep)) throw new Error('Неизвестный шаг настройки')
-        if (patch.setupStep !== 'projects' && !next.projectsUrl) throw new Error('Сначала подключите API проектов')
         next.setupStep = patch.setupStep
     }
     await storageSet(SETTINGS_KEY, next)

@@ -18,7 +18,11 @@ const props = defineProps({ step: { type: String, required: true }, settings: { 
 const emit = defineEmits(['completed'])
 const projectsUrl = ref(props.settings.projectsUrl || ''), accessUrl = ref(props.settings.accessUrl || '')
 const busy = ref(false), error = ref(''), apiAuthorizationRequired = ref(false), capabilities = ref(null)
-const stepNumber = computed(() => ['projects', 'security', 'accesses'].indexOf(props.step) + 1)
+const stepOrder = ['security', 'projects', 'accesses']
+const stepNumber = computed(() => stepOrder.indexOf(props.step) + 1)
+const stepTitle = computed(() => ({ security: 'Добро пожаловать', projects: 'Подключите API проектов', accesses: 'Личные доступы и сервисы' })[props.step] || 'Настройка')
+const previousStep = computed(() => stepOrder[Math.max(0, stepOrder.indexOf(props.step) - 1)])
+const close = async () => run(async () => { await advance('done') })
 const run = async action => {
     if (busy.value) return
     busy.value = true; error.value = ''
@@ -42,12 +46,12 @@ const connect = scope => run(async () => {
         apiAuthorizationRequired.value = needsApiAuthorization(result, scope)
         if (result.refreshErrors?.length) throw new Error(result.refreshErrors.join('\n'))
     }
-    await advance(scope === 'projects' ? 'security' : 'done')
+    await advance(scope === 'projects' ? 'accesses' : 'done')
 })
 const enable = () => run(async () => {
     await enableCredentialProtection({ advanceSetup: true })
     await refreshSecurityStatus()
-    await advance('accesses')
+    await advance('projects')
 })
 const authorize = () => run(() => props.step === 'projects' ? authorizeProjectsApi() : authorizeAccessApi())
 onMounted(async () => {
@@ -56,20 +60,15 @@ onMounted(async () => {
 })
 </script>
 <template>
-    <main class="ui-background flex h-full flex-col overflow-y-auto px-6 py-7 text-ui-text">
-        <header class="mb-6"><p class="text-xs font-semibold tracking-wider text-ui-accent">SUP 5th · Настройка</p><h1 class="mt-2 text-xl font-semibold">{{ step === 'projects' ? 'Добро пожаловать' : step === 'security' ? 'Защитите доступы' : 'Личные доступы и сервисы' }}</h1><p class="mt-2 text-xs text-ui-muted">Шаг {{ stepNumber }} из 3</p></header>
+    <main class="ui-background relative flex h-full flex-col overflow-y-auto px-6 py-7 text-ui-text">
+        <button type="button" aria-label="Закрыть настройку" title="Закрыть настройку" class="ui-icon-button absolute top-2.5 right-2.5" @click="close">
+            <svg aria-hidden="true" viewBox="0 0 16 16" class="size-4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="m4 4 8 8M12 4l-8 8" /></svg>
+        </button>
+        <header class="mb-6"><p class="text-xs font-semibold tracking-wider text-ui-accent">SUP 5th · Настройка</p><h1 class="mt-2 text-xl font-semibold">{{ stepTitle }}</h1><p class="mt-2 text-xs text-ui-muted">Шаг {{ stepNumber }} из 3</p></header>
         <ol aria-label="Этапы настройки" class="mb-6 grid grid-cols-3 gap-2 text-xs">
-            <li v-for="(label,index) in ['Проекты','Биометрия','Доступы']" :key="label" :aria-current="stepNumber === index + 1 ? 'step' : undefined" class="border-t-2 pt-2" :class="stepNumber >= index + 1 ? 'border-ui-accent text-ui-text' : 'border-ui-border text-ui-muted'">{{ label }}</li>
+            <li v-for="(label,index) in ['Биометрия','Проекты','Доступы']" :key="label" :aria-current="stepNumber === index + 1 ? 'step' : undefined" class="border-t-2 pt-2" :class="stepNumber >= index + 1 ? 'border-ui-accent text-ui-text' : 'border-ui-border text-ui-muted'">{{ label }}</li>
         </ol>
-        <Card v-if="step === 'projects'" title="Подключите API проектов">
-            <p class="mb-4 text-xs text-ui-muted">Это обязательный шаг. Возьмите адрес API из таблицы «База знаний 5th». Мы проверим подключение и загрузим проекты.</p>
-            <form class="grid gap-3" @submit.prevent="connect('projects')">
-                <label for="setup-projects" class="text-xs text-ui-muted">API проектов</label>
-                <Input id="setup-projects" v-model="projectsUrl" type="url" required placeholder="https://script.google.com/macros/s/…/exec" :disabled="busy" />
-                <Button type="submit" :loading="busy" :disabled="refreshJob.running">Подключить проекты</Button>
-            </form>
-        </Card>
-        <Card v-else-if="step === 'security'" title="Биометрия устройства">
+        <Card v-if="step === 'security'" title="Биометрия устройства">
             <div class="grid gap-4">
                 <p class="text-xs text-ui-muted">Биометрия защищает сохранённые пароли. Настройку можно пропустить и вернуться к ней позже в разделе «Защита».</p>
                 <Message v-if="securityStatus.enabled" type="success">Биометрическая защита уже включена.</Message>
@@ -78,8 +77,16 @@ onMounted(async () => {
                     <p v-if="capabilities && !capabilities.available" class="text-xs text-ui-muted">WebAuthn сейчас недоступен. Этот шаг можно пропустить.</p>
                     <BiometricProviderHelp />
                 </template>
-                <Button variant="ghost" :disabled="busy" @click="run(() => advance('accesses'))">{{ securityStatus.enabled ? 'Далее' : 'Пропустить' }}</Button>
+                <Button variant="ghost" :disabled="busy" @click="run(() => advance('projects'))">{{ securityStatus.enabled ? 'Далее' : 'Пропустить' }}</Button>
             </div>
+        </Card>
+        <Card v-else-if="step === 'projects'" title="Подключите API проектов">
+            <p class="mb-4 text-xs text-ui-muted">Возьмите адрес API из таблицы «База знаний 5th». Мы проверим подключение и загрузим проекты.</p>
+            <form class="grid gap-3" @submit.prevent="connect('projects')">
+                <label for="setup-projects" class="text-xs text-ui-muted">API проектов</label>
+                <Input id="setup-projects" v-model="projectsUrl" type="url" required placeholder="https://script.google.com/macros/s/…/exec" :disabled="busy" />
+                <Button type="submit" :loading="busy" :disabled="refreshJob.running">Подключить проекты</Button>
+            </form>
         </Card>
         <Card v-else title="Подключите API доступов">
             <p class="mb-4 text-xs text-ui-muted">Добавьте адрес API личных доступов и сервисов. Этот шаг необязательный.</p>
@@ -93,7 +100,7 @@ onMounted(async () => {
         </Card>
         <p v-if="refreshJob.running" role="status" class="mt-3 text-xs text-ui-accent">Загрузка данных: {{ refreshJob.completed }} / {{ refreshJob.total }}</p>
         <Button v-if="apiAuthorizationRequired && step !== 'security'" variant="secondary" class="mt-3" :disabled="busy" @click="authorize">Открыть API / авторизацию</Button>
-        <Button v-if="step !== 'projects'" variant="ghost" class="mt-4 self-start" :disabled="busy" @click="run(() => advance(step === 'accesses' ? 'security' : 'projects'))">← Назад</Button>
+        <Button v-if="step !== 'security'" variant="ghost" class="mt-4 self-start" :disabled="busy" @click="run(() => advance(previousStep))">← Назад</Button>
         <Notification v-if="error" :text="error" />
     </main>
 </template>

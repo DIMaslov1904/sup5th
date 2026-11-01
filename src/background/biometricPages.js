@@ -44,7 +44,7 @@ const executeIntent = async (intent, refreshData) => {
 
 export const createBiometricPageHandlers = ({ unlock, refreshData }) => {
     let pending = Promise.resolve()
-    const serial = action => { const result = pending.then(action); pending = result.catch(() => {}); return result }
+    const serial = action => { const result = pending.then(action); pending = result.catch(() => { }); return result }
     const read = () => sessionGet(BIOMETRIC_PAGES_KEY, {})
     const write = flows => sessionSet(BIOMETRIC_PAGES_KEY, flows)
     const open = payload => serial(async () => {
@@ -58,7 +58,7 @@ export const createBiometricPageHandlers = ({ unlock, refreshData }) => {
         const flows = Object.fromEntries(Object.entries(await read()).filter(([, flow]) => flow.expiresAt > Date.now()))
         flows[id] = { mode: payload.mode, intent, advanceSetup: payload.mode === 'enable' && payload.advanceSetup === true, refreshAfterUnlock: payload.refreshAfterUnlock !== false, tabId: tab.id, returnTabId: returnTab?.id, state: 'pending', expiresAt: Date.now() + lifetime }
         try { await write(flows) }
-        catch (error) { await extensionApi.tabs.remove(tab.id).catch(() => {}); throw error }
+        catch (error) { await extensionApi.tabs.remove(tab.id).catch(() => { }); throw error }
         return { id }
     })
     const get = ({ id }, sender) => serial(async () => checkedPage((await read())[id], id, sender))
@@ -73,7 +73,7 @@ export const createBiometricPageHandlers = ({ unlock, refreshData }) => {
         // Never persist credentials, PRF secrets, vault keys or copied values here.
         let action
         try {
-            if (flow.advanceSetup) await saveApiSettings({ setupStep: 'accesses' })
+            if (flow.advanceSetup) await saveApiSettings({ setupStep: 'projects' })
             action = await executeIntent(flow.intent, refreshData)
         }
         catch (error) { action = { kind: 'error', error: error.message } }

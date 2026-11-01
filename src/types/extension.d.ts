@@ -1,4 +1,4 @@
-export type SetupStep = 'projects' | 'security' | 'accesses' | 'done'
+export type SetupStep = 'intro' | 'security' | 'projects' | 'accesses' | 'done'
 
 export interface ApiSettings {
     projectsUrl: string

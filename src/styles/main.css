@@ -97,12 +97,20 @@
 @keyframes ui-copy-appear { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 .ui-preview { animation: ui-preview-appear 130ms ease-out; }
 .ui-copy-confirm { display: inline-block; animation: ui-copy-appear 120ms ease-out; }
+@keyframes ui-intro-appear { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes ui-intro-float {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33% { transform: translate3d(26px, -20px, 0) scale(1.1); }
+  66% { transform: translate3d(-20px, 16px, 0) scale(0.94); }
+}
+.ui-intro-appear { animation: ui-intro-appear 700ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.ui-intro-float { animation: ui-intro-float 18s ease-in-out infinite; }
 .ui-view-enter-active { transition: opacity 100ms ease-out, transform 100ms ease-out; }
 .ui-view-leave-active { transition: opacity 60ms ease-in; }
 .ui-view-enter-from { opacity: 0; transform: translateY(2px); }
 .ui-view-leave-to { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
-  .ui-preview, .ui-copy-confirm { animation: none; }
+  .ui-preview, .ui-copy-confirm, .ui-intro-appear, .ui-intro-float { animation: none; }
   .ui-view-enter-active, .ui-view-leave-active { transition: none; }
 }
 
