@@ -1,8 +1,10 @@
 import { evaluateRobotsFile, indexingRulesFromMeta } from './seoRules.js'
 import { normalizeAuditUrl } from './seoAuditLinks.js'
+import { parseAuditExclusionRules, matchAuditExclusion } from './seoAuditExclusionRules.js'
 
-export const createAuditIndexability = (siteUrl, { enabled = true, maxExcluded = 50000 } = {}) => {
+export const createAuditIndexability = (siteUrl, { enabled = true, maxExcluded = 50000, customExclusions = '' } = {}) => {
     const origin = new URL(siteUrl).origin, excluded = new Map(), allowed = new Set()
+    const custom = parseAuditExclusionRules(customExclusions)
     let robots = { pending: true }, limited = false
     const internal = url => new URL(url).origin === origin
     const record = (url, reason, details = {}) => {
@@ -19,8 +21,11 @@ export const createAuditIndexability = (siteUrl, { enabled = true, maxExcluded =
     }
     const beforeRequest = (value, details = {}) => {
         const url = normalizeAuditUrl(value)
-        if (!enabled || !url || !internal(url)) return true
+        if (!url) return true
         if (excluded.has(url)) return record(url, excluded.get(url).reason, details)
+        const customRule = matchAuditExclusion(custom, url)
+        if (customRule) return record(url, `Свои исключения: ${customRule.directive}: ${customRule.value}`, details)
+        if (!enabled || !internal(url)) return true
         if (robots.pending || allowed.has(url)) return true
         for (const agent of ['googlebot', 'yandex']) {
             const rule = evaluateRobotsFile(robots, url, agent)
@@ -30,8 +35,8 @@ export const createAuditIndexability = (siteUrl, { enabled = true, maxExcluded =
         return true
     }
     const afterResponse = (result, details = {}) => {
-        if (!enabled) return true
         if (result.excludedRedirect) return record(result.url, `Редирект на исключённый URL: ${result.excludedRedirect}`, { ...details, status: result.status })
+        if (!enabled) return true
         if (!internal(result.url)) return true
         const headers = result.response?.xRobotsTags ?? result.response?.headers?.['x-robots-tag'] ?? ''
         const rules = indexingRulesFromMeta(result.indexingMeta || [], headers)
@@ -42,8 +47,8 @@ export const createAuditIndexability = (siteUrl, { enabled = true, maxExcluded =
         return true
     }
     return {
-        beforeRequest, afterResponse, has: url => excluded.has(url),
+        beforeRequest, afterResponse, has: url => excluded.has(url), hasCustomRules: custom.hasRules,
         setRobots: file => { robots = file; allowed.clear() },
-        snapshot: () => ({ enabled, limited, items: [...excluded.values()].map(item => ({ ...item, sources: [...item.sources], sitemaps: [...item.sitemaps] })) })
+        snapshot: () => ({ enabled, customExclusions: custom.text, limited, items: [...excluded.values()].map(item => ({ ...item, sources: [...item.sources], sitemaps: [...item.sitemaps] })) })
     }
 }

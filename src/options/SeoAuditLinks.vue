@@ -8,6 +8,7 @@ import Button from '../popup/components/ui/Button.vue'
 import Card from '../popup/components/ui/Card.vue'
 import Select from '../popup/components/ui/Select.vue'
 import SeoAuditSources from './SeoAuditSources.vue'
+import HoverHint from '../popup/components/ui/HoverHint.vue'
 
 const props = defineProps({
     results: { type: Array, default: () => [] },
@@ -69,8 +70,7 @@ const exportCsv = () => downloadText(
                             <a v-if="link.redirected" :href="link.finalUrl" :title="link.finalUrl" target="_blank" rel="noreferrer" class="mt-1 block wrap-anywhere text-ui-muted">→ {{ link.finalUrl }}</a>
                         </th>
                         <td data-label="Ответ и пояснение" class="border-t border-ui-border/60 p-2 align-top">
-                            <span :class="['broken','server'].includes(link.outcome) ? 'text-ui-danger' : link.outcome === 'ok' ? 'text-ui-success' : 'text-ui-warning'">{{ link.label }}</span>
-                            <span class="mt-1 block text-[11px] text-ui-muted">{{ httpHint(link) }}</span>
+                            <HoverHint :text="httpHint(link)"><span :class="['broken','server'].includes(link.outcome) ? 'text-ui-danger' : link.outcome === 'ok' ? 'text-ui-success' : 'text-ui-warning'">{{ link.label }}</span></HoverHint>
                             <span v-if="link.ttfb != null" class="mt-1 block text-[11px] text-ui-muted">До заголовков: {{ link.ttfb }} мс</span>
                             <span v-if="link.metaReason && link.kind === 'page'" class="mt-1 block text-[11px] text-ui-muted">{{ link.metaReason }}</span>
                         </td>

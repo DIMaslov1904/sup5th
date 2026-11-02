@@ -110,7 +110,7 @@ export const buildAuditIssues = (report, audit, checks = []) => {
         if (id === 'duplicates-description') return duplicateUrls(pageSummary.duplicateDescriptions)
         if (id === 'sitemap') return status === 'fail' ? sitemapErrors.map(file => normalizeAuditUrl(file.url)) : sitemapUrls
         if (id === 'sitemap-current') return sitemapFiles.map(file => file.url)
-        if (id === 'llm-txt') return report?.llmTxt ? [report.llmTxt.url || new URL('/llm.txt', current).href] : []
+        if (id === 'llm-txt') return audit?.llmTxt || report?.llmTxt ? [audit?.llmTxt?.url || report?.llmTxt?.url || new URL('/llm.txt', current).href] : []
         if (id === 'xrobots-chain') return chain.filter(hop => status !== 'warning' || /noindex/i.test([hop.xRobotsTags || '', hop.headers?.['x-robots-tag'] || ''].join(', '))).map(hop => hop.url)
         if (id.startsWith('index-server-')) return [current]
         if (PAGE_SCOPED.has(id)) return [current]

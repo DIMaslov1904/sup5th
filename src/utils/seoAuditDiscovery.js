@@ -47,7 +47,7 @@ export const createAuditDiscovery = (data, maxUrls = AUDIT_DISCOVERY_LIMIT, { mo
         ...(data.internalLinks || []), ...(data.linkRows || []).map(item => item.url),
         ...(data.imageRows || []).map(item => ({ url: item.src, kind: 'image' }))
     ]
-    if (seedLinks) {
+    if (seedLinks && entries.has(normalizeAuditUrl(data.url))) {
         add(initial, 'links', data.url)
         if (data.auditLinks ? data.auditLinksTotal > data.auditLinks.length : (data.internalLinksTotal || 0) > (data.internalLinks || []).length) limited = true
     }

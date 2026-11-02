@@ -6,6 +6,7 @@ import { downloadText } from '../utils/seoClient.js'
 import Card from '../popup/components/ui/Card.vue'
 import Select from '../popup/components/ui/Select.vue'
 import Button from '../popup/components/ui/Button.vue'
+import SeoAuditInfo from './SeoAuditInfo.vue'
 
 const props = defineProps({ issues: { type: Array, default: () => [] } })
 const emit = defineEmits(['select'])
@@ -39,7 +40,8 @@ const filtered = computed(() => props.issues.filter(matched))
 const groups = computed(() => ISSUE_SEVERITIES
     .map(([id, label]) => ({ id, label, items: filtered.value.filter(issue => issue.severity === id) }))
     .filter(group => group.items.length))
-const hasHelp = issue => Boolean(issue.help?.how || (issue.help?.why && issue.help.why !== issue.hint))
+const helpText = issue => [issue.help?.why, issue.help?.how ? `Что делать: ${issue.help.how}` : '',
+    `${categoryLabels[issue.category]} · ${statusLabels[issue.status]} · ${ISSUE_SCOPE_LABELS[issue.scope]}`].filter(Boolean).join('\n\n')
 const exportCsv = () => downloadText(auditIssuesCsv(filtered.value), 'seo-audit-issues.csv', 'text/csv;charset=utf-8')
 </script>
 <template>
@@ -52,7 +54,8 @@ const exportCsv = () => downloadText(auditIssuesCsv(filtered.value), 'seo-audit-
         <section v-for="group in groups" :key="group.id" class="mt-4 first:mt-0">
             <h3 class="mb-2 flex flex-wrap justify-between gap-2 text-xs font-semibold">{{ group.label }}<span class="font-normal text-ui-muted">{{ group.items.length }}</span></h3>
             <ul class="grid min-w-0 gap-1.5">
-                <li v-for="issue in group.items" :key="issue.id" :data-audit-issue="issue.id" class="grid min-w-0 gap-1.5 rounded-control border border-ui-border bg-ui-field/40 px-3 py-2 text-xs">
+                <li v-for="issue in group.items" :key="issue.id" :data-audit-issue="issue.id" class="relative grid min-w-0 gap-1.5 rounded-control border border-ui-border bg-ui-field/40 py-2 pr-10 pl-3 text-xs">
+                    <SeoAuditInfo :text="helpText(issue)" :label="`Пояснение: ${issue.label}`" class="absolute top-1.5 right-1.5" />
                     <div class="flex flex-wrap items-start justify-between gap-2">
                         <div class="flex min-w-0 items-start gap-2">
                             <span :class="colors[issue.status]" :aria-label="statusLabels[issue.status]" class="shrink-0">{{ symbols[issue.status] }}</span>
@@ -65,13 +68,7 @@ const exportCsv = () => downloadText(auditIssuesCsv(filtered.value), 'seo-audit-
                         <button v-if="issue.urlCount" type="button" class="ui-link shrink-0 text-[11px]" @click="emit('select', issue)">Адреса: {{ issue.urlCount }} →</button>
                         <span v-else class="shrink-0 text-[11px] text-ui-muted">Без адресов</span>
                     </div>
-                    <p class="text-[11px] text-ui-muted">{{ categoryLabels[issue.category] }} · {{ statusLabels[issue.status] }} · {{ ISSUE_SCOPE_LABELS[issue.scope] }}</p>
                     <p v-if="issue.hint" class="min-w-0 text-[11px] text-ui-muted wrap-anywhere">{{ issue.hint }}</p>
-                    <details v-if="hasHelp(issue)" class="text-[11px]">
-                        <summary class="cursor-pointer text-ui-accent">Пояснение</summary>
-                        <p v-if="issue.help?.why" class="mt-1 text-ui-muted">{{ issue.help.why }}</p>
-                        <p v-if="issue.help?.how" class="mt-1"><span class="text-ui-muted">Что делать: </span>{{ issue.help.how }}</p>
-                    </details>
                 </li>
             </ul>
         </section>

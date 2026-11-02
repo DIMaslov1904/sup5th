@@ -2,7 +2,7 @@ import { normalizeAuditUrl } from './seoAuditLinks.js'
 import { AUDIT_HTML_LIMIT } from './seoAuditPages.js'
 const empty = url => ({ ok: false, status: 0, url, headers: {}, text: '', ttfb: null })
 
-export const createAuditFetch = (fetchResource, { signal, waitForResume, exclusions, excludeNonIndexable }) => async (
+export const createAuditFetch = (fetchResource, { signal, waitForResume, exclusions, excludeNonIndexable, method = 'GET', followRedirects = true }) => async (
     url, maxBytes = AUDIT_HTML_LIMIT, trace = false, htmlOnly = false, guard = false
 ) => {
     let current = url, elapsed = 0, timingKnown = true
@@ -13,13 +13,13 @@ export const createAuditFetch = (fetchResource, { signal, waitForResume, exclusi
         if (visited.has(current)) return { ...empty(current), chain, failure: 'redirect' }
         visited.add(current)
         let info
-        try { info = await fetchResource(current, 'GET', maxBytes, { trace, fresh: true, htmlOnly, manualRedirect: guard && excludeNonIndexable }) }
+        try { info = await fetchResource(current, method, maxBytes, { trace, fresh: true, htmlOnly, manualRedirect: !followRedirects || guard && (excludeNonIndexable || exclusions.hasCustomRules) }) }
         catch (error) { if (signal?.aborted) throw error; return { ...empty(current), chain, failure: 'network' } }
         signal?.throwIfAborted()
         timingKnown &&= info.ttfb != null
         elapsed += info.ttfb || 0
         const combined = { ...info, chain: [...chain, ...(info.chain || [])], ttfb: timingKnown ? elapsed : null }
-        if (!info.redirectUrl) return combined
+        if (!followRedirects || !info.redirectUrl) return combined
         if (guard && !exclusions.afterResponse({ url: current, response: info })) return combined
         const next = normalizeAuditUrl(info.redirectUrl, current)
         if (!next) return { ...combined, failure: 'redirect' }

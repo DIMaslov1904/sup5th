@@ -4,11 +4,16 @@ import { AUDIT_MODES } from '../utils/seoAuditLinks.js'
 import { summarizeAuditChecks } from '../utils/seoAuditChecks.js'
 import { summarizeAuditPages } from '../utils/seoAuditPages.js'
 import Card from '../popup/components/ui/Card.vue'
+import SeoAuditInfo from './SeoAuditInfo.vue'
 const props = defineProps({ report: Object, audit: Object, issues: Array, busy: Boolean })
 const emit = defineEmits(['select-status'])
 const summary = computed(() => summarizeAuditChecks(props.issues || []))
 const pages = computed(() => summarizeAuditPages(props.audit.pageResults || props.audit.results))
 const mode = computed(() => AUDIT_MODES.find(item => item.value === props.audit.mode)?.label || 'Только страницы')
+const help = computed(() => [mode.value, `Лимит URL: ${props.audit.sample.limit}. Обход ограничен исходным сайтом.`,
+    `Найдено по ссылкам: ${props.audit.sample.linked}; в sitemap: ${props.audit.sample.mapped}.`,
+    `DOM исходной страницы: ${new Date(props.report.scannedAt).toLocaleString('ru-RU')}. HTTP-проверки выполняются без cookies.`,
+    'Счётчики показывают охват доступных источников и не гарантируют обнаружение всех страниц сайта.'].join('\n\n'))
 const complete = computed(() => !props.busy && !props.audit.partial && !props.audit.sample.limited && props.audit.crawl.complete
     && props.audit.results.length >= props.audit.sample.total && props.audit.results.every(item => ['ok', 'broken', 'server'].includes(item.outcome)))
 const statuses = [
@@ -18,18 +23,14 @@ const statuses = [
 ]
 </script>
 <template>
-    <Card title="Сводка аудита">
+    <Card>
+        <div class="mb-2 flex items-center justify-between gap-2"><h3 class="text-[13px] font-semibold">Сводка аудита</h3><SeoAuditInfo :text="help" label="Пояснение сводки аудита" /></div>
         <a :href="report.url" :title="report.url" target="_blank" rel="noreferrer" class="mb-3 block truncate text-xs text-ui-accent">{{ report.url }}</a>
         <dl aria-label="Итоги аудита" class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3 lg:grid-cols-5">
             <div v-for="item in statuses" :key="item.value" class="min-w-0 rounded-control bg-ui-raised/60 p-3"><dt class="text-ui-muted">{{ item.label }}</dt><dd :class="item.color" class="mt-1 text-2xl font-semibold tabular-nums"><button type="button" class="w-full text-left hover:underline" :aria-label="`${item.label}: ${summary[item.value]}. Показать проверки`" :data-audit-summary="item.value" @click="emit('select-status', item.value)">{{ summary[item.value] }}</button></dd></div>
         </dl>
-        <p class="mt-3 text-xs font-semibold">{{ mode }} · HTTP-проверено {{ audit.results.length }} из {{ audit.sample.total }} найденных URL{{ audit.sample.limited ? '+' : '' }}</p>
-        <p class="mt-1 text-xs text-ui-muted">Обработано внутренних адресов страниц: {{ audit.crawl.current }} из {{ audit.crawl.discovered }}. Полных HTML по уникальным конечным URL: {{ pages.htmlCount }}.</p>
+        <p class="mt-3 text-xs font-semibold">Проверено {{ audit.results.length }} из {{ audit.sample.total }} URL{{ audit.sample.limited ? '+' : '' }} · HTML-страниц: {{ pages.htmlCount }} · Исключено: {{ audit.exclusions?.items.length || 0 }}</p>
         <p v-if="audit.crawl.unavailable" class="mt-1 text-xs text-ui-warning">Не удалось полностью прочитать страниц для сбора ссылок: {{ audit.crawl.unavailable }}.</p>
-        <p v-if="audit.mode !== 'external'" class="mt-1 text-xs text-ui-muted">Гостевой HTML и ссылки: {{ audit.sample.linked }} · Найдено в sitemap: {{ audit.sample.mapped }} · Не встречены в обработанных sitemap: {{ audit.sample.outsideSitemap }}.</p>
-        <p class="mt-1 text-xs text-ui-muted">Исключение неиндексируемых страниц: {{ audit.exclusions?.enabled ? 'включено' : 'выключено' }} · Исключено URL: {{ audit.exclusions?.items.length || 0 }}{{ audit.exclusions?.limited ? '+' : '' }}.</p>
         <p class="mt-2 text-xs" :class="complete ? 'text-ui-success' : 'text-ui-warning'">{{ busy ? 'Поиск и проверка продолжаются.' : complete ? 'Обработаны все URL, обнаруженные в доступных источниках.' : 'Проверка неполная: проверьте лимиты, остановку и ограничения доступа.' }}</p>
-        <p class="mt-1 text-[11px] text-ui-muted">Лимит HTTP-результатов: {{ audit.sample.limit }}<template v-if="audit.mode === 'external'"> · Лимит обхода страниц: {{ audit.crawl.limit }}</template>. Обход ограничен исходным origin. Наличие URL только в sitemap не означает, что на него есть ссылка со страницы.</p>
-        <p class="mt-1 text-[11px] text-ui-muted">HTTP и сбор ссылок: гостевые GET без cookies. DOM открытой вкладки от {{ new Date(report.scannedAt).toLocaleString('ru-RU') }} используется только для отдельных проверок страницы. Счётчики не гарантируют охват всего сайта.</p>
     </Card>
 </template>

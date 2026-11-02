@@ -3,6 +3,7 @@ import { summarizeAuditPages, normalizeAuditText } from './seoAuditPages.js'
 import { META_LENGTH_RANGES } from './seoValidation.js'
 import { CWV_THRESHOLDS, cwvRatingStatus } from './cwv.js'
 import { withoutFragment } from './linkCheckStatus.js'
+import { auditLlmCheck } from './seoAuditLlm.js'
 const check = (id, label, status, hint = '') => ({ id, label, status, hint })
 const lengthCheck = (field, value) => {
     const length = [...String(value || '').trim()].length, { min, max } = META_LENGTH_RANGES[field]
@@ -197,10 +198,8 @@ export const buildAuditChecks = (data, audit) => {
     const sitemap = audit.sitemap
     list.push(check('sitemap', 'Обработка обнаруженных sitemap', sitemap.state === 'missing' ? 'warning' : sitemap.state === 'invalid' ? 'fail' : sitemap.state === 'unknown' || !sitemap.complete ? 'unknown' : 'pass', sitemap.state === 'missing' ? 'Sitemap не найден; файл не обязателен для каждого сайта' : `Прочитано XML-файлов: ${sitemap.files.length}; ошибок: ${sitemap.errors.length}`))
     list.push(check('sitemap-current', 'Текущий URL в обработанных sitemap', sitemap.containsCurrent ? 'pass' : sitemap.state === 'missing' ? 'na' : !sitemap.complete ? 'unknown' : 'warning', sitemap.containsCurrent ? 'URL найден' : sitemap.complete ? 'URL не найден; проверьте необходимость его включения' : 'Полная проверка не выполнена'))
-    const llmTxt = data.llmTxt
-    list.push(check('llm-txt', 'Файл llm.txt', !llmTxt || llmTxt.pending ? 'unknown' : llmTxt.exists ? 'pass' : 'warning', !llmTxt || llmTxt.pending
-        ? 'Файл ещё не проверен'
-        : llmTxt.exists ? `Найден в корне сайта${llmTxt.size ? ` · ${llmTxt.size} симв.` : ''}; полезен для LLM-краулеров` : 'Не найден в корне сайта; не обязателен, но помогает LLM-краулерам понять сайт'))
+    const llm = auditLlmCheck(audit.llmTxt || data.llmTxt)
+    list.push(check('llm-txt', 'Файл llm.txt', llm.status, llm.hint))
     return list
 }
 export const summarizeAuditChecks = checks => Object.fromEntries(['pass', 'fail', 'warning', 'unknown', 'na'].map(status => [status, checks.filter(item => item.status === status).length]))

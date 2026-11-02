@@ -4,13 +4,14 @@ import { paginateAuditResults } from '../utils/seoAuditResults.js'
 import Card from '../popup/components/ui/Card.vue'
 import Button from '../popup/components/ui/Button.vue'
 import SeoAuditSources from './SeoAuditSources.vue'
+import SeoAuditInfo from './SeoAuditInfo.vue'
 const props = defineProps({ exclusions: Object })
 const open = ref(false), page = ref(1)
 const pagination = computed(() => paginateAuditResults(props.exclusions?.items || [], page.value))
 </script>
 <template>
     <Card v-if="exclusions?.items.length" title="Исключённые URL">
-        <p class="text-xs text-ui-muted">Исключено из HTTP-результатов и дальнейшего обхода: {{ exclusions.items.length }}{{ exclusions.limited ? '+' : '' }}. Запрет robots.txt проверяется до запроса; meta noindex и X-Robots-Tag — после получения ответа.</p>
+        <div class="flex items-center gap-1"><p class="text-xs text-ui-muted">Исключено URL: {{ exclusions.items.length }}{{ exclusions.limited ? '+' : '' }}</p><SeoAuditInfo label="Пояснение исключённых URL" text="Свои правила и robots.txt проверяются до запроса. Meta noindex и X-Robots-Tag определяются после ответа. Исключённые адреса не участвуют в дальнейшем обходе; причина указана у каждого URL." /></div>
         <details class="mt-2 text-xs" @toggle="open = $event.target.open">
             <summary class="cursor-pointer text-ui-accent">Показать адреса и причины</summary>
             <div v-if="open" class="mt-2 grid gap-2">

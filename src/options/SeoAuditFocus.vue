@@ -7,8 +7,8 @@ import { ISSUE_STATUS_LABELS as statusLabels, ISSUE_COLORS as colors, ISSUE_SEVE
 import Button from '../popup/components/ui/Button.vue'
 import Card from '../popup/components/ui/Card.vue'
 import Input from '../popup/components/ui/Input.vue'
-import PropertyList from '../popup/components/ui/PropertyList.vue'
 import SeoAuditSources from './SeoAuditSources.vue'
+import SeoAuditInfo from './SeoAuditInfo.vue'
 
 const props = defineProps({ issue: { type: Object, required: true }, audit: Object })
 const emit = defineEmits(['back'])
@@ -18,7 +18,7 @@ watch(query, () => { visible.value = 100 })
 
 const resultByUrl = computed(() => {
     const map = new Map()
-    for (const item of [...(props.audit?.results || []), ...(props.audit?.pageResults || []), ...(props.audit?.sitemap?.files || []), ...(props.audit?.sitemap?.errors || []), ...(props.audit?.robotsFile ? [props.audit.robotsFile] : [])]) {
+    for (const item of [...(props.audit?.results || []), ...(props.audit?.pageResults || []), ...(props.audit?.sitemap?.files || []), ...(props.audit?.sitemap?.errors || []), ...(props.audit?.robotsFile ? [props.audit.robotsFile] : []), ...(props.audit?.llmTxt ? [props.audit.llmTxt] : [])]) {
         const url = normalizeAuditUrl(item.url), finalUrl = normalizeAuditUrl(item.finalUrl)
         if (!map.has(url)) map.set(url, item)
         if (finalUrl && !map.has(finalUrl)) map.set(finalUrl, item)
@@ -43,10 +43,7 @@ const plural = (count, forms) => {
 const addressesLabel = computed(() => `${props.issue.urlCount} ${plural(props.issue.urlCount, ['адрес', 'адреса', 'адресов'])}`)
 const kindLabel = item => item?.kind ? (AUDIT_KIND_LABELS[item.kind] || item.kind) : ''
 const statusLabel = item => item?.label || (item?.status ? `HTTP ${item.status}` : 'Нет HTTP-ответа')
-const helpRows = computed(() => [
-    ...(props.issue.help?.why ? [{ label: 'Почему важно', value: props.issue.help.why }] : []),
-    ...(props.issue.help?.how ? [{ label: 'Что делать', value: props.issue.help.how }] : [])
-])
+const helpText = computed(() => [props.issue.help?.why, props.issue.help?.how ? `Что делать: ${props.issue.help.how}` : '', ISSUE_SCOPE_LABELS[props.issue.scope]].filter(Boolean).join('\n\n'))
 </script>
 <template>
     <div class="grid min-w-0 gap-3">
@@ -55,15 +52,14 @@ const helpRows = computed(() => [
             <span class="text-ui-muted">Ошибки /</span>
             <span class="min-w-0 wrap-anywhere">{{ issue.label }}</span>
         </div>
-        <Card :title="`${issue.label} · ${addressesLabel}`">
+        <Card>
+            <div class="mb-3 flex items-start justify-between gap-2"><h3 class="text-[13px] font-semibold">{{ issue.label }} · {{ addressesLabel }}</h3><SeoAuditInfo :text="helpText" :label="`Пояснение: ${issue.label}`" /></div>
             <div class="grid gap-3">
                 <div class="flex flex-wrap items-center gap-2 text-xs">
                     <span :class="colors[issue.status]" class="font-medium">{{ statusLabels[issue.status] }}</span>
                     <span :class="severityClasses[issue.severity]">· {{ severityLabels[issue.severity] }}</span>
                     <span v-if="issue.hint" class="min-w-0 text-ui-muted wrap-anywhere">· {{ issue.hint }}</span>
                 </div>
-                <p class="text-xs text-ui-muted">{{ ISSUE_SCOPE_LABELS[issue.scope] }}<template v-if="issue.scope === 'page'">. Результат относится к исходному снимку страницы и её HTTP-ответу.</template></p>
-                <PropertyList v-if="helpRows.length" :items="helpRows" />
                 <label class="grid gap-1 text-xs text-ui-muted">Поиск по адресу<Input v-model="query" placeholder="URL или часть пути" /></label>
                 <p class="text-xs text-ui-muted" role="status">Показано {{ shown.length }} из {{ filtered.length }}<template v-if="filtered.length !== issue.urlCount"> (всего в проблеме {{ issue.urlCount }})</template>.</p>
                 <p v-if="!filtered.length" class="text-xs text-ui-muted">По этому запросу адресов нет.</p>

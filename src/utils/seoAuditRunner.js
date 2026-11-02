@@ -5,44 +5,28 @@ import { AUDIT_DISCOVERY_LIMIT, createAuditDiscovery } from './seoAuditDiscovery
 import { normalizeAuditMode, normalizeAuditUrl } from './seoAuditLinks.js'
 import { createAuditIndexability } from './seoAuditIndexability.js'
 import { createAuditFetch } from './seoAuditFetch.js'
+import { inspectAuditAvailability } from './seoAuditAvailability.js'
+import { inspectAuditLlm } from './seoAuditLlm.js'
 import { withoutFragment } from './linkCheckStatus.js'
 const emptySitemap = () => ({ state: 'unknown', files: [], pages: [], errors: [], duplicates: 0, duplicateUrls: [], pending: true, complete: false, containsCurrent: false })
 
-export const createAuditControl = signal => {
-    let paused = false
-    const waiters = new Set()
-    return {
-        pause: () => { paused = true },
-        resume: () => { paused = false; for (const release of [...waiters]) release() },
-        waitForResume: async () => {
-            signal?.throwIfAborted()
-            while (paused) {
-                signal?.throwIfAborted()
-                await new Promise((resolve, reject) => {
-                    const cleanup = () => { waiters.delete(release); signal?.removeEventListener('abort', abort) }
-                    const release = () => { cleanup(); resolve() }
-                    const abort = () => { cleanup(); reject(signal.reason) }
-                    waiters.add(release); signal?.addEventListener('abort', abort, { once: true })
-                })
-            }
-            signal?.throwIfAborted()
-        }
-    }
-}
+export { createAuditControl } from './seoAuditControl.js'
 
 export const runSeoAuditRequests = async (data, fetchResource, {
     signal, onProgress = () => { }, onUpdate = () => { }, pageLimit = DEFAULT_AUDIT_PAGE_LIMIT,
     getPageLimit = () => pageLimit, crawlPageLimit = DEFAULT_AUDIT_PAGE_LIMIT, mode = 'pages',
     getCrawlPageLimit = () => crawlPageLimit, waitForResume = async () => { }, parseMeta = parseMetaHtml, parseSitemap = parseSitemapXml, updateInterval = 100,
-    excludeNonIndexable = true
+    excludeNonIndexable = true, customExclusions = ''
 } = {}) => {
     mode = normalizeAuditMode(mode)
-    const exclusions = createAuditIndexability(data.url, { enabled: excludeNonIndexable, maxExcluded: Infinity })
+    const exclusions = createAuditIndexability(data.url, { enabled: excludeNonIndexable, customExclusions, maxExcluded: Infinity })
     const pool = createAuditDiscovery(data, AUDIT_DISCOVERY_LIMIT, { mode, seedLinks: true, accept: exclusions.beforeRequest }), results = new Map(), pageResults = new Map()
     const started = new Set(), completed = new Set(), crawlStarted = new Set(), robotsUrl = new URL('/robots.txt', data.url).href
     const origin = new URL(data.url).origin
     let finished = false, targetsPending = true, crawlPending = mode === 'external', sitemapPending = true, sitemapSeen = 0
     let robotsFile = { url: robotsUrl, exists: false, status: 0, content: '', pending: true }, sitemap = emptySitemap()
+    const llmUrl = new URL('/llm.txt', data.url).href
+    let llmTxt = { url: llmUrl, exists: false, status: 0, pending: mode !== 'external', skipped: mode === 'external' }
     const sample = () => {
         const limit = normalizeAuditPageLimit(getPageLimit())
         const priority = mode === 'external' ? pool.urls : [...new Set([...pool.pageUrls, ...pool.urls])]
@@ -66,7 +50,7 @@ export const runSeoAuditRequests = async (data, fetchResource, {
         return {
             mode, sample: selected, results: [...results.values()].sort((a, b) => pool.order.get(a.url) - pool.order.get(b.url)).map(describeResult),
             pageResults: [...pageResults.values()].map(describeResult), crawl, exclusions: exclusions.snapshot(), requests: completed.size,
-            robotsFile, sitemap, pagesPending: targetsPending || crawlPending,
+            robotsFile, sitemap, llmTxt, pagesPending: targetsPending || crawlPending,
             partial: !finished || signal?.aborted === true || results.size < selected.urls.length
         }
     }
@@ -86,6 +70,7 @@ export const runSeoAuditRequests = async (data, fetchResource, {
         publishTimer ??= setTimeout(emit, remaining)
     }
     const get = createAuditFetch(fetchResource, { signal, waitForResume, exclusions, excludeNonIndexable })
+    const head = createAuditFetch(fetchResource, { signal, waitForResume, exclusions, excludeNonIndexable, method: 'HEAD', followRedirects: false })
     // Динамический размер батча по скользящему среднему TTFB: быстрый сервер — больший батч, медленный — меньший
     let ttfbSamples = []
     const recordTtfb = info => {
@@ -99,6 +84,12 @@ export const runSeoAuditRequests = async (data, fetchResource, {
     }
     publish(true)
     const inspect = async url => {
+        if (mode === 'external' && new URL(url).origin !== origin) {
+            const info = await head(url, 1000, true, false, true)
+            signal?.throwIfAborted()
+            recordTtfb(info)
+            return info.excludedRedirect ? null : inspectAuditAvailability(url, info)
+        }
         const info = await get(url, AUDIT_HTML_LIMIT, url === normalizeAuditUrl(data.url), true, true)
         signal?.throwIfAborted()
         recordTtfb(info)
@@ -190,11 +181,19 @@ export const runSeoAuditRequests = async (data, fetchResource, {
     }
     const robotsTask = robotsWork()
     const sitemapTask = sitemapWork().finally(() => { sitemapPending = false })
+    const llmTask = (async () => {
+        if (mode === 'external') return
+        const info = await get(llmUrl, 256 * 1024)
+        signal?.throwIfAborted()
+        llmTxt = inspectAuditLlm(llmUrl, info)
+        publish()
+    })()
     const crawlTask = mode === 'external' ? crawlWork() : Promise.resolve()
-    const work = await Promise.allSettled([targetsWork(), crawlTask, sitemapTask])
+    const work = await Promise.allSettled([targetsWork(), crawlTask, sitemapTask, llmTask])
     clearTimeout(publishTimer); publishTimer = null
     robotsFile = { ...robotsFile, pending: false }
     sitemap = { ...sitemap, pending: false }
+    llmTxt = { ...llmTxt, pending: false }
     finished = true; targetsPending = false; crawlPending = false
     const failure = work.find(item => item.status === 'rejected')
     if (failure && !signal?.aborted) { publish(true); throw failure.reason }
