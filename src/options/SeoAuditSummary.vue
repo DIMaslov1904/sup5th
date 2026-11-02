@@ -4,22 +4,24 @@ import { AUDIT_MODES } from '../utils/seoAuditLinks.js'
 import { summarizeAuditChecks } from '../utils/seoAuditChecks.js'
 import { summarizeAuditPages } from '../utils/seoAuditPages.js'
 import Card from '../popup/components/ui/Card.vue'
-const props = defineProps({ report: Object, audit: Object, checks: Array, busy: Boolean })
-const summary = computed(() => summarizeAuditChecks(props.checks || []))
+const props = defineProps({ report: Object, audit: Object, issues: Array, busy: Boolean })
+const emit = defineEmits(['select-status'])
+const summary = computed(() => summarizeAuditChecks(props.issues || []))
 const pages = computed(() => summarizeAuditPages(props.audit.pageResults || props.audit.results))
 const mode = computed(() => AUDIT_MODES.find(item => item.value === props.audit.mode)?.label || 'Только страницы')
 const complete = computed(() => !props.busy && !props.audit.partial && !props.audit.sample.limited && props.audit.crawl.complete
     && props.audit.results.length >= props.audit.sample.total && props.audit.results.every(item => ['ok', 'broken', 'server'].includes(item.outcome)))
 const statuses = [
     { value: 'fail', label: 'Проверки с ошибками', color: 'text-ui-danger' }, { value: 'warning', label: 'Рекомендации', color: 'text-ui-warning' },
-    { value: 'pass', label: 'Успешные проверки', color: 'text-ui-success' }, { value: 'unknown', label: 'Не удалось подтвердить', color: 'text-ui-muted' }
+    { value: 'pass', label: 'Успешные проверки', color: 'text-ui-success' }, { value: 'unknown', label: 'Не удалось подтвердить', color: 'text-ui-muted' },
+    { value: 'na', label: 'Не применимо', color: 'text-ui-muted' }
 ]
 </script>
 <template>
     <Card title="Сводка аудита">
         <a :href="report.url" :title="report.url" target="_blank" rel="noreferrer" class="mb-3 block truncate text-xs text-ui-accent">{{ report.url }}</a>
-        <dl aria-label="Итоги аудита" class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
-            <div v-for="item in statuses" :key="item.value" class="rounded-control bg-ui-raised/60 p-3"><dt class="text-ui-muted">{{ item.label }}</dt><dd :class="item.color" class="mt-1 text-2xl font-semibold tabular-nums">{{ summary[item.value] }}</dd></div>
+        <dl aria-label="Итоги аудита" class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3 lg:grid-cols-5">
+            <div v-for="item in statuses" :key="item.value" class="min-w-0 rounded-control bg-ui-raised/60 p-3"><dt class="text-ui-muted">{{ item.label }}</dt><dd :class="item.color" class="mt-1 text-2xl font-semibold tabular-nums"><button type="button" class="w-full text-left hover:underline" :aria-label="`${item.label}: ${summary[item.value]}. Показать проверки`" :data-audit-summary="item.value" @click="emit('select-status', item.value)">{{ summary[item.value] }}</button></dd></div>
         </dl>
         <p class="mt-3 text-xs font-semibold">{{ mode }} · HTTP-проверено {{ audit.results.length }} из {{ audit.sample.total }} найденных URL{{ audit.sample.limited ? '+' : '' }}</p>
         <p class="mt-1 text-xs text-ui-muted">Обработано внутренних адресов страниц: {{ audit.crawl.current }} из {{ audit.crawl.discovered }}. Полных HTML по уникальным конечным URL: {{ pages.htmlCount }}.</p>

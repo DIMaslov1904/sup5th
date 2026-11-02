@@ -25,9 +25,11 @@ const { tab, error, ready, section, seoSection, sourceRevision, select, selectSe
             </header>
             <template v-if="ready">
                 <Message v-if="error || !tab" type="error">{{ error || 'Откройте проверяемый сайт и запустите SEO-инструменты через расширение.' }}</Message>
-                <SeoAudit v-else-if="section === 'seo'" :key="sourceRevision" :tab="tab" />
-                <SitemapView v-else-if="section === 'sitemap'" :key="sourceRevision" :tab="tab" />
-                <SeoPanel v-else-if="section === 'overview'" :key="sourceRevision" :tab="tab" :initial-section="seoSection" :docked="docked" expanded @section-change="selectSeoSection" />
+                <KeepAlive v-else :key="sourceRevision">
+                    <SeoAudit v-if="section === 'seo'" :tab="tab" />
+                    <SitemapView v-else-if="section === 'sitemap'" :tab="tab" />
+                    <SeoPanel v-else-if="section === 'overview'" :tab="tab" :initial-section="seoSection" :docked="docked" expanded @section-change="selectSeoSection" />
+                </KeepAlive>
             </template>
         </div>
     </main>

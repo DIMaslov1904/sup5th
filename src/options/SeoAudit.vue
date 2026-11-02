@@ -1,23 +1,24 @@
 <script setup>
 import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { extensionApi } from '../platform/extensionApi.js'
-import { sendSeoToTab, withActiveTab, fetchSeo } from '../utils/seoClient.js'
+import { sendSeoToTab, withActiveTab, fetchSeo, downloadText } from '../utils/seoClient.js'
 import { createAuditControl, runSeoAuditRequests } from '../utils/seoAuditRunner.js'
 import { normalizeAuditPageLimit, AUDIT_PAGE_LIMIT, DEFAULT_AUDIT_PAGE_LIMIT } from '../utils/seoAuditPages.js'
 import { AUDIT_MODES } from '../utils/seoAuditLinks.js'
 import { buildAuditChecks } from '../utils/seoAuditChecks.js'
-import { buildAuditIssues } from '../utils/seoAuditIssues.js'
+import { buildAuditIssues, isAuditProblem } from '../utils/seoAuditIssues.js'
+import { buildAuditExport } from '../utils/seoAuditExport.js'
+import { useSeoAuditView } from './useSeoAuditView.js'
 import { withoutFragment } from '../utils/linkCheckStatus.js'
 import Button from '../popup/components/ui/Button.vue'
 import Select from '../popup/components/ui/Select.vue'
 import Notification from '../popup/components/ui/Notification.vue'
 import Tabs from '../popup/components/ui/Tabs.vue'
 import SeoAuditSummary from './SeoAuditSummary.vue'
-import SeoAuditIssues from './SeoAuditIssues.vue'
-import SeoAuditFocus from './SeoAuditFocus.vue'
+import SeoAuditIssueView from './SeoAuditIssueView.vue'
 import SeoAuditLinks from './SeoAuditLinks.vue'
 import SeoAuditFiles from './SeoAuditFiles.vue'
-import SeoAuditPageIssues from './SeoAuditPageIssues.vue'
+import SeoAuditPages from './SeoAuditPages.vue'
 import SeoAuditExclusions from './SeoAuditExclusions.vue'
 
 const props = defineProps({ tab: Object })
@@ -35,12 +36,9 @@ const normalizeLimits = () => {
 }
 const checks = computed(() => report.value && audit.value ? buildAuditChecks(report.value, audit.value) : [])
 const issues = computed(() => report.value && audit.value ? buildAuditIssues(report.value, audit.value, checks.value) : [])
-const section = ref('summary')
-const focusId = ref('')
-const focusIssue = computed(() => focusId.value ? issues.value.find(issue => issue.id === focusId.value) || null : null)
-const openIssue = issue => { if (issue?.urlCount) focusId.value = issue.id }
-const closeIssue = () => { focusId.value = '' }
-const issueCount = computed(() => issues.value.filter(issue => issue.severity !== 'info').length)
+const { section, filter, focusId, openIssue, closeIssue, showStatus, resetView } = useSeoAuditView(props.tab)
+const runId = ref(0)
+const issueCount = computed(() => issues.value.filter(isAuditProblem).length)
 const excludedCount = computed(() => audit.value?.exclusions?.items?.length || 0)
 const sections = computed(() => {
     const items = [
@@ -53,8 +51,9 @@ const sections = computed(() => {
     if (excludedCount.value) items.push(['exclusions', `Исключения · ${excludedCount.value}`])
     return items
 })
-watch(sections, value => { if (!value.some(([key]) => key === section.value)) section.value = 'summary' })
-watch(section, () => { focusId.value = '' })
+watch([sections, busy], ([value, running]) => {
+    if (audit.value && !running && !value.some(([key]) => key === section.value)) section.value = 'summary'
+})
 let alive = true, revision = 0, controller, control
 const stopAudit = () => { controller?.abort(); state.value = 'stopping' }
 const togglePause = () => {
@@ -70,8 +69,9 @@ const runAudit = async () => {
     control = createAuditControl(signal)
     normalizeLimits()
     const auditMode = mode.value
+    if (report.value || audit.value) resetView()
+    runId.value++
     state.value = 'scanning'; message.value = ''; notice.value = ''; audit.value = null; report.value = null
-    section.value = 'summary'; focusId.value = ''
     progress.value = { current: 0, total: 0, started: 0, crawl: { started: 0 } }
     try {
         const tab = props.tab?.id ? await extensionApi.tabs.get(props.tab.id) : (await extensionApi.tabs.query({ active: true, lastFocusedWindow: true }))[0]
@@ -108,12 +108,17 @@ const runAudit = async () => {
         message.value = error.message; state.value = 'error'
     }
 }
+const exportReport = () => downloadText(JSON.stringify(buildAuditExport(report.value, audit.value, issues.value,
+    { state: state.value, notice: notice.value }), null, 2), `seo-audit-${new Date().toISOString().slice(0, 10)}.json`, 'application/json;charset=utf-8')
 </script>
 <template>
     <section class="flex min-w-0 w-full flex-col gap-4 text-ui-text">
         <header class="flex flex-wrap items-center justify-between gap-3">
             <h1 class="ui-title">SEO-аудит сайта</h1>
-            <Button variant="primary" size="md" :disabled="busy" @click="runAudit">{{ state === 'scanning' ? 'Снимок страницы…' : state === 'checking' ? 'Проверяем…' : state === 'paused' ? 'На паузе' : state === 'stopping' ? 'Останавливаем…' : 'Запустить аудит' }}</Button>
+            <div class="flex flex-wrap gap-2">
+                <Button v-if="audit && report" variant="secondary" size="md" @click="exportReport">Скачать отчёт (JSON)</Button>
+                <Button variant="primary" size="md" :disabled="busy" @click="runAudit">{{ state === 'scanning' ? 'Снимок страницы…' : state === 'checking' ? 'Проверяем…' : state === 'paused' ? 'На паузе' : state === 'stopping' ? 'Останавливаем…' : 'Запустить аудит' }}</Button>
+            </div>
         </header>
         <div class="ui-panel grid gap-3">
             <label class="grid gap-1 text-xs text-ui-muted">Режим проверки<Select v-model="mode" aria-label="Режим проверки" :disabled="busy"><option v-for="item in AUDIT_MODES" :key="item.value" :value="item.value">{{ item.label }}</option></Select></label>
@@ -141,25 +146,14 @@ const runAudit = async () => {
         <template v-if="audit && report">
             <p v-if="notice" role="status" class="ui-panel text-xs text-ui-warning">{{ notice }}</p>
             <Tabs v-model="section" :items="sections" label="Разделы SEO-аудита" wrap />
-            <template v-if="section === 'summary'">
-                <SeoAuditSummary :report="report" :audit="audit" :checks="checks" :busy="busy" />
-            </template>
-            <template v-else-if="section === 'issues'">
-                <SeoAuditFocus v-if="focusIssue" :issue="focusIssue" :audit="audit" @back="closeIssue" />
-                <SeoAuditIssues v-else :issues="issues" @select="openIssue" />
-            </template>
-            <template v-else-if="section === 'links'">
-                <SeoAuditLinks :key="revision" :results="audit.results" :mode="audit.mode" :page-url="report.url" />
-            </template>
-            <template v-else-if="section === 'pages'">
-                <SeoAuditPageIssues :key="revision" :results="audit.pageResults" />
-            </template>
-            <template v-else-if="section === 'files'">
-                <SeoAuditFiles :report="report" :audit="audit" />
-            </template>
-            <template v-else-if="section === 'exclusions'">
-                <SeoAuditExclusions :key="revision" :exclusions="audit.exclusions" />
-            </template>
+            <KeepAlive :key="runId">
+                <SeoAuditSummary v-if="section === 'summary'" :report="report" :audit="audit" :issues="issues" :busy="busy" @select-status="showStatus" />
+                <SeoAuditIssueView v-else-if="section === 'issues'" v-model:filter="filter" :issues="issues" :audit="audit" :focus-id="focusId" :busy="busy" @select="openIssue" @back="closeIssue" />
+                <SeoAuditLinks v-else-if="section === 'links'" :results="audit.results" :mode="audit.mode" :page-url="report.url" />
+                <SeoAuditPages v-else-if="section === 'pages'" :results="audit.pageResults" :issues="issues" @select-issue="openIssue" />
+                <SeoAuditFiles v-else-if="section === 'files'" :report="report" :audit="audit" />
+                <SeoAuditExclusions v-else-if="section === 'exclusions'" :exclusions="audit.exclusions" />
+            </KeepAlive>
         </template>
         <p v-else-if="!busy" class="text-xs text-ui-muted">Выберите режим проверки и запустите аудит. Результат покажет ошибки, рекомендации и страницы, на которых найдена каждая ссылка.</p>
     </section>

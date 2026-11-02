@@ -20,6 +20,7 @@ export const fetchSeoResource = async ({ url, method = 'GET', timeout = 20000, m
         const response = await fetch(parsed.href, { method, credentials: 'omit', redirect: manualRedirect ? 'manual' : 'follow', ...(trace || fresh ? { cache: 'no-store' } : {}), signal: controller.signal })
         const ttfb = Math.round(performance.now() - started)
         if (manualRedirect && (response.type === 'opaqueredirect' || [301, 302, 303, 307, 308].includes(response.status))) {
+            await observer?.waitForHeaders()
             const observed = observer?.result(response) || {}, hop = observed.chain?.at(-1)
             const headers = { ...(hop?.headers || {}), ...seoResponseHeaders(Object.fromEntries(response.headers.entries())) }
             return { ok: false, status: hop?.status || response.status, url: parsed.href, headers, text: '', ttfb,

@@ -68,13 +68,13 @@ const exportCsv = () => downloadText(
                             <span class="mt-1 flex flex-wrap gap-x-2 text-[11px] text-ui-muted"><span>{{ AUDIT_KIND_LABELS[link.kind] || 'Тип не определён' }}</span><span>· {{ directionLabels[directionOf(link)] }}</span></span>
                             <a v-if="link.redirected" :href="link.finalUrl" :title="link.finalUrl" target="_blank" rel="noreferrer" class="mt-1 block wrap-anywhere text-ui-muted">→ {{ link.finalUrl }}</a>
                         </th>
-                        <td class="border-t border-ui-border/60 p-2 align-top">
+                        <td data-label="Ответ и пояснение" class="border-t border-ui-border/60 p-2 align-top">
                             <span :class="['broken','server'].includes(link.outcome) ? 'text-ui-danger' : link.outcome === 'ok' ? 'text-ui-success' : 'text-ui-warning'">{{ link.label }}</span>
                             <span class="mt-1 block text-[11px] text-ui-muted">{{ httpHint(link) }}</span>
                             <span v-if="link.ttfb != null" class="mt-1 block text-[11px] text-ui-muted">До заголовков: {{ link.ttfb }} мс</span>
                             <span v-if="link.metaReason && link.kind === 'page'" class="mt-1 block text-[11px] text-ui-muted">{{ link.metaReason }}</span>
                         </td>
-                        <td class="min-w-0 border-t border-ui-border/60 p-2 align-top"><SeoAuditSources :sources="link.sources" :sitemaps="link.sitemaps" :current="link.current" /></td>
+                        <td data-label="Где найдена ссылка" class="min-w-0 border-t border-ui-border/60 p-2 align-top"><SeoAuditSources :sources="link.sources" :sitemaps="link.sitemaps" :current="link.current" /></td>
                     </tr>
                 </tbody>
             </table>
@@ -91,16 +91,4 @@ const exportCsv = () => downloadText(
         </nav>
     </Card>
 </template>
-<style scoped>
-.audit-table-wrapper { overflow: auto; max-inline-size: 100%; max-block-size: 38rem; container-type: inline-size; }
-tbody th { position: sticky; inset-inline-start: 0; }
-@container (width < 560px) {
-    table, tbody, tr, th, td { display: block; inline-size: 100%; }
-    thead { display: none; }
-    tbody th { position: static; }
-    td::before { display: block; margin-block-end: .25rem; color: var(--color-ui-muted); }
-    td:nth-child(2)::before { content: 'Ответ и пояснение: '; }
-    td:nth-child(3)::before { content: 'Где найдена ссылка: '; }
-    tr + tr { border-block-start: 2px solid var(--color-ui-border); }
-}
-</style>
+<style src="../styles/seoAuditTable.css"></style>

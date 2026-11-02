@@ -45,7 +45,11 @@ export const useSeoSource = (docked, params) => {
             key = seoSidePanelKey(window.id)
             const current = contextRevision, saved = await extensionApi.storage.session.get(key)
             if (!alive || current !== contextRevision) return
-            if (saved[key]) await apply(saved[key])
+            const explicitId = Number(params.get('tabId'))
+            if (saved[key] || Number.isInteger(explicitId) && explicitId > 0) await apply({
+                ...saved[key], ...(Number.isInteger(explicitId) && explicitId > 0 ? { tabId: explicitId } : {}),
+                ...(params.has('tool') ? { tool: params.get('tool'), section: params.get('section') } : {})
+            })
             else {
                 const [active] = await extensionApi.tabs.query({ active: true, currentWindow: true })
                 if (alive && current === contextRevision) await apply({ tabId: active?.id, tool: 'overview', section: 'overview' })
@@ -59,7 +63,10 @@ export const useSeoSource = (docked, params) => {
         extensionApi.tabs.onUpdated.removeListener(updated); extensionApi.tabs.onRemoved.removeListener(removed)
     })
     const save = () => {
-        if (!docked) { history.replaceState(null, '', `?${params}`); return }
+        const current = new URLSearchParams(location.search)
+        current.set('tool', section.value); current.set('section', seoSection.value)
+        history.replaceState(history.state, '', `?${current}`)
+        if (!docked) return
         if (key && sourceId) extensionApi.storage.session.set({ [key]: { tabId: sourceId, tool: section.value, section: seoSection.value } }).catch(reason => { if (alive) error.value = reason.message })
     }
     const select = name => { section.value = tool(name); params.set('tool', section.value); save() }
