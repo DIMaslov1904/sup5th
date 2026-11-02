@@ -1,10 +1,9 @@
 import { classifyLinkCheck } from './linkCheckStatus.js'
 import { parseMetaHtml } from './seoRules.js'
 import { auditUrlKind, normalizeAuditUrl as normalizeUrl } from './seoAuditLinks.js'
-export const AUDIT_PAGE_LIMIT = 5000
 export const DEFAULT_AUDIT_PAGE_LIMIT = 100
 export const AUDIT_HTML_LIMIT = 1024 * 1024
-export const normalizeAuditPageLimit = count => Number.isFinite(Number(count)) ? Math.max(1, Math.min(AUDIT_PAGE_LIMIT, Math.trunc(Number(count)))) : DEFAULT_AUDIT_PAGE_LIMIT
+export const normalizeAuditPageLimit = count => Number.isFinite(Number(count)) ? Math.max(1, Math.trunc(Number(count))) : DEFAULT_AUDIT_PAGE_LIMIT
 export const normalizeAuditText = value => String(value || '').normalize('NFC').replace(/\s+/g, ' ').trim()
 const filterAuditPages = (results, filter = 'all') => filter === '4xx' ? results.filter(item => item.status >= 400 && item.status < 500)
     : filter === '5xx' ? results.filter(item => item.status >= 500 && item.status < 600) : results

@@ -1,6 +1,6 @@
 import { auditUrlKind, normalizeAuditMode, normalizeAuditUrl } from './seoAuditLinks.js'
 export { collectAuditLinks, normalizeAuditUrl } from './seoAuditLinks.js'
-export const AUDIT_DISCOVERY_LIMIT = 50000
+export const AUDIT_DISCOVERY_LIMIT = Infinity
 
 export const createAuditDiscovery = (data, maxUrls = AUDIT_DISCOVERY_LIMIT, { mode = 'pages', seedLinks = true, accept = () => true } = {}) => {
     mode = normalizeAuditMode(mode)

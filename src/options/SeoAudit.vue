@@ -3,7 +3,7 @@ import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { extensionApi } from '../platform/extensionApi.js'
 import { sendSeoToTab, withActiveTab, fetchSeo, downloadText } from '../utils/seoClient.js'
 import { createAuditControl, runSeoAuditRequests } from '../utils/seoAuditRunner.js'
-import { normalizeAuditPageLimit, AUDIT_PAGE_LIMIT, DEFAULT_AUDIT_PAGE_LIMIT } from '../utils/seoAuditPages.js'
+import { normalizeAuditPageLimit, DEFAULT_AUDIT_PAGE_LIMIT } from '../utils/seoAuditPages.js'
 import { AUDIT_MODES } from '../utils/seoAuditLinks.js'
 import { buildAuditChecks } from '../utils/seoAuditChecks.js'
 import { buildAuditIssues, isAuditProblem } from '../utils/seoAuditIssues.js'
@@ -25,6 +25,7 @@ const props = defineProps({ tab: Object })
 const state = ref('idle'), message = ref(''), notice = ref('')
 const progress = ref({ current: 0, total: 0, started: 0, crawl: { started: 0 } }), report = shallowRef(null), audit = shallowRef(null)
 const pageLimit = ref(DEFAULT_AUDIT_PAGE_LIMIT), crawlPageLimit = ref(DEFAULT_AUDIT_PAGE_LIMIT), mode = ref('pages')
+const limitOptions = [1, 10, 100, 500, 1000, 5000]
 const excludeNonIndexable = ref(true)
 const selectedMode = computed(() => AUDIT_MODES.find(item => item.value === mode.value))
 const busy = computed(() => ['scanning', 'checking', 'paused', 'stopping'].includes(state.value))
@@ -130,12 +131,13 @@ const exportReport = () => downloadText(JSON.stringify(buildAuditExport(report.v
                 <p id="audit-exclude-hint" class="text-[11px] text-ui-muted">Учитывать robots.txt и noindex в meta / X-Robots-Tag для Googlebot и Яндекса. Noindex можно определить только после загрузки страницы; ссылки с неё дальше не проверяются.</p>
             </div>
             <div class="flex flex-wrap items-center gap-3">
-                <label class="flex flex-wrap items-center gap-2 text-xs">{{ mode === 'external' ? 'Лимит внешних URL' : mode === 'pages' ? 'Лимит страниц' : 'Лимит внутренних URL' }}<input v-model.number="pageLimit" aria-label="Лимит HTTP-проверки" type="number" :min="minimumLimit" :max="AUDIT_PAGE_LIMIT" step="1" class="ui-field w-24" :disabled="busy && (state !== 'paused' || !audit?.pagesPending)" @change="normalizeLimits" /></label>
-                <label v-if="mode === 'external'" class="flex flex-wrap items-center gap-2 text-xs">Лимит обхода страниц<input v-model.number="crawlPageLimit" aria-label="Лимит обхода страниц" type="number" :min="minimumCrawlLimit" :max="AUDIT_PAGE_LIMIT" step="1" class="ui-field w-24" :disabled="busy && (state !== 'paused' || !audit?.crawl.pending)" @change="normalizeLimits" /></label>
+                <label for="audit-page-limit" class="flex flex-wrap items-center gap-2 text-xs">{{ mode === 'external' ? 'Лимит внешних URL' : mode === 'pages' ? 'Лимит страниц' : 'Лимит внутренних URL' }}<input id="audit-page-limit" v-model.number="pageLimit" aria-label="Лимит HTTP-проверки" type="number" list="audit-limit-options" :min="minimumLimit" step="1" class="ui-field w-24" :disabled="busy && (state !== 'paused' || !audit?.pagesPending)" @change="normalizeLimits" /></label>
+                <label v-if="mode === 'external'" for="audit-crawl-page-limit" class="flex flex-wrap items-center gap-2 text-xs">Лимит обхода страниц<input id="audit-crawl-page-limit" v-model.number="crawlPageLimit" aria-label="Лимит обхода страниц" type="number" list="audit-limit-options" :min="minimumCrawlLimit" step="1" class="ui-field w-24" :disabled="busy && (state !== 'paused' || !audit?.crawl.pending)" @change="normalizeLimits" /></label>
+                <datalist id="audit-limit-options"><option v-for="value in limitOptions" :key="value" :value="value"></option></datalist>
                 <Button v-if="state === 'checking' || state === 'paused'" variant="secondary" size="sm" @click="togglePause">{{ state === 'paused' ? 'Продолжить' : 'Пауза' }}</Button>
                 <Button v-if="busy" variant="secondary" size="sm" :disabled="state === 'stopping'" @click="stopAudit">Остановить аудит</Button>
             </div>
-            <p class="text-[11px] text-ui-muted">Обход без авторизации: ссылки берём из гостевого HTML и sitemap, cookies браузера не отправляем. Каждый лимит — до {{ AUDIT_PAGE_LIMIT.toLocaleString('ru-RU') }} запросов; изменить его можно на паузе.</p>
+            <p class="text-[11px] text-ui-muted">Обход без авторизации: ссылки берём из гостевого HTML и sitemap, cookies браузера не отправляем. Верхнего ограничения количества URL нет; лимиты можно изменить на паузе.</p>
         </div>
         <Notification v-if="message" :text="message" />
         <div v-if="busy && audit" class="ui-panel text-xs" role="status">

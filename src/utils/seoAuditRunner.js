@@ -37,7 +37,7 @@ export const runSeoAuditRequests = async (data, fetchResource, {
     excludeNonIndexable = true
 } = {}) => {
     mode = normalizeAuditMode(mode)
-    const exclusions = createAuditIndexability(data.url, { enabled: excludeNonIndexable })
+    const exclusions = createAuditIndexability(data.url, { enabled: excludeNonIndexable, maxExcluded: Infinity })
     const pool = createAuditDiscovery(data, AUDIT_DISCOVERY_LIMIT, { mode, seedLinks: true, accept: exclusions.beforeRequest }), results = new Map(), pageResults = new Map()
     const started = new Set(), completed = new Set(), crawlStarted = new Set(), robotsUrl = new URL('/robots.txt', data.url).href
     const origin = new URL(data.url).origin
@@ -47,8 +47,8 @@ export const runSeoAuditRequests = async (data, fetchResource, {
         const limit = normalizeAuditPageLimit(getPageLimit())
         const priority = mode === 'external' ? pool.urls : [...new Set([...pool.pageUrls, ...pool.urls])]
         const urls = [...started].filter(url => !exclusions.has(url))
-        urls.push(...priority.filter(url => !started.has(url) && !exclusions.has(url)).slice(0, Math.max(0, limit - started.size)))
-        return { ...pool.summary({ exclude: exclusions.has }), limit, urls }
+        const pending = priority.filter(url => !started.has(url) && !exclusions.has(url)).slice(0, Math.max(0, limit - started.size))
+        return { ...pool.summary({ exclude: exclusions.has }), limit, urls: urls.concat(pending) }
     }
     const describeResult = result => {
         const details = pool.describe(result.url)
@@ -173,7 +173,7 @@ export const runSeoAuditRequests = async (data, fetchResource, {
         const declared = /^\s*sitemap\s*:/im.test(robotsContent)
         const roots = sitemapRoots(robotsContent, data.url, { onError: error => discoveryErrors.push(error) })
         await collectSitemap(roots, url => get(url, 8 * 1024 * 1024, false, false, true), {
-            signal, parse: parseSitemap, waitForResume, onUpdate: combined => {
+            signal, parse: parseSitemap, waitForResume, maxUrls: Infinity, maxFiles: Infinity, onUpdate: combined => {
                 for (const item of combined.pages.slice(sitemapSeen)) pool.add([item.url], 'sitemap', item.source)
                 sitemapSeen = combined.pages.length
                 const errors = [...discoveryErrors, ...combined.errors]
