@@ -187,6 +187,7 @@ const tools = computed(() => {
         ['WHOIS',`https://www.whois.com/whois/${host}`],
         ['SSL',`https://www.ssllabs.com/ssltest/analyze.html?d=${host}`],
         ['Webarchive',`https://web.archive.org/web/*/${report.value.url}`],
+        ['Веб-архив.ру',`https://web-arhive.ru/search?url=${url}&hidden=0`],
         ['Яндекс Вебмастер', 'https://webmaster.yandex.ru/sites/'],
         ['Индексация в Яндексе',`https://yandex.ru/search/?text=${encodeURIComponent('url:' + report.value.url)}`],
         ['Дубли Title в Яндексе',`https://yandex.ru/search/?text=${title}`],
