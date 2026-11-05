@@ -1,9 +1,11 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import { sendSeoToTab, withActiveTab, fetchSeo, openSeoApp, canPinSeoPage, pinSeoPage } from '../../utils/seoClient.js'
+import { extensionApi } from '../../platform/extensionApi.js'
+import { sendSeoToTab, withActiveTab, fetchSeo, openSeoApp, openSocialPreview, canPinSeoPage, pinSeoPage } from '../../utils/seoClient.js'
 import { SeoTabUnavailableError } from '../../utils/seoMessaging.js'
 import { callBackground } from '../../utils/backgroundClient.js'
 import { SEO_SECTIONS, normalizeSeoSection } from '../../utils/seoSections.js'
+import { SEO_ANNOTATIONS } from '../../utils/seoAnnotations.js'
 import { evaluateHttpStatus } from '../../utils/seoValidation.js'
 import { loadSeoNetwork, requestWithHeadFallback } from '../../utils/seoNetwork.js'
 import { buildHeadingTree } from '../../utils/headingTree.js'
@@ -19,7 +21,6 @@ import Tabs from './ui/Tabs.vue'
 import Input from './ui/Input.vue'
 import Select from './ui/Select.vue'
 import PropertyList from './ui/PropertyList.vue'
-import OpenGraphPreview from './OpenGraphPreview.vue'
 import YandexCounter from './YandexCounter.vue'
 import SeoOverview from './SeoOverview.vue'
 import SeoImagePreview from './SeoImagePreview.vue'
@@ -27,7 +28,7 @@ import SeoToolIcon from './SeoToolIcon.vue'
 import CopyButton from './ui/CopyButton.vue'
 
 const props = defineProps({ tab: Object, session: Object, initialSection: { type: String, default: '' }, expanded: Boolean, docked: Boolean })
-const emit = defineEmits(['section-change'])
+const emit = defineEmits(['section-change', 'annotations-change'])
 const notification = ref('')
 const pinning = ref(false)
 const pin = async () => {
@@ -42,7 +43,6 @@ const section = ref(normalizeSeoSection(props.initialSection)), report = shallow
 const unavailable = ref('')
 const linkFilter = ref('all'), relFilter = ref('all'), protocolFilter = ref('all'), statusFilter = ref('all'), imageFilter = ref('all'), query = ref(''), visible = ref(100)
 const checked = shallowRef({}), checking = ref(false), checkProgress = ref(0)
-const ogPreviewOpen = ref(false)
 const metaItems = tags => tags.map(item => ({ label: item.name, value: item.content, warning: item.inHead === false ? 'вне head' : '' }))
 const openGraphMeta = computed(() => metaItems((report.value?.metaTags || []).filter(item => /^og:/i.test(item.name))))
 const twitterMeta = computed(() => {
@@ -78,6 +78,7 @@ const scan = async () => {
         if (alive) {
             sessionContext = { tabId: props.tab.id, url: data.url, documentId: data.documentId }
             report.value = data; checked.value = {}; visible.value = 100
+            if (props.docked) emit('annotations-change', props.tab.id, data.actions)
             enrich(data, revision)
             refreshCwv(revision)
         }
@@ -171,8 +172,12 @@ const checkLinks = async () => {
 }
 const toggle = async (action) => {
     const revision = scanRevision
+    const { actions: previous, documentId } = report.value
+    const enabled = !previous[action]
+    const tabId = props.tab.id
+    if (props.docked && SEO_ANNOTATIONS.includes(action)) emit('annotations-change', tabId, { ...previous, [action]: enabled }, action)
     try {
-        const actions = await sendSeoToTab(props.tab.id, 'seo:action', { action, enabled: !report.value.actions[action] })
+        const actions = await sendSeoToTab(tabId, 'seo:action', { action, enabled, documentId })
         if (alive && revision === scanRevision) report.value = { ...report.value, actions }
     } catch (e) { if (alive && revision === scanRevision) error.value = e.message }
 }
@@ -183,6 +188,19 @@ const goToHeading = async item => {
         if (result.hidden) notification.value = 'Заголовок скрыт на странице. Прокрутка к нему невозможна.'
     } catch (reason) { error.value = reason.message }
 }
+const goToImage = async ({ id, src }) => {
+    notification.value = ''; error.value = ''
+    const tabId = props.tab.id, documentId = report.value.documentId, revision = scanRevision
+    try {
+        const result = await withActiveTab(tabId, () => sendSeoToTab(tabId, 'seo:image', { id, src, documentId }))
+        if (!alive || revision !== scanRevision) return
+        if (result.hidden) {
+            notification.value = 'Изображение скрыто на странице. Прокрутка к нему невозможна.'
+        } else if (props.expanded) {
+            await extensionApi.tabs.update(tabId, { active: true })
+        }
+    } catch (reason) { if (alive && revision === scanRevision) error.value = reason.message }
+}
 const downloadImage = async url => {
     try { await callBackground('seo:downloadImage', { url }) }
     catch (reason) { error.value = reason.message }
@@ -190,6 +208,10 @@ const downloadImage = async url => {
 const expand = async () => {
     persist()
     try { await openSeoApp(props.tab.id, 'overview', section.value) }
+    catch (reason) { error.value = reason.message }
+}
+const previewLinks = async () => {
+    try { await openSocialPreview(props.tab.id) }
     catch (reason) { error.value = reason.message }
 }
 const linkStatusClass = info => ({ success: 'text-ui-success', warning: 'text-ui-warning', danger: 'text-ui-danger' })[evaluateHttpStatus(info.status, info.redirected).status]
@@ -253,23 +275,26 @@ const tools = computed(() => {
                 <div class="flex items-center gap-2"><Select v-model="imageFilter" aria-label="Alt изображений" class="min-w-0 flex-1"><option value="all">Все изображения</option><option value="missing">Без атрибута alt</option><option value="empty">Пустой alt</option><option value="filled">Заполненный alt</option></Select><Button size="sm" variant="secondary" @click="toggle('alt')">{{ report.actions.alt ? 'Убрать alt' : 'Показать alt' }}</Button></div>
                 <Button size="sm" variant="secondary" @click="toggle('downloads')">{{ report.actions.downloads ? 'Убрать ссылки скачивания' : 'Ссылки скачивания на странице' }}</Button>
                 <p class="text-xs text-ui-muted">Всего: {{ report.images.total }} · Без alt: {{ report.images.withoutAlt }} · Пустой alt: {{ report.images.emptyAlt }}</p>
-                <article v-for="item in images.slice(0,visible)" :key="item.id" class="flex gap-3 ui-panel text-xs">
-                    <SeoImagePreview v-if="/^https?:/.test(item.src)" :src="item.src" :alt="item.alt" />
+                <article v-for="item in images.slice(0,visible)" :key="item.id" class="relative isolate flex gap-3 ui-panel text-xs hover:bg-ui-raised">
+                    <button type="button" aria-label="Показать изображение на странице" title="Показать изображение на странице"
+                        class="absolute inset-0 cursor-pointer rounded-panel focus-visible:outline-2 focus-visible:outline-ui-accent" @click="goToImage(item)"></button>
+                    <div v-if="/^https?:/.test(item.src)" class="relative z-10 shrink-0 self-start">
+                        <SeoImagePreview :src="item.src" :alt="item.alt" />
+                    </div>
                     <div class="grid min-w-0 gap-1">
-                        <a :href="/^https?:/.test(item.src) ? item.src : undefined" target="_blank" rel="noreferrer" class="break-all text-ui-accent">{{ item.src || 'Источник отсутствует' }}</a>
+                        <a v-if="/^https?:/.test(item.src)" :href="item.src" target="_blank" rel="noreferrer" class="relative z-10 break-all text-ui-accent">{{ item.src }}</a>
+                        <span v-else class="break-all text-ui-muted">{{ item.src || 'Источник отсутствует' }}</span>
                         <span>Alt: {{ item.alt === null ? 'Отсутствует' : item.alt || '(пустой)' }}</span>
                         <span>Title: {{ item.title || 'Нет' }} · {{ item.width }} × {{ item.height }} · {{ item.loading || 'eager' }}</span>
-                        <button v-if="/^https?:/.test(item.src)" type="button" class="w-fit cursor-pointer text-ui-accent hover:underline" @click="downloadImage(item.src)">Скачать</button>
+                        <button v-if="/^https?:/.test(item.src)" type="button" class="relative z-10 w-fit cursor-pointer text-ui-accent hover:underline" @click="downloadImage(item.src)">Скачать</button>
                     </div>
-
                 </article>
                 <Button v-if="images.length > visible" size="sm" variant="ghost" @click="visible += 100">Показать ещё</Button>
             </template>
             <template v-if="section === 'markup'">
                 <Card title="Open Graph"><PropertyList v-if="openGraphMeta.length" :items="openGraphMeta" /><p v-else class="text-xs text-ui-muted">Не найден</p></Card>
                 <Card title="Twitter Cards"><PropertyList v-if="twitterMeta.length" :items="twitterMeta" /><p v-else class="text-xs text-ui-muted">Не найден</p></Card>
-                <Button size="sm" variant="secondary" @click="ogPreviewOpen = true">Предпросмотр</Button>
-                <OpenGraphPreview v-model:open="ogPreviewOpen" :report="report" />
+                <Button size="sm" variant="secondary" @click="previewLinks">Предпросмотр ссылок ↗</Button>
                 <Card title="JSON-LD"><div v-for="(item,index) in report.jsonLd" :key="index" class="mb-2"><p class="text-xs" :class="item.valid ? 'text-ui-success' : 'text-ui-warning'">{{ item.valid ? 'Корректный JSON' : item.error }}</p><pre class="max-h-72 overflow-auto whitespace-pre-wrap break-all text-[11px]">{{ item.valid ? JSON.stringify(item.value,null,2) : item.raw }}</pre></div><p v-if="!report.jsonLd.length" class="text-xs text-ui-muted">Не найден</p></Card>
                 <Card title="Microdata / RDFa"><pre class="max-h-72 overflow-auto whitespace-pre-wrap break-all text-[11px]">{{ JSON.stringify({ microdata: report.microdata, rdfa: report.rdfa },null,2) }}</pre></Card>
                 <div class="flex flex-wrap gap-2"><a :href="tools.find(item => item[0] === 'Schema.org')?.[1]" target="_blank" rel="noreferrer" class="text-xs text-ui-accent">Валидатор Schema.org ↗</a><a :href="tools.find(item => item[0] === 'Google Rich Results')?.[1]" target="_blank" rel="noreferrer" class="text-xs text-ui-accent">Google Rich Results ↗</a></div>
@@ -282,7 +307,7 @@ const tools = computed(() => {
                 <Button v-if="!expanded" variant="secondary" size="sm" @click="openSeoApp(tab.id,'sitemap')">Открыть единый sitemap ↗</Button>
             </template>
             <template v-if="section === 'page'">
-                <p class="text-xs text-ui-muted">Изменения действуют только на этой странице до выключения или её закрытия/перезагрузки.</p>
+                <p class="text-xs text-ui-muted">{{ docked ? 'Подсветки сохраняются при переходах в этой вкладке. Отключение CSS действует на текущей странице.' : 'Изменения действуют только на этой странице до выключения или её закрытия/перезагрузки.' }}</p>
                 <Button v-for="[action,label] in [['external','Внешние ссылки'],['noindex','Noindex / nofollow'],['headings','Заголовки H1–H6'],['alt','Alt изображений'],['downloads','Ссылки скачивания изображений'],['css','Отключить CSS']]" :key="action" size="sm" variant="secondary" @click="toggle(action)">{{ report.actions[action] ? '✓ ' : '' }}{{ label }}</Button>
                 <Card title="Статистика текста"><p class="text-xs">Слов: {{ report.statistics.words }} · Символов: {{ report.statistics.characters }} · Без пробелов: {{ report.statistics.withoutSpaces }}</p><p class="text-xs">Выделенный текст: {{ report.statistics.selection.words }} слов, {{ report.statistics.selection.characters }} символов</p>
                     <details v-for="[key,label] in [['top','Частые слова'],['bigrams','Биграммы'],['withoutAnchors','Без анкоров'],['anchors','Анкоры'],['imageText','Alt и title изображений']]" :key="key" class="mt-3 text-xs"><summary class="cursor-pointer text-ui-accent">{{ label }}</summary><p v-for="row in (Array.isArray(report.statistics[key]) ? report.statistics[key] : report.statistics[key].top)" :key="row.word">{{ row.word }} — {{ row.count }} ({{ row.density }}%)</p></details>

@@ -23,14 +23,17 @@
 
 Manifest V3 · Vue 3 · JavaScript / TypeScript · Vite 8 · Tailwind CSS 4 · CRXJS · IndexedDB / Web Crypto.
 
-Node.js 24.13.1:
+Установите зависимости командой `npm ci` на Node.js 24.13.1.
 
-```bash
-npm ci
-npm run build:all
-```
+| Команда | Результат |
+| --- | --- |
+| `npm run dev` | Режим разработки для Chromium |
+| `npm run dev:firefox` | Режим разработки для Firefox |
+| `npm run build` | Сборка Chromium в `dist/` |
+| `npm run build:firefox` | Сборка Firefox в `dist-firefox/` |
+| `npm run release` | Проверка типов, обе сборки и два ZIP-пакета в `release/` |
 
-Результат: `dist` (Chromium), `dist-firefox`; ZIP-пакеты — в `release/`. `npm run build:release` собирает только Chromium; подписанный Firefox XPI добавляется в релиз вручную.
+Команда `release` готовит `sup5th-chromium-v<версия>.zip` для Chromium и `sup5th-firefox-v<версия>.zip` для подписи Firefox. Публикация в GitHub Releases выполняется вручную. Для Firefox в релиз добавляется подписанный `.xpi`.
 
 ## API
 

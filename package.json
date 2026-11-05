@@ -8,13 +8,9 @@
   "scripts": {
     "dev": "vite",
     "dev:firefox": "vite --mode firefox",
-    "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.firefox.json && tsc -p tsconfig.webextensions.json",
-    "build": "npm run typecheck && vite build",
-    "build:firefox": "npm run typecheck && vite build --mode firefox",
-    "build:release": "npm run build",
-    "build:all": "npm run typecheck && vite build && vite build --mode firefox",
-    "verify:seo-audit": "node scripts/verify-seo-audit.mjs",
-    "lint:firefox": "addons-linter --self-hosted dist-firefox"
+    "build": "vite build",
+    "build:firefox": "vite build --mode firefox",
+    "release": "vue-tsc --noEmit && tsc -p tsconfig.firefox.json && tsc -p tsconfig.webextensions.json && vite build --mode release && vite build --mode release-firefox"
   },
   "dependencies": {
     "punycode": "^2.3.1",
@@ -28,8 +24,6 @@
     "@types/node": "^24.19.2",
     "@types/webextension-polyfill": "^0.12.6",
     "@vitejs/plugin-vue": "^6.0.9",
-    "addons-linter": "^1.15.1",
-    "playwright": "1.62.1",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.3.5",

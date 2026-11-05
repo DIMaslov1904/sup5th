@@ -1,4 +1,5 @@
 import { createImageAnnotations } from './imageAnnotations.js'
+import { SEO_ANNOTATIONS, seoAnnotations } from '../utils/seoAnnotations.js'
 const annotations = createImageAnnotations()
 const state = { headings: false, external: false, noindex: false, alt: false, downloads: false, css: false }
 const sheets = new Map()
@@ -48,8 +49,16 @@ addEventListener('resize', refreshImageLabels)
 addEventListener('scroll', refreshImageLabels, true)
 addEventListener('load', refreshImageLabels, true)
 export const getSeoActions = () => ({ ...state })
+export const setSeoAnnotations = actions => {
+    const next = seoAnnotations(actions)
+    if (SEO_ANNOTATIONS.some(name => next[name] !== state[name])) {
+        Object.assign(state, next)
+        render()
+    }
+    return getSeoActions()
+}
 export const setSeoAction = ({ action, enabled }) => {
-    if (!(action in state)) throw new Error('Неизвестное действие SEO')
+    if (!Object.hasOwn(state, action)) throw new Error('Неизвестное действие SEO')
     state[action] = Boolean(enabled)
     if (action === 'css') {
         if (enabled) for (const sheet of document.styleSheets) {

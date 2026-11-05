@@ -10,7 +10,8 @@ import { createManifest } from "./manifest.config.mjs"
 const rootDir = dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig(({ mode }) => {
-  const browser = mode === 'firefox' ? 'firefox' : 'chrome'
+  const browser = mode === 'firefox' || mode === 'release-firefox' ? 'firefox' : 'chrome'
+  const release = mode === 'release' || mode === 'release-firefox'
   const manifest = createManifest(browser)
   const outDir = browser === 'chrome' ? 'dist' : `dist-${browser}`
   return {
@@ -18,10 +19,11 @@ export default defineConfig(({ mode }) => {
       vue(),
       tailwindcss(),
       crx({ manifest, browser }),
-      zipPack({
+      release && zipPack({
         inDir: outDir,
         outDir: 'release',
-        outFileName: `sup5th-${browser === 'chrome' ? 'chromium' : browser}-v${manifest.version}.zip`
+        outFileName: `sup5th-${browser === 'chrome' ? 'chromium' : browser}-v${manifest.version}.zip`,
+        done: error => { if (error) throw error }
       })
     ],
     resolve: {
@@ -35,6 +37,7 @@ export default defineConfig(({ mode }) => {
         input: {
           'src/sidepanel/index': resolve(rootDir, 'src/sidepanel/index.html'),
           'src/biometric/index': resolve(rootDir, 'src/biometric/index.html'),
+          'src/social-preview/index': resolve(rootDir, 'src/social-preview/index.html'),
           ...(browser === 'chrome'
             ? { 'src/offscreen/index': resolve(rootDir, 'src/offscreen/index.html') }
             : {})

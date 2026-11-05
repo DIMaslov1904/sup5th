@@ -56,7 +56,7 @@ export const collectAuditTargets = (doc, pageUrl) => {
         const existing = targets.get(url)
         if (!existing || existing.kind === 'page') targets.set(url, target)
     }
-    for (const link of doc.querySelectorAll('a[href], area[href]')) add(link.getAttribute('href'), link.hasAttribute('download') ? 'document' : 'page')
+    for (const link of doc.querySelectorAll('a[href]:not([data-sup-seo-download]), area[href]')) add(link.getAttribute('href'), link.hasAttribute('download') ? 'document' : 'page')
     for (const image of doc.querySelectorAll('img, input[type="image" i]')) {
         for (const raw of [image.currentSrc, image.getAttribute('src'), image.getAttribute('data-src'), image.getAttribute('data-original')]) add(raw, 'image')
         for (const raw of auditSrcsetUrls(image.getAttribute('srcset') || image.getAttribute('data-srcset'))) add(raw, 'image')

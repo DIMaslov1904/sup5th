@@ -2,6 +2,7 @@ import { extensionApi } from '../platform/extensionApi.js'
 import { trustedLocal } from '../platform/trustedStorage.js'
 import { createBiometricPageHandlers } from './biometricPages.js'
 import { fetchSeoResource } from './seoFetch.js'
+import { seoAnnotationsKey } from '../utils/seoAnnotations.js'
 import { getProjectShortcuts, updateProjectShortcuts } from './projectShortcuts.js'
 import { getPipelineAbsence, setPipelineAbsence } from './pipelineBadges.js'
 import { downloadSeoImage } from './imageDownload.js'
@@ -106,7 +107,9 @@ extensionApi.runtime.onInstalled.addListener(startup)
 extensionApi.runtime.onStartup.addListener(startup)
 extensionApi.alarms.onAlarm.addListener(alarm => { if (alarm.name === PROJECTS_ALARM) startup() })
 extensionApi.tabs.onActivated.addListener(({ tabId }) => updateBadgeForTab(tabId))
-extensionApi.tabs.onRemoved.addListener(tabId => ready.then(() => Promise.all([forgetAuthTab(tabId), forgetSupportAuthTab(tabId)])).catch(console.error))
+extensionApi.tabs.onRemoved.addListener(tabId => ready.then(() => Promise.all([
+    forgetAuthTab(tabId), forgetSupportAuthTab(tabId), extensionApi.storage.session.remove(seoAnnotationsKey(tabId))
+])).catch(console.error))
 extensionApi.tabs.onUpdated.addListener((tabId, changes, tab) => {
     if (changes.status !== 'complete') return
     updateBadgeForTab(tabId)

@@ -14,7 +14,7 @@ import Tabs from '../popup/components/ui/Tabs.vue'
 const params = new URLSearchParams(location.search)
 const props = defineProps({ docked: Boolean })
 const homeUrl = extensionApi.runtime.getURL('src/options/index.html')
-const { tab, error, ready, address, addressError, opening, inspectAddress, section, seoSection, sourceRevision, select, selectSeoSection } = useSeoSource(props.docked, params)
+const { tab, error, ready, address, addressError, opening, inspectAddress, section, seoSection, sourceRevision, select, selectSeoSection, rememberAnnotations } = useSeoSource(props.docked, params)
 </script>
 <template>
     <main class="min-h-screen ui-background flex flex-col text-ui-text">
@@ -28,7 +28,6 @@ const { tab, error, ready, address, addressError, opening, inspectAddress, secti
                     <Input v-model="address" aria-label="Адрес сайта" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://example.com" class="min-w-0 flex-1" required :disabled="opening" @update:model-value="addressError = ''" />
                     <Button type="submit" :loading="opening">Проверить</Button>
                 </form>
-                <Button v-else-if="tab" size="sm" variant="ghost" class="justify-self-start" @click="extensionApi.tabs.update(tab.id, { active: true })">К сайту ↗</Button>
                 <Message v-if="!docked && addressError">{{ addressError }}</Message>
             </header>
             <p v-if="!ready" class="text-[13px] text-ui-muted" role="status">Загружаем страницу…</p>
@@ -36,7 +35,8 @@ const { tab, error, ready, address, addressError, opening, inspectAddress, secti
             <KeepAlive v-if="tab" :key="sourceRevision">
                 <SeoAudit v-if="section === 'seo'" :tab="tab" />
                 <SitemapView v-else-if="section === 'sitemap'" :tab="tab" />
-                <SeoPanel v-else-if="section === 'overview'" :tab="tab" :initial-section="seoSection" :docked="docked" expanded @section-change="selectSeoSection" />
+                <SeoPanel v-else-if="section === 'overview'" :tab="tab" :initial-section="seoSection" :docked="docked" expanded
+                    @section-change="selectSeoSection" @annotations-change="rememberAnnotations" />
             </KeepAlive>
         </div>
     </main>

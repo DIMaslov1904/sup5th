@@ -38,6 +38,9 @@ export const withActiveTab = async (tabId, action) => {
 export const openSeoApp = (tabId, tool = 'seo', section = '') => extensionApi.tabs.create({
     url: seoAppUrl(extensionApi.runtime.getURL('src/options/index.html'), tabId, tool, section)
 })
+export const openSocialPreview = tabId => extensionApi.tabs.create({
+    url: extensionApi.runtime.getURL('src/social-preview/index.html') + '?tabId=' + tabId
+})
 export const downloadText = (text, filename, type = 'text/plain') => {
     const url = URL.createObjectURL(new Blob([text], { type }))
     const a = document.createElement('a'); a.href = url; a.download = filename; a.click()

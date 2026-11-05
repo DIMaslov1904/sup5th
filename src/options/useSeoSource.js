@@ -2,6 +2,8 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { extensionApi } from '../platform/extensionApi.js'
 import { normalizeSeoSection } from '../utils/seoSections.js'
 import { seoSidePanelKey } from '../utils/seoSidePanel.js'
+import { seoAnnotations, seoAnnotationsKey } from '../utils/seoAnnotations.js'
+import { sendSeoToTab, withActiveTab } from '../utils/seoClient.js'
 import { siteHref } from '../utils/siteAddress.js'
 const tool = value => ['overview', 'seo', 'sitemap'].includes(value) ? value : 'overview'
 
@@ -10,7 +12,30 @@ export const useSeoSource = (docked, params) => {
     const address = ref(''), addressError = ref(''), opening = ref(false)
     const section = ref(tool(params.get('tool')))
     const seoSection = ref(normalizeSeoSection(params.get('section')))
+    const remembered = new Map()
     let alive = true, revision = 0, contextRevision = 0, sourceId = null, key = '', sourceAddress = ''
+    const restoreAnnotations = async (id, url, current) => {
+        try {
+            if (!remembered.has(id)) {
+                const storageKey = seoAnnotationsKey(id)
+                const saved = await extensionApi.storage.session.get(storageKey)
+                if (!alive || current !== revision) return
+                if (!remembered.has(id)) remembered.set(id, saved[storageKey] || null)
+            }
+            const actions = remembered.get(id)
+            if (actions) await withActiveTab(id, () => sendSeoToTab(id, 'seo:annotations', { url, actions }))
+        } catch { /* The source may have navigated or be inaccessible to the extension. */ }
+    }
+    const rememberAnnotations = (id, actions, action) => {
+        if (!docked || id !== sourceId) return
+        const previous = remembered.get(id)
+        const next = seoAnnotations(actions)
+        if (!action && (previous || !Object.values(next).some(Boolean))) return
+        const preferred = action && previous ? { ...previous, [action]: next[action] } : next
+        remembered.set(id, preferred)
+        extensionApi.storage.session.set({ [seoAnnotationsKey(id)]: preferred })
+            .catch(reason => { if (alive && sourceId === id) error.value = reason.message })
+    }
     const setAddress = (url, replace = false) => {
         if (replace || !address.value || address.value === sourceAddress) address.value = url
         sourceAddress = url
@@ -28,6 +53,10 @@ export const useSeoSource = (docked, params) => {
             loading = value.status === 'loading' || Boolean(value.pendingUrl && isSite)
             if (isSite) setAddress(url)
             if (loading) return
+            if (docked && isSite) {
+                await restoreAnnotations(id, url, current)
+                if (!alive || current !== revision) return
+            }
             tab.value = isSite ? value : null
             sourceRevision.value++
         } catch {
@@ -51,7 +80,10 @@ export const useSeoSource = (docked, params) => {
         if (changes.status === 'loading') { revision++; ready.value = false; tab.value = null }
         else if (changes.status === 'complete' || changes.url) load(id)
     }
-    const removed = id => { if (id === sourceId && (docked || !ready.value)) load(id) }
+    const removed = id => {
+        remembered.delete(id)
+        if (id === sourceId && (docked || !ready.value)) load(id)
+    }
     onMounted(async () => {
         extensionApi.tabs.onUpdated.addListener(updated); extensionApi.tabs.onRemoved.addListener(removed)
         if (!docked) { await load(Number(params.get('tabId'))); return }
@@ -119,5 +151,5 @@ export const useSeoSource = (docked, params) => {
             if (alive) opening.value = false
         }
     }
-    return { tab, error, ready, address, addressError, opening, inspectAddress, section, seoSection, sourceRevision, select, selectSeoSection }
+    return { tab, error, ready, address, addressError, opening, inspectAddress, section, seoSection, sourceRevision, select, selectSeoSection, rememberAnnotations }
 }

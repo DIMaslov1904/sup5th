@@ -1,8 +1,9 @@
 import { extensionApi } from '../platform/extensionApi.js'
-import { collectSeoDom } from '../utils/seoDom.js'
+import { collectMetaTags, collectSeoDom } from '../utils/seoDom.js'
 import { collectIndexingRules } from '../utils/seoRules.js'
-import { getSeoActions, setSeoAction } from './seoActions.js'
-import { captureHeadings, focusHeading } from './headingNavigation.js'
+import { getSeoActions, setSeoAction, setSeoAnnotations } from './seoActions.js'
+import { captureHeadings, captureImages, focusHeading, focusImage } from './seoElementNavigation.js'
+import { withoutFragment } from '../utils/linkCheckStatus.js'
 import { collectPageWeight } from './pageWeight.js'
 import { collectCwv } from '../utils/cwv.js'
 import { AUDIT_DISCOVERY_LIMIT } from '../utils/seoAuditDiscovery.js'
@@ -33,7 +34,7 @@ const declaredCharset = () => document.querySelector('meta[charset]')?.getAttrib
     || getMeta('meta[http-equiv="Content-Type" i]').match(/charset=([\w-]+)/i)?.[1]?.trim() || ''
 
 const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = false } = {}) => {
-    const dom = collectSeoDom(document, location.href)
+    const dom = collectSeoDom(document, location.href, captureImages())
 
     const robotsUrl = new URL('/robots.txt', location.href).href
     const sitemapUrl = new URL('/sitemap.xml', location.href).href
@@ -58,7 +59,7 @@ const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = false } 
 
     // Уникальные внутренние ссылки (для расширенного аудита на отдельной странице)
     const currentUrl = new URL(location.href); currentUrl.hash = ''
-    const internalLinkUrls = [...new Set([...document.links].map(link => {
+    const internalLinkUrls = [...new Set([...document.links].filter(link => !link.hasAttribute('data-sup-seo-download')).map(link => {
         try {
             const url = new URL(link.href); url.hash = ''
             return /^https?:$/.test(url.protocol) && url.origin === location.origin && !url.username && !url.password && url.href !== currentUrl.href ? url.href : ''
@@ -138,13 +139,40 @@ const registerSeoHandler = () => {
             sendResponse({ ok: true, data: { documentId, url: location.href, actions: getSeoActions() } })
             return false
         }
+        if (message?.type === 'seo:social') {
+            sendResponse({ ok: true, data: {
+                url: location.href,
+                baseUrl: document.baseURI,
+                title: document.title.trim(),
+                description: getMeta('head meta[name="description" i]'),
+                metaTags: collectMetaTags(document.head).filter(tag => /^(?:og|twitter):/i.test(tag.name))
+            } })
+            return false
+        }
         if (message?.type === 'seo:heading') {
             try { sendResponse({ ok: true, data: focusHeading(message.payload || {}) }) }
             catch (error) { sendResponse({ ok: false, error: error.message }) }
             return false
         }
+        if (message?.type === 'seo:image') {
+            try {
+                if (message.payload?.documentId !== documentId) throw new Error('Страница изменилась. Обновите SEO-анализ.')
+                sendResponse({ ok: true, data: focusImage(message.payload) })
+            } catch (error) { sendResponse({ ok: false, error: error.message }) }
+            return false
+        }
         if (message?.type === 'seo:action') {
-            try { sendResponse({ ok: true, data: setSeoAction(message.payload) }) }
+            try {
+                if (message.payload?.documentId && message.payload.documentId !== documentId) throw new Error('Страница изменилась. Обновите SEO-анализ.')
+                sendResponse({ ok: true, data: setSeoAction(message.payload) })
+            } catch (error) { sendResponse({ ok: false, error: error.message }) }
+            return false
+        }
+        if (message?.type === 'seo:annotations') {
+            try {
+                if (withoutFragment(message.payload.url) !== withoutFragment(location.href)) throw new Error('Исходная страница изменилась.')
+                sendResponse({ ok: true, data: setSeoAnnotations(message.payload.actions) })
+            }
             catch (error) { sendResponse({ ok: false, error: error.message }) }
             return false
         }
