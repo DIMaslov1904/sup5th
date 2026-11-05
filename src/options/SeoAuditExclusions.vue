@@ -2,9 +2,9 @@
 import { computed, ref } from 'vue'
 import { paginateAuditResults } from '../utils/seoAuditResults.js'
 import Card from '../popup/components/ui/Card.vue'
-import Button from '../popup/components/ui/Button.vue'
 import SeoAuditSources from './SeoAuditSources.vue'
 import SeoAuditInfo from './SeoAuditInfo.vue'
+import SeoAuditPagination from './SeoAuditPagination.vue'
 const props = defineProps({ exclusions: Object })
 const open = ref(false), page = ref(1)
 const pagination = computed(() => paginateAuditResults(props.exclusions?.items || [], page.value))
@@ -22,11 +22,8 @@ const pagination = computed(() => paginateAuditResults(props.exclusions?.items |
                         <SeoAuditSources :sources="item.sources" :sitemaps="item.sitemaps" :current="item.current" />
                     </li>
                 </ul>
-                <nav v-if="pagination.count > 1" class="flex flex-wrap items-center gap-2" aria-label="Страницы исключённых URL">
-                    <Button variant="secondary" size="sm" :disabled="pagination.page === 1" @click="page = pagination.page - 1">Назад</Button>
-                    <span>{{ pagination.page }} / {{ pagination.count }}</span>
-                    <Button variant="secondary" size="sm" :disabled="pagination.page === pagination.count" @click="page = pagination.page + 1">Далее</Button>
-                </nav>
+                <SeoAuditPagination v-if="pagination.count > 1" :page="pagination.page" :count="pagination.count"
+                    label="Страницы исключённых URL" @update:page="page = $event" />
             </div>
         </details>
     </Card>

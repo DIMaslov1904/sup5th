@@ -6,6 +6,7 @@ import { downloadText } from '../utils/seoClient.js'
 import Card from '../popup/components/ui/Card.vue'
 import Button from '../popup/components/ui/Button.vue'
 import Select from '../popup/components/ui/Select.vue'
+import SeoAuditPagination from './SeoAuditPagination.vue'
 const props = defineProps({ results: { type: Array, default: () => [] } })
 const query = ref(''), status = ref('all'), page = ref(1)
 const colors = { available: 'text-ui-success', unavailable: 'text-ui-danger', redirect: 'text-ui-warning', unknown: 'text-ui-muted' }
@@ -36,7 +37,8 @@ const exportCsv = () => downloadText(auditAvailabilityCsv(filtered.value), 'seo-
                 </tr></tbody>
             </table>
         </div>
-        <nav v-if="pagination.count > 1" class="mt-3 flex items-center gap-2 text-xs" aria-label="Страницы внешних ссылок"><Button variant="secondary" size="sm" :disabled="pagination.page === 1" @click="page--">Назад</Button><span>{{ pagination.page }} / {{ pagination.count }}</span><Button variant="secondary" size="sm" :disabled="pagination.page === pagination.count" @click="page++">Далее</Button></nav>
+        <SeoAuditPagination v-if="pagination.count > 1" :page="pagination.page" :count="pagination.count"
+            label="Страницы внешних ссылок" class="mt-3" @update:page="page = $event" />
     </Card>
 </template>
 <style src="../styles/seoAuditTable.css"></style>

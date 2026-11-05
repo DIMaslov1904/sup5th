@@ -11,16 +11,18 @@ const PROBE_TIMEOUT = 2000
 const INJECT_TIMEOUT = 10000
 const INJECTED_TIMEOUT = 15000
 
-export const createSeoMessenger = ({ sendMessage, inject }) => async (tabId, type = 'seo:scan', payload = {}) => {
-    if (!Number.isInteger(tabId)) throw new Error('Откройте проверяемый сайт')
+export class SeoTabUnavailableError extends Error {}
+
+export const createSeoMessenger = ({ sendMessage, inject }) => async (tabId, type, payload = {}) => {
+    if (!Number.isInteger(tabId)) throw new SeoTabUnavailableError('Откройте страницу сайта и запустите анализ.')
     const request = () => sendMessage(tabId, { type, payload }, { frameId: 0 })
     let response = await withTimeout(request(), PROBE_TIMEOUT)
     if (response == null) {
         const injected = await withTimeout(Promise.resolve().then(() => inject(tabId)), INJECT_TIMEOUT)
-        if (injected == null) throw new Error('Не удалось запустить SEO-анализ: вкладка не отвечает. Откройте её и повторите анализ.')
+        if (injected == null) throw new SeoTabUnavailableError('Откройте проверяемую вкладку и повторите анализ.')
         response = await withTimeout(request(), INJECTED_TIMEOUT)
     }
-    if (response == null) throw new Error('SEO-скрипт не ответил после запуска. Перезагрузите проверяемую страницу и повторите анализ.')
+    if (response == null) throw new SeoTabUnavailableError('Обновите проверяемую страницу и повторите анализ.')
     if (!response.ok) throw new Error(response.error || 'Не удалось получить SEO-данные')
     return response.data
 }

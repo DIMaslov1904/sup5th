@@ -1,151 +1,219 @@
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { startAuditFixture } from '../tests/seo-audit-fixture.mjs'
 
-// Use an installed Playwright, or point PLAYWRIGHT_MODULE at its index.mjs.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
-const output = resolve(process.env.SEO_AUDIT_OUTPUT || '/tmp/sup5th-seo-ui')
+const output = resolve(process.env.SEO_AUDIT_OUTPUT || join(tmpdir(), 'sup5th-seo-ui'))
+const extensionPath = resolve(process.env.SEO_AUDIT_DIST || 'dist')
+assert.ok(existsSync(join(extensionPath, 'manifest.json')), 'Build Chromium with npm run build first')
 await mkdir(output, { recursive: true })
 await rm(join(output, 'verification.json'), { force: true })
-const profile = await mkdtemp(join(tmpdir(), 'sup5th-seo-ui-'))
-const fixture = await startAuditFixture(), errors = [], verified = []
-let context, ui
-const check = (name, assertion) => { assertion(); verified.push(name); console.log('PASS ' + name) }
-const switchTab = name => ui.getByRole('tablist', { name: 'Разделы SEO-аудита' }).getByRole('tab', { name: new RegExp('^' + name) }).click()
-const start = async (pause = false) => {
-    await ui.getByRole('button', { name: 'Запустить аудит', exact: true }).click()
-    if (pause) {
-        await ui.getByRole('button', { name: 'Пауза', exact: true }).click()
-        await ui.getByRole('button', { name: 'Продолжить', exact: true }).waitFor()
-        await ui.getByLabel('Лимит HTTP-проверки', { exact: true }).fill('16')
-        await ui.getByLabel('Лимит HTTP-проверки', { exact: true }).fill('15')
-        await ui.getByRole('button', { name: 'Продолжить', exact: true }).click()
-    }
-    await ui.getByRole('button', { name: 'Запустить аудит', exact: true }).waitFor({ timeout: 30000 })
-    await ui.getByRole('tablist', { name: 'Разделы SEO-аудита' }).waitFor()
+const profile = await mkdtemp(join(tmpdir(), 'sup5th-seo-profile-'))
+let context, fixture, ui
+const verified = [], uncaught = []
+const pass = name => { verified.push(name); console.log('PASS ' + name) }
+
+const tabs = name => ui.getByRole('tablist', { name, exact: true })
+const resultTab = name => tabs('Разделы SEO-аудита').getByRole('tab', { name })
+const modeTab = name => tabs('Режим проверки').getByRole('tab', { name, exact: true })
+const button = name => ui.getByRole('button', { name, exact: true })
+const startButton = () => button('Запустить аудит')
+const limit = () => ui.getByLabel('Лимит HTTP-проверки', { exact: true })
+const finished = () => startButton().waitFor()
+const run = async () => { await startButton().click(); await finished() }
+const download = async (name, filename) => {
+    const [file] = await Promise.all([ui.waitForEvent('download'), button(name).click()])
+    const path = join(output, filename)
+    await file.saveAs(path)
+    return readFile(path, 'utf8')
 }
+const report = async filename => JSON.parse(await download('Скачать отчёт (JSON)', filename))
+const withPendingRequest = async action => {
+    const held = fixture.holdSiteResponse('/')
+    try {
+        await startButton().click()
+        await Promise.race([
+            held.started,
+            delay(15000, undefined, { ref: false }).then(() => { throw new Error('Audit did not request the source page') })
+        ])
+        await action(held.release)
+    } finally {
+        held.release()
+    }
+}
+
 try {
-    context = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, acceptDownloads: true,
-        ...(process.env.SEO_BROWSER_EXECUTABLE ? { executablePath: process.env.SEO_BROWSER_EXECUTABLE } : {}),
-        args: [`--disable-extensions-except=${resolve('dist')}`, `--load-extension=${resolve('dist')}`], ignoreDefaultArgs: ['--disable-extensions'] })
-    const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker')
-    const extensionId = new URL(worker.url()).host
-    const source = await context.newPage(); await source.goto(fixture.origin)
-    const tab = await worker.evaluate(async origin => (await chrome.tabs.query({})).find(item => item.url === origin + '/'), fixture.origin)
-    assert.ok(tab?.id)
-    ui = await context.newPage()
-    ui.on('pageerror', error => errors.push(error.message))
-    ui.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
-    await ui.goto(`chrome-extension://${extensionId}/src/options/index.html?tool=seo&tabId=${tab.id}`)
-    const cdp = await context.newCDPSession(ui)
+    fixture = await startAuditFixture()
+    const browser = process.env.SEO_BROWSER_EXECUTABLE
+        ? { executablePath: process.env.SEO_BROWSER_EXECUTABLE }
+        : { channel: existsSync(chromium.executablePath()) ? 'chromium' : 'chrome' }
+    context = await chromium.launchPersistentContext(profile, {
+        ...browser, headless: true, acceptDownloads: true,
+        args: ['--enable-unsafe-extension-debugging'], ignoreDefaultArgs: ['--disable-extensions']
+    })
+    const cdp = await context.browser().newBrowserCDPSession()
+    const { id } = await cdp.send('Extensions.loadUnpacked', { path: extensionPath })
     const browserVersion = await cdp.send('Browser.getVersion')
-    await ui.getByRole('heading', { name: 'SEO-аудит сайта' }).waitFor()
-    await ui.getByLabel('Режим проверки', { exact: true }).selectOption('internal')
-    await ui.getByLabel('Лимит HTTP-проверки', { exact: true }).fill('15')
-    await start(true)
-    assert.equal(await ui.getByRole('tablist', { name: 'Разделы SEO-аудита' }).getByRole('tab').count(), 6)
-    const downloadPromise = ui.waitForEvent('download')
-    await ui.getByRole('button', { name: 'Скачать отчёт (JSON)', exact: true }).click()
-    await (await downloadPromise).saveAs(join(output, 'report.json'))
-    const exported = JSON.parse(await readFile(join(output, 'report.json'), 'utf8'))
-    assert.equal(exported.state, 'done'); assert.equal(exported.audit.pageResults.length, 9)
-    assert.equal(exported.audit.exclusions.items.length, 2)
-    check('pause/resume, six tabs, nine crawled page addresses and exclusions', () => assert.equal(fixture.requests.includes('/excluded'), false))
-    for (const [status, count] of Object.entries(exported.summary)) assert.equal(Number(await ui.locator(`[data-audit-summary="${status}"]`).innerText()), count)
-    check('summary counts include page issues and match full JSON export', () => assert.ok(exported.issues.some(issue => issue.id === 'pages-missing-title')))
-    await ui.screenshot({ path: join(output, 'summary.png'), fullPage: true })
+    const worker = context.serviceWorkers().find(candidate => new URL(candidate.url()).host === id)
+        || await context.waitForEvent('serviceworker', candidate => new URL(candidate.url()).host === id)
+    const sourceUrl = fixture.origin + '/'
+    const source = context.pages()[0]
+    await source.goto(sourceUrl)
+    const tab = await worker.evaluate(async url => (await chrome.tabs.query({})).find(item => item.url === url), sourceUrl)
+    assert.ok(tab?.id, 'Fixture tab is visible to the installed extension')
+    assert.ok((await context.cookies(sourceUrl)).some(cookie => cookie.name === 'seo_fixture'))
+
+    ui = await context.newPage()
+    ui.setDefaultTimeout(15000)
+    ui.on('pageerror', error => uncaught.push(error.message))
+    const app = 'chrome-extension://' + id
+    const auditUrl = app + '/src/options/index.html?tool=seo&tabId=' + tab.id
+    await ui.goto(auditUrl)
+    await modeTab('Внутренние ссылки').click()
+    await limit().fill('15')
+    const custom = ui.getByLabel('Свои исключения', { exact: true })
+    assert.equal(await custom.isVisible(), false)
+    await ui.getByText('Дополнительно', { exact: true }).click()
+    await custom.fill('Disallow: /custom-blocked')
+    const startIndex = fixture.requests.length
+    await withPendingRequest(async release => {
+        await button('Пауза').click()
+        await button('Продолжить').waitFor()
+        assert.equal(await modeTab('Внутренние ссылки').isDisabled(), true)
+        assert.equal(await custom.isDisabled(), true)
+        await limit().fill('16')
+        await button('Продолжить').click()
+        release()
+        await finished()
+    })
+    const internal = await report('report.json')
+    assert.equal(internal.state, 'done')
+    assert.equal(internal.settings.mode, 'internal')
+    assert.equal(internal.settings.pageLimit, 16)
+    assert.equal(internal.settings.customExclusions, 'Disallow: /custom-blocked')
+    pass('Pause and resume preserve the edited request limit and audit settings')
+
+    const requests = fixture.requests.slice(startIndex)
+    const paths = requests.filter(item => item.site === 'site' && item.method === 'GET').map(item => item.path)
+    const exclusions = new Map(internal.audit.exclusions.items.map(item => [new URL(item.url).pathname, item]))
+    assert.equal(paths.includes('/robots-blocked') || paths.includes('/custom-blocked'), false)
+    assert.equal(paths.includes('/noindex'), true)
+    assert.match(exclusions.get('/robots-blocked')?.reason, /robots\.txt/)
+    assert.match(exclusions.get('/custom-blocked')?.reason, /Свои исключения/)
+    assert.match(exclusions.get('/noindex')?.reason, /X-Robots-Tag/)
+    assert.equal(requests.some(item => item.cookie || item.site === 'external'), false)
+    assert.ok(internal.audit.robotsFile.exists)
+    assert.equal(internal.audit.sitemap.state, 'valid')
+    assert.equal(internal.audit.sitemap.complete, true)
+    assert.equal(internal.audit.llmTxt.exists, true)
+    assert.ok(internal.audit.pageResults.some(item => item.url === fixture.origin + '/sitemap-only'))
+    pass('Internal audit reads robots.txt, nested sitemap and llm.txt without cookies or blocked requests')
+
+    const redirect = internal.audit.results.find(item => item.url === fixture.origin + '/redirect')
+    assert.equal(redirect?.finalUrl, fixture.origin + '/landing')
+    assert.equal(redirect.response.headers['x-fixture-final'], 'true')
+    assert.equal(Object.hasOwn(redirect.response.headers, 'x-api-key'), false)
+    assert.ok(redirect.response.chain.some(hop => hop.status === 302 && hop.headers['x-fixture-hop'] === 'internal'))
+    assert.ok(internal.audit.results.some(item => item.url === fixture.origin + '/manual.pdf' && item.kind === 'document'))
+    pass('Internal redirects preserve hop and final headers, and private headers stay out of the report')
+
+    for (const [status, count] of Object.entries(internal.summary)) {
+        assert.equal(Number(await ui.locator(`[data-audit-summary="${status}"]`).innerText()), count)
+    }
     await ui.locator('[data-audit-summary="fail"]').click()
-    assert.equal(await ui.getByLabel('Фильтр проблем аудита').inputValue(), 'fail')
     await ui.locator('[data-audit-issue="links-http"]').getByRole('button').first().click()
-    const focusUrls = await ui.locator('[data-audit-focus-url] > a').evaluateAll(anchors => anchors.map(anchor => anchor.href).sort())
-    assert.deepEqual(focusUrls, [fixture.origin + '/missing', fixture.origin + '/server-error'].sort())
+    const focusUrls = ui.locator('[data-audit-focus-url] > a')
+    assert.deepEqual((await focusUrls.evaluateAll(anchors => anchors.map(anchor => anchor.href))).sort(),
+        ['/missing', '/server-error'].map(path => fixture.origin + path).sort())
     assert.equal(new URL(ui.url()).searchParams.get('check'), 'links-http')
-    await ui.getByRole('textbox').fill('missing')
-    await switchTab('Файлы'); await switchTab('Ошибки')
-    assert.equal(await ui.getByRole('textbox').inputValue(), 'missing')
-    await ui.getByRole('button', { name: '← К ошибкам', exact: true }).click()
+    await button('← К ошибкам').click()
     assert.equal(await ui.getByLabel('Фильтр проблем аудита').inputValue(), 'fail')
-    check('issue to exact URLs, deep link, return and preserved issue filter', () => assert.equal(new URL(ui.url()).searchParams.has('check'), false))
-    await switchTab('Ссылки')
+    pass('Summary counts agree with JSON and HTTP problems link to the exact affected URLs')
+
+    await resultTab(/^Ссылки/).click()
+    assert.equal(await ui.getByLabel('Направление ссылки').count(), 0)
     await ui.getByLabel('HTTP-статус', { exact: true }).selectOption('4xx')
-    assert.equal(await ui.locator('[data-audit-result]').count(), 2)
-    await ui.getByLabel('HTTP-статус', { exact: true }).selectOption('redirects')
     assert.equal(await ui.locator('[data-audit-result]').count(), 1)
-    await ui.getByLabel('HTTP-статус', { exact: true }).selectOption('uncertain')
+    await ui.getByLabel('HTTP-статус', { exact: true }).selectOption('redirects')
     assert.equal(await ui.locator('[data-audit-result]').count(), 1)
     await ui.getByLabel('HTTP-статус', { exact: true }).selectOption('all')
     await ui.getByLabel('Тип URL', { exact: true }).selectOption('document')
-    await ui.getByRole('searchbox').fill('manual')
-    assert.equal(await ui.locator('[data-audit-result]').count(), 1)
-    const csvPromise = ui.waitForEvent('download'); await ui.getByRole('button', { name: 'Скачать CSV (1)', exact: true }).click()
-    await (await csvPromise).saveAs(join(output, 'links.csv'))
-    assert.ok((await readFile(join(output, 'links.csv'), 'utf8')).includes('Внутренняя'))
-    await switchTab('Страницы'); await switchTab('Ссылки')
-    assert.equal(await ui.getByRole('searchbox').inputValue(), 'manual')
+    const search = ui.getByRole('searchbox')
+    await search.fill('manual')
+    const csv = await download('Скачать CSV (1)', 'links.csv')
+    assert.match(csv, /manual\.pdf/)
+    assert.match(csv, /"Направление"/)
+    assert.match(csv, /"Внутренняя"/)
+    assert.doesNotMatch(csv, /server-error/)
+    await resultTab(/^Страницы/).click()
+    await resultTab(/^Ссылки/).click()
+    assert.equal(await search.inputValue(), 'manual')
     assert.equal(await ui.getByLabel('Тип URL', { exact: true }).inputValue(), 'document')
-    check('links HTTP/type/search filters, CSV and preserved state', () => assert.equal(exported.audit.results.length, 12))
-    await switchTab('Страницы')
-    await ui.getByRole('searchbox').fill('/empty')
-    await ui.getByRole('button', { name: fixture.origin + '/empty', exact: true }).click()
-    assert.ok((await ui.locator('[data-audit-page-details]').innerText()).includes('Не заполнен'))
-    await ui.getByRole('button', { name: 'Страницы без Title →', exact: true }).click()
+    pass('HTTP, type and text filters match CSV output and survive switching result tabs')
+
+    await resultTab(/^Страницы/).click()
+    await search.fill('/empty')
+    await button(fixture.origin + '/empty').click()
+    assert.match(await ui.locator('[data-audit-page-details]').innerText(), /Не заполнен/)
+    await button('Страницы без Title →').click()
     assert.equal(new URL(ui.url()).searchParams.get('check'), 'pages-missing-title')
-    assert.equal(await ui.locator('[data-audit-focus-url]').count(), 1)
-    await switchTab('Страницы')
-    assert.equal(await ui.locator('[data-audit-page-details]').count(), 1)
-    await ui.screenshot({ path: join(output, 'page-card.png'), fullPage: true })
-    await ui.getByRole('button', { name: '← К страницам', exact: true }).click()
-    assert.equal(await ui.getByRole('searchbox').inputValue(), '/empty')
-    check('page table, metadata card, related issue and return preserve selection', () => assert.ok(true))
-    await ui.getByRole('tab', { name: 'Единый sitemap', exact: true }).click()
-    await ui.getByRole('tab', { name: 'Детальный аудит', exact: true }).click()
-    assert.equal(await ui.getByRole('searchbox').inputValue(), '/empty')
-    assert.equal(await ui.getByLabel('Режим проверки', { exact: true }).inputValue(), 'internal')
-    assert.equal(await ui.getByLabel('Лимит HTTP-проверки', { exact: true }).inputValue(), '15')
+    assert.equal(await focusUrls.count(), 1)
+    await resultTab(/^Страницы/).click()
+    await button('← К страницам').click()
+    await tabs('Инструменты расширения').getByRole('tab', { name: 'Единый sitemap' }).click()
+    await tabs('Инструменты расширения').getByRole('tab', { name: 'Детальный аудит' }).click()
+    assert.equal(await search.inputValue(), '/empty')
+    assert.equal(await limit().inputValue(), '16')
     await ui.setViewportSize({ width: 360, height: 850 })
-    await ui.getByRole('searchbox').fill('')
     assert.equal(await ui.locator('.audit-table-wrapper thead').evaluate(element => getComputedStyle(element).display), 'none')
     assert.ok(await ui.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
-    await ui.screenshot({ path: join(output, 'pages-narrow.png'), fullPage: true })
-    check('tool switching retains results and narrow tables fit the viewport', () => assert.ok(true))
-    const deepUrl = `chrome-extension://${extensionId}/src/options/index.html?tool=seo&tabId=${tab.id}&tab=issues&check=pages-missing-title`
-    await ui.goto(deepUrl); await ui.getByRole('heading', { name: 'SEO-аудит сайта' }).waitFor()
-    await ui.getByLabel('Лимит HTTP-проверки', { exact: true }).fill('10'); await start()
-    assert.equal(await ui.locator('[data-audit-focus-url]').count(), 1)
-    await switchTab('Ссылки'); await ui.reload()
-    await ui.getByRole('heading', { name: 'SEO-аудит сайта' }).waitFor(); await start()
-    assert.ok(await ui.getByRole('tab', { name: /^Ссылки/ }).getAttribute('aria-selected') === 'true')
-    check('direct issue URL works after a fresh audit; selected tab survives reload', () => assert.ok(true))
-    await ui.getByLabel('Режим проверки', { exact: true }).selectOption('external')
-    await ui.getByLabel('Лимит HTTP-проверки', { exact: true }).fill('5')
-    await ui.getByLabel('Лимит обхода страниц', { exact: true }).fill('15'); await start(); await switchTab('Ссылки')
-    await ui.getByLabel('Направление ссылки', { exact: true }).selectOption('internal')
-    assert.equal(await ui.locator('[data-audit-result]').count(), 0)
-    await ui.getByLabel('Направление ссылки', { exact: true }).selectOption('external')
-    assert.equal(await ui.locator('[data-audit-result]').count(), 1)
-    check('external-link mode and direction filter', () => assert.ok(true))
-    await worker.evaluate(async tab => {
-        await chrome.storage.session.set({ [`seoSidePanel:${tab.windowId}`]: { tabId: tab.id, tool: 'overview', section: 'overview' } })
-    }, tab)
-    await ui.goto(`chrome-extension://${extensionId}/src/sidepanel/index.html?tool=seo&tabId=${tab.id}&tab=pages`)
-    await ui.getByRole('heading', { name: 'SEO-аудит сайта' }).waitFor(); await start()
-    assert.equal(await ui.getByRole('tab', { name: /^Страницы/ }).getAttribute('aria-selected'), 'true')
-    await ui.getByRole('searchbox').fill('/empty'); await switchTab('Ссылки'); await switchTab('Страницы')
-    assert.equal(await ui.getByRole('searchbox').inputValue(), '/empty')
-    check('sidepanel app respects explicit deep link and retains tab filters', () => assert.ok(true))
-    await ui.getByRole('button', { name: 'Запустить аудит', exact: true }).click()
-    await ui.getByRole('button', { name: 'Пауза', exact: true }).waitFor()
-    await ui.getByRole('button', { name: 'Остановить аудит', exact: true }).click()
-    await ui.getByRole('button', { name: 'Запустить аудит', exact: true }).waitFor()
-    assert.ok(await ui.getByText('Проверка остановлена. Показаны только полученные результаты.', { exact: true }).isVisible())
-    check('new run resets view and stopping retains a marked partial report', () => assert.equal(new URL(ui.url()).searchParams.get('tab'), 'summary'))
-    assert.deepEqual(errors, [])
-    await writeFile(join(output, 'verification.json'), JSON.stringify({ browserVersion, verified, errors, crawledPages: exported.audit.pageResults.length, checkedUrls: exported.audit.results.length, exclusions: exported.audit.exclusions.items.length }, null, 2))
-    await rm(join(output, 'failure.png'), { force: true }); await rm(join(output, 'failure.txt'), { force: true })
+    pass('Page details link to issues, tools keep their result state and tables fit a narrow viewport')
+
+    await withPendingRequest(async release => {
+        await button('Остановить аудит').click()
+        release()
+        await finished()
+    })
+    assert.equal((await report('partial.json')).state, 'partial')
+    pass('Stopping during a request keeps a partial report')
+
+    await modeTab('Внешние ссылки').click()
+    await limit().fill('5')
+    await ui.getByLabel('Лимит обхода страниц', { exact: true }).fill('12')
+    const externalStart = fixture.requests.length
+    await run()
+    const external = await report('external.json')
+    assert.equal(external.state, 'done')
+    assert.equal(external.settings.mode, 'external')
+    assert.deepEqual(fixture.requests.slice(externalStart).filter(item => item.site === 'external')
+        .map(item => item.method + ' ' + item.path).sort(), ['HEAD /head-only', 'HEAD /ok', 'HEAD /redirect'])
+    const byPath = new Map(external.audit.results.map(item => [new URL(item.url).pathname, item]))
+    assert.equal(byPath.get('/ok')?.availability, 'available')
+    assert.equal(byPath.get('/head-only')?.status, 405)
+    assert.equal(byPath.get('/redirect')?.redirectUrl, fixture.externalOrigin + '/destination')
+    await ui.getByLabel('Доступность внешних ссылок', { exact: true }).selectOption('redirect')
+    assert.equal(await ui.locator('[data-audit-availability]').count(), 1)
+    pass('External audit sends one HEAD per URL, exposes the redirect target and applies its response filter')
+
+    await ui.goto(app + '/src/sidepanel/index.html?tool=seo&tabId=' + tab.id + '&tab=issues&check=pages-missing-title')
+    await run()
+    assert.equal(await resultTab(/^Ошибки/).getAttribute('aria-selected'), 'true')
+    assert.equal(await focusUrls.first().getAttribute('href'), fixture.origin + '/empty')
+    pass('Side panel opens the requested issue after a fresh audit')
+    assert.deepEqual(uncaught, [])
+    await writeFile(join(output, 'verification.json'), JSON.stringify({ browserVersion, verified }, null, 2))
+    await rm(join(output, 'failure.txt'), { force: true })
     console.log('UI verification passed. Evidence: ' + output)
 } catch (error) {
-    if (ui) { await ui.screenshot({ path: join(output, 'failure.png'), fullPage: true }).catch(() => {}); await writeFile(join(output, 'failure.txt'), await ui.locator('body').innerText().catch(() => '') + '\n' + error.stack) }
+    const body = await ui?.locator('body').innerText({ timeout: 1500 }).catch(() => '')
+    await writeFile(join(output, 'failure.txt'), error.stack + (body ? '\n\n' + body : ''))
     throw error
-} finally { await context?.close(); await fixture.close(); await rm(profile, { recursive: true, force: true }) }
+} finally {
+    await context?.close()
+    await fixture?.close()
+    await rm(profile, { recursive: true, force: true })
+}

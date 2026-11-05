@@ -1,7 +1,7 @@
 export const AUDIT_MODES = [
     { value: 'pages', label: 'Страницы', hint: 'Обход внутренних страниц и sitemap. Известные файлы и ресурсы пропускаются; llm.txt проверяется отдельно.' },
-    { value: 'internal', label: 'Все внутренние ссылки (страницы и файлы)', hint: 'Проверка страниц, документов, изображений и ресурсов. llm.txt проверяется отдельно.' },
-    { value: 'external', label: 'Проверка внешних ссылок на доступность', hint: 'Внутренние страницы используются для поиска ссылок. Каждый внешний URL получает один HEAD-запрос без перехода по редиректам и повторного GET. В отчёте — только ответ и Location.' }
+    { value: 'internal', label: 'Внутренние ссылки', hint: 'Проверка страниц, документов, изображений и ресурсов. llm.txt проверяется отдельно.' },
+    { value: 'external', label: 'Внешние ссылки', hint: 'Внутренние страницы используются для поиска ссылок. Каждый внешний URL получает один HEAD-запрос без перехода по редиректам и повторного GET. В отчёте — только ответ и Location.' }
 ]
 export const normalizeAuditMode = mode => AUDIT_MODES.some(item => item.value === mode) ? mode : 'pages'
 export const normalizeAuditUrl = (value, base) => {
@@ -76,9 +76,4 @@ export const collectAuditTargets = (doc, pageUrl) => {
         }
     }
     return [...targets.values()]
-}
-
-export const collectAuditLinks = (doc, pageUrl) => {
-    const origin = new URL(pageUrl).origin
-    return collectAuditTargets(doc, pageUrl).filter(item => new URL(item.url).origin === origin).map(item => item.url)
 }

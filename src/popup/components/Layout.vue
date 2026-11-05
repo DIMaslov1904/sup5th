@@ -2,7 +2,8 @@
 import IconButton from './ui/IconButton.vue'
 import Input from './ui/Input.vue'
 import Button from './ui/Button.vue'
-import { securityStatus, refreshSecurityStatus, refreshJob, activeSupportTicket } from '../backgroundState.js'
+import Modal from './ui/Modal.vue'
+import { securityStatus, refreshSecurityStatus, refreshJob } from '../backgroundState.js'
 import { lockCredentialVault } from '../data/projectData.js'
 import { ensureUnlocked } from '../unlockStore.js'
 import { nextTick, onMounted, ref } from 'vue'
@@ -10,19 +11,11 @@ import { openTicket, searchTicketNumber } from '../../utils/ticketNavigation.js'
 import Notification from './ui/Notification.vue'
 const modelItemMenu = defineModel()
 const search = defineModel('search', { type: String, default: '' })
-const emit = defineEmits(['search', 'ticket'])
-const searchInput = ref(null)
+const emit = defineEmits(['search', 'open-protection'])
+const searchInput = ref(null), content = ref(null)
 onMounted(() => nextTick(() => searchInput.value?.$el?.focus()).catch(() => {}))
-const locking = ref(false), lockError = ref('')
+const locking = ref(false), lockError = ref(''), lockConfirmation = ref(false)
 const openingTicket = ref(false), ticketError = ref('')
-const openCurrentTicket = async () => {
-    if (!activeSupportTicket.value) { emit('ticket'); return }
-    if (openingTicket.value) return
-    openingTicket.value = true; ticketError.value = ''
-    try { await openTicket(activeSupportTicket.value.ticketId) }
-    catch (reason) { ticketError.value = reason.message || 'Не удалось открыть тикет' }
-    finally { openingTicket.value = false }
-}
 const pasteSearch = async event => {
     const number = searchTicketNumber(event.clipboardData?.getData('text/plain'))
     if (!number) return
@@ -33,15 +26,33 @@ const pasteSearch = async event => {
     catch (reason) { ticketError.value = reason.message || 'Не удалось открыть тикет' }
     finally { openingTicket.value = false }
 }
-const toggleLock = async () => {
-    if (!securityStatus.value.enabled) { modelItemMenu.value = 'settings'; return }
-    locking.value = true; lockError.value = ''
+const runVaultAction = async action => {
+    locking.value = true
+    lockError.value = ''
     try {
-        if (securityStatus.value.unlocked) await lockCredentialVault()
-        else await ensureUnlocked(async () => {}, { refreshAfterUnlock: false })
+        await action()
         await refreshSecurityStatus()
     } catch (error) { lockError.value = error.message }
     finally { locking.value = false }
+}
+const toggleLock = () => {
+    if (locking.value) return
+    if (!securityStatus.value.enabled) {
+        emit('open-protection')
+        content.value?.scrollTo(0, 0)
+        return
+    }
+    if (securityStatus.value.unlocked) {
+        lockConfirmation.value = true
+        return
+    }
+    return runVaultAction(() => ensureUnlocked(async () => {}, { refreshAfterUnlock: false }))
+}
+const confirmLock = () => {
+    lockConfirmation.value = false
+    if (!locking.value && securityStatus.value.enabled && securityStatus.value.unlocked) {
+        return runVaultAction(lockCredentialVault)
+    }
 }
 </script>
 <template>
@@ -64,21 +75,31 @@ const toggleLock = async () => {
                     class="pr-2 pl-8 text-xs"
                     @click="emit('search')" @keydown.enter.prevent="emit('search')" @paste="pasteSearch" />
             </label>
-            <Button variant="ghost" class="px-2 text-xs tabular-nums" :disabled="openingTicket"
-                :title="activeSupportTicket ? `Отсчёт с ${new Date(activeSupportTicket.startedAt).toLocaleString('ru-RU')}` : 'Перейти к тикету'"
-                @click="openCurrentTicket">{{ activeSupportTicket ? activeSupportTicket.ticketId : 'Тикет' }}</Button>
-            <IconButton :label="!securityStatus.enabled ? 'Защита выключена — настройки' : securityStatus.unlocked ? 'Заблокировать хранилище' : 'Разблокировать хранилище'" :disabled="locking || !securityStatus.ready" :class="securityStatus.enabled ? securityStatus.unlocked ? 'text-ui-success' : 'text-ui-warning' : 'text-ui-muted'" @click="toggleLock"><svg class="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path :d="securityStatus.enabled && !securityStatus.unlocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M16 10V6a4 4 0 0 0-8 0'"/><path d="M12 14v3"/></svg></IconButton>
+            <IconButton label="Тикеты" @click="modelItemMenu = 'tickets'">
+                <svg class="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M4 6h16a1 1 0 0 1 1 1v3a2 2 0 0 0 0 4v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a2 2 0 0 0 0-4V7a1 1 0 0 1 1-1Z" />
+                    <path d="M15 9h.01M15 12h.01M15 15h.01" />
+                </svg>
+            </IconButton>
+            <IconButton :label="!securityStatus.enabled ? 'Защита выключена — настройки' : securityStatus.unlocked ? 'Заблокировать хранилище' : 'Разблокировать хранилище'" :disabled="!securityStatus.ready" :aria-disabled="locking || undefined" :class="securityStatus.enabled ? securityStatus.unlocked ? 'text-ui-success' : 'text-ui-warning' : 'text-ui-muted'" @click="toggleLock"><svg class="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path :d="securityStatus.enabled && !securityStatus.unlocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M16 10V6a4 4 0 0 0-8 0'"/><path d="M12 14v3"/></svg></IconButton>
             <IconButton label="Настройки" @click="modelItemMenu = 'settings'">
                 <svg class="size-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="m9.5 3-.6 2.2-2 .9-2.1-.6-2.5 4.3 1.5 1.6v2.2l-1.5 1.6 2.5 4.3 2.1-.6 2 .9.6 2.2h5l.6-2.2 2-.9 2.1.6 2.5-4.3-1.5-1.6v-2.2l1.5-1.6-2.5-4.3-2.1.6-2-.9L14.5 3Z" /><circle cx="12" cy="12" r="3" />
                 </svg>
             </IconButton>
         </nav>
-        <div class="app-scroll flex min-h-0 flex-1 flex-col overflow-y-auto pt-16" :class="modelItemMenu === 'seo' ? 'pb-0' : 'pb-6'">
+        <div ref="content" class="app-scroll flex min-h-0 flex-1 flex-col overflow-y-auto pt-16" :class="modelItemMenu === 'seo' ? 'pb-0' : 'pb-6'">
             <p v-if="refreshJob.running" role="status" class="mx-4 mb-3 flex items-center gap-2 text-xs text-ui-accent"><span class="ui-loading" aria-hidden="true"></span>Загрузка данных: {{ refreshJob.completed }} / {{ refreshJob.total }}</p>
             <Notification v-if="lockError" :text="lockError" />
             <Notification v-if="ticketError" :text="ticketError" />
             <slot />
         </div>
+        <Modal v-model:open="lockConfirmation" title="Заблокировать хранилище?">
+            <p class="text-xs text-ui-muted">Чтобы снова просмотреть защищённые доступы, разблокируйте хранилище.</p>
+            <div class="mt-4 flex justify-end gap-2">
+                <Button variant="secondary" autofocus @click="lockConfirmation = false">Отмена</Button>
+                <Button @click="confirmLock">Заблокировать</Button>
+            </div>
+        </Modal>
     </div>
 </template>

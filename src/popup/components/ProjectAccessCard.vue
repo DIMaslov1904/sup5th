@@ -25,7 +25,6 @@ const login = () => run(() => ensureUnlocked(() => startAdminAuth(props.project.
         <template #menu>
             <button v-for="item in [['login', 'Скопировать логин', access.hasLogin], ['password', 'Скопировать пароль', access.hasPassword], ['text', 'Скопировать доступ', access.hasLogin && access.hasPassword]]"
                 v-show="item[2]" :key="item[0]" type="button" :disabled="busy" class="ui-menu-item" @click="copy(item[0])">{{ item[1] }}</button>
-            <span v-if="!access.hasLogin && !access.hasPassword" class="px-3 py-2 text-xs text-ui-muted">Логин и пароль не указаны</span>
         </template>
     </CredentialCard>
 </template>

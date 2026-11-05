@@ -6,7 +6,6 @@ import { createSeoSessionClient } from './seoSessionClient.js'
 import { saveApiSettings } from './data/projectData.js'
 import Layout from './components/Layout.vue'
 import UnlockModal from './components/UnlockModal.vue'
-import TicketModal from './components/TicketModal.vue'
 import Intro from './views/Intro.vue'
 import Site from './views/Site.vue'
 import Projects from './views/Projects.vue'
@@ -20,6 +19,7 @@ import { useSetupState } from './setupState.js'
 const Welcome = defineAsyncComponent(() => import('./views/Welcome.vue'))
 const { settings: setupSettings, ready: setupReady, step: setupStep, error: setupError, retry: retrySetup } = useSetupState()
 const Tools = defineAsyncComponent(() => import('./views/Tools.vue'))
+const Tickets = defineAsyncComponent(() => import('./views/Tickets.vue'))
 const SeoPanel = defineAsyncComponent(() => import('./components/SeoPanel.vue'))
 const seoTab = ref(null), seoTabReady = ref(false)
 const seoSession = ref(null)
@@ -30,7 +30,7 @@ const stateReady = ref(false)
 const selectedProjectUrl = ref('')
 const selectedServiceId = ref('')
 const search = ref('')
-const ticketOpen = ref(false)
+const settingsSection = ref('maintenance')
 let statePort = null
 let heartbeat
 let disconnectState
@@ -41,6 +41,11 @@ const openCatalogue = () => {
   view.value = 'projects'
 }
 watch(search, openCatalogue)
+
+const openProtection = () => {
+  settingsSection.value = 'security'
+  view.value = 'settings'
+}
 
 const applySetupStep = step => saveApiSettings({ setupStep: step }).catch(reason => { setupError.value = reason.message })
 const startWithoutSetup = () => applySetupStep('done')
@@ -103,18 +108,18 @@ onUnmounted(() => {
 <template>
   <Intro v-if="setupReady && setupStep === 'intro'" @skip="startWithoutSetup" @setup="openSetup" />
   <Welcome v-else-if="setupReady && setupStep !== 'done'" :step="setupStep" :settings="setupSettings" @completed="openCatalogue" />
-  <Layout v-else-if="stateReady && setupReady" v-model="view" v-model:search="search" @search="openCatalogue" @ticket="ticketOpen = true">
+  <Layout v-else-if="stateReady && setupReady" v-model="view" v-model:search="search" @search="openCatalogue" @open-protection="openProtection">
     <Transition name="ui-view" mode="out-in"><div :key="view" class="flex flex-[1_0_auto] flex-col">
     <Site v-if="view === 'site'" />
-    <section v-if="view === 'seo'" class="flex flex-1 flex-col px-3"><SeoPanel v-if="seoTabReady" :tab="seoTab" :session="seoSession" auto-scan /></section>
+    <section v-if="view === 'seo'" class="flex flex-1 flex-col px-3"><SeoPanel v-if="seoTabReady" :tab="seoTab" :session="seoSession" /></section>
     <Projects v-if="view === 'projects'" v-model:search="search" v-model:selected-project-url="selectedProjectUrl" v-model:selected-service-id="selectedServiceId" />
-    <Settings v-if="view === 'settings'" />
+    <Settings v-if="view === 'settings'" v-model:section="settingsSection" />
     <Tools v-if="view === 'tools'" />
+    <Tickets v-if="view === 'tickets'" />
     </div></Transition>
   </Layout>
   <div v-else><Preloader label="Загрузка расширения…" /><Button v-if="setupError" class="mx-4" @click="retrySetup">Повторить загрузку</Button></div>
   <Notification v-if="setupError" :text="setupError" />
   <UnlockModal />
-  <TicketModal v-model:open="ticketOpen" />
   <NotificationHost />
 </template>

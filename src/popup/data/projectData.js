@@ -34,6 +34,8 @@ export const clearErrorLog = () => callBackground('data:errors:clear')
 export const clearAllData = () => callBackground('data:clear')
 export const loadIconStatus = () => callBackground('icons:status')
 export const refreshSiteIcons = () => callBackground('icons:refresh')
+/** @param {string} url */
+export const refreshSiteIcon = url => callBackground('icons:refreshOne', { url })
 export const cancelSiteIcons = () => callBackground('icons:cancel')
 
 /** @param {string} url @param {string} accessId */

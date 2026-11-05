@@ -7,9 +7,8 @@ export const requestWithHeadFallback = async (request, url, options = {}) => {
     return [0, 405, 501].includes(head.status) ? request(url, 'GET', options) : head
 }
 
-export const loadSeoNetwork = async (initial, fetchResource, onUpdate = () => { }) => {
-    let report = initial, sitemapRevision = 0
-    const publish = patch => { report = { ...report, ...patch }; onUpdate(report) }
+export const loadSeoNetwork = async (initial, fetchResource, publish) => {
+    let sitemapRevision = 0
     const request = async (url, method = 'GET', options = {}) => {
         try { return await fetchResource(url, method, options) }
         catch { return { ok: false, status: 0, url, headers: {}, text: '', ttfb: null } }
@@ -54,5 +53,4 @@ export const loadSeoNetwork = async (initial, fetchResource, onUpdate = () => { 
         publish({ llmTxt: { url, exists: info.ok, status: info.status, size: info.text ? info.text.length : null, pending: false } })
     })()
     await Promise.all([pageWork, robotsWork, sitemap(defaultSitemap), llmWork])
-    return report
 }

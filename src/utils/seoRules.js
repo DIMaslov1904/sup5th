@@ -4,7 +4,13 @@ const normalizeRobotsPath = value => String(value).replace(/%([\da-f]{2})|[^\x00
     const char = String.fromCharCode(parseInt(hex, 16))
     return /[a-z\d._~-]/i.test(char) ? char : '%' + hex.toUpperCase()
 })
-const evaluateRobots = (content, pageUrl, agent = '*') => {
+const compileRobotsRule = rule => {
+    const normalized = normalizeRobotsPath(rule.value), anchored = normalized.endsWith('$')
+    const source = anchored ? normalized.slice(0, -1) : normalized
+    const pattern = source.split('*').map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + (anchored ? '$' : '')
+    return { pattern: new RegExp(`^${pattern}`), specificity: source.replace(/\*/g, '').replace(/%[\dA-F]{2}/g, 'x').length }
+}
+const compileRobots = content => {
     const groups = []; let group = null, hasRules = false
     for (const raw of String(content || '').split(/\r?\n/)) {
         const line = raw.replace(/#.*/, '').trim(), colon = line.indexOf(':')
@@ -17,24 +23,37 @@ const evaluateRobots = (content, pageUrl, agent = '*') => {
             hasRules = true; if (value) group.rules.push({ directive, value })
         }
     }
-    const exact = groups.filter(g => g.agents.includes(agent.toLowerCase()))
-    const selected = exact.length ? exact : groups.filter(g => g.agents.includes('*'))
-    const url = new URL(pageUrl), path = normalizeRobotsPath(url.pathname + url.search)
-    const rules = selected.flatMap(g => g.rules).map(rule => {
-        const normalized = normalizeRobotsPath(rule.value), anchored = normalized.endsWith('$')
-        const source = anchored ? normalized.slice(0, -1) : normalized
-        const pattern = source.split('*').map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + (anchored ? '$' : '')
-        return { ...rule, applies: new RegExp(`^${pattern}`).test(path), specificity: source.replace(/\*/g, '').replace(/%[\dA-F]{2}/g, 'x').length }
-    }).filter(rule => rule.applies).sort((a, b) => b.specificity - a.specificity || (a.directive === 'allow' ? -1 : 1))
-    return { allowed: rules[0]?.directive !== 'disallow', rules }
+    const rulesByAgent = new Map()
+    const fallback = groups.filter(group => group.agents.includes('*'))
+    return (pageUrl, agent) => {
+        const name = agent.toLowerCase()
+        if (!rulesByAgent.has(name)) {
+            const exact = groups.filter(group => group.agents.includes(name))
+            rulesByAgent.set(name, (exact.length ? exact : fallback).flatMap(group => group.rules))
+        }
+        const url = new URL(pageUrl), path = normalizeRobotsPath(url.pathname + url.search)
+        const rules = []
+        for (const rule of rulesByAgent.get(name)) {
+            const { pattern, specificity } = rule.compiled ||= compileRobotsRule(rule)
+            if (pattern.test(path)) rules.push({ directive: rule.directive, value: rule.value, applies: true, specificity })
+        }
+        rules.sort((a, b) => b.specificity - a.specificity || (a.directive === 'allow' ? -1 : 1))
+        return { allowed: rules[0]?.directive !== 'disallow', rules }
+    }
 }
 
+const compiledRobotsFiles = new WeakMap()
 export const evaluateRobotsFile = (file, url, agent = '*') => {
     if (file.pending || file.failure) return { allowed: null, rules: [] }
     if ([404, 410].includes(file.status)) return { allowed: true, rules: [] }
     if (file.truncated || /^\s*(?:<!doctype\s+html|<html\b)/i.test(file.content || '')) return { allowed: null, rules: [] }
-    if (file.exists) return evaluateRobots(file.content, url, agent)
-    return { allowed: null, rules: [] }
+    if (!file.exists) return { allowed: null, rules: [] }
+    let compiled = compiledRobotsFiles.get(file)
+    if (!compiled || compiled.content !== file.content) {
+        compiled = { content: file.content, evaluate: compileRobots(file.content) }
+        compiledRobotsFiles.set(file, compiled)
+    }
+    return compiled.evaluate(url, agent)
 }
 const prohibitsIndexing = value => /(?:^|[\s,])(?:noindex|none)(?=$|[\s,])/i.test(value)
 export const indexingRulesFromMeta = (tags, xRobots = '') => {

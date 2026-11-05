@@ -4,8 +4,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { loadApiSettings, loadProjectData, refreshAll, loadErrorLog, clearErrorLog, clearAllData, authorizeProjectsApi, authorizeAccessApi, lockCredentialVault, disableCredentialProtection, enablePinProtection } from '../data/projectData.js'
 import { getBiometricCapabilities } from '../../utils/biometricHello.js'
 import { enableCredentialProtection, unlockCredentialProtection } from '../biometricActions.js'
-import { securityStatus, refreshJob, refreshSecurityStatus, activeSupportTicket } from '../backgroundState.js'
-import { resetActiveSupportTicket } from '../data/projectData.js'
+import { securityStatus, refreshJob, refreshSecurityStatus } from '../backgroundState.js'
 import { ensureUnlocked } from '../unlockStore.js'
 import { BIOMETRIC_ACTION_HANDLED } from '../../utils/biometricPage.js'
 import Button from '../components/ui/Button.vue'
@@ -27,14 +26,19 @@ import { projectShortcuts, updateProjectShortcuts } from '../projectShortcutsSta
 import { REFRESH_PERIOD } from '../../utils/dataRefreshPolicy.js'
 import { needsApiAuthorization } from '../../utils/apiAuthorizationState.js'
 
-const section = ref('connection'), settings = ref({ projectsUrl: '', accessUrl: '' }), data = ref(null), errors = ref([])
+const section = defineModel('section', { type: String, required: true })
+const settings = ref({ projectsUrl: '', accessUrl: '' }), data = ref(null), errors = ref([])
 const savedSettings = ref({ projectsUrl: '', accessUrl: '' })
 const loaded = ref(false), busy = ref(''), message = ref({ type: 'info', text: '' }), caps = ref({ available: false })
 const pin = ref('')
 const securityTab = ref('biometric')
 const securityTabs = computed(() => caps.value?.available ? [['biometric', 'Биометрия'], ['pin', 'PIN-код']] : [['pin', 'PIN-код']])
 watch(securityTabs, tabs => { if (!tabs.some(([value]) => value === securityTab.value)) securityTab.value = tabs[0][0] })
-const sections = [['connection','Подключение'],['data','Загрузка'],['security','Защита'],['maintenance','Обслуживание'],['updates','Обновления']]
+const sections = [['maintenance', 'Общее'], ['data', 'Загрузка'], ['security', 'Защита'], ['updates', 'Обновления']]
+const apiSources = [
+    ['projects', 'Проекты', 'projectsUrl', 'projectApiStatus'],
+    ['accesses', 'Личные доступы и сервисы', 'accessUrl', 'accessApiStatus']
+]
 const snapshot = computed(() => data.value?.lastSuccessfulData)
 const needsAuthorization = type => {
     const url = savedSettings.value[type === 'projects' ? 'projectsUrl' : 'accessUrl']
@@ -77,7 +81,7 @@ const run = async (name, action, success = '') => {
 }
 const loadData = scope => run('load', async () => {
     const saved = scope === 'all' ? await autosave.flushAll() : await autosave.flush(scope === 'projects' ? 'projectsUrl' : 'accessUrl')
-    if (!saved) throw new Error('Проверьте адреса API в разделе «Подключение»')
+    if (!saved) throw new Error('Проверьте адреса API в разделе «Загрузка»')
     const action = () => refreshAll({ scope })
     const result = scope !== 'projects' && savedSettings.value.accessUrl ? await ensureUnlocked(action, { refreshAfterUnlock: false, intent: { type: 'refresh', scope } }) : await action()
     data.value = result === BIOMETRIC_ACTION_HANDLED ? await loadProjectData() : result
@@ -113,20 +117,6 @@ const reset = () => {
         <ExtensionUpdates v-if="section === 'updates'" />
         <Preloader v-else-if="!loaded" label="Загрузка настроек…" />
         <template v-else>
-            <template v-if="section === 'connection'">
-                <Card v-for="[type,title,field] in [['projects','Проекты','projectsUrl'],['accesses','Личные доступы и сервисы','accessUrl']]" :key="type" :title="title">
-                    <Input :model-value="settings[field]" :aria-label="`URL API: ${title}`" :aria-invalid="Boolean(autosave.states[field].error)" :aria-describedby="autosave.states[field].status !== 'idle' ? `api-${field}-status` : undefined" placeholder="URL веб-приложения Apps Script" :disabled="Boolean(busy)" @update:model-value="value => autosave.update(field, value)" @blur="autosave.flush(field)" @keydown.enter.prevent="autosave.flush(field)" />
-                    <p v-if="autosave.states[field].status !== 'idle'" :id="`api-${field}-status`" role="status" aria-live="polite" class="mt-2 text-xs" :class="autosave.states[field].error ? 'text-ui-danger' : 'text-ui-muted'">{{ autosave.states[field].error || saveLabels[autosave.states[field].status] }}</p>
-                    <p v-if="type === 'projects'" class="mt-2 text-xs text-ui-muted">Адрес из таблицы «База знаний 5th».</p>
-                    <CopyAccessApiCode v-else class="mt-2" />
-                    <Message v-if="data?.[type === 'projects' ? 'projectApiStatus' : 'accessApiStatus']" type="warning" class="mt-2">{{ data[type === 'projects' ? 'projectApiStatus' : 'accessApiStatus'] === 'access_denied' ? 'Доступ к таблице ограничен. Обратитесь к владельцу.' : 'Войдите в Google и подтвердите доступ, затем повторите загрузку.' }}</Message>
-                    <Button v-if="needsAuthorization(type)" size="sm" variant="ghost" class="mt-2" :disabled="Boolean(busy)" @click="authorize(type)">Открыть API / авторизацию</Button>
-                </Card>
-                <Card title="Доп. функции">
-                    <ToggleSwitch class="mb-3" label="Показывать последние проекты" :model-value="projectShortcuts.enabled" :disabled="Boolean(busy)" @update:model-value="value => run('shortcuts', () => updateProjectShortcuts({kind:'configure',enabled:value}))" />
-                    <ToggleSwitch label="Показывать статус pipeline в проекте" :model-value="pipelineBadgePreference.enabled" :disabled="!pipelineBadgePreference.ready || Boolean(busy)" described-by="pipeline-badge-help" @update:model-value="value => run('pipeline', () => setPipelineBadgeEnabled(value))" />
-                </Card>
-            </template>
             <template v-if="section === 'data'">
                 <Card title="Загрузка данных">
                     <div class="grid grid-cols-3 gap-2"><Button :disabled="Boolean(busy) || refreshJob.running || (!savedSettings.projectsUrl && !savedSettings.accessUrl)" @click="loadData('all')">Загрузить всё</Button><Button variant="secondary" :disabled="Boolean(busy) || refreshJob.running || !savedSettings.projectsUrl" @click="loadData('projects')">Только проекты</Button><Button variant="secondary" :disabled="Boolean(busy) || refreshJob.running || !savedSettings.accessUrl" @click="loadData('accesses')">Только доступы</Button></div>
@@ -134,8 +124,18 @@ const reset = () => {
                     <p v-else-if="refreshJob.finishedAt" class="mt-3 text-xs text-ui-muted">Последняя операция: {{ date(refreshJob.finishedAt) }} · {{ refreshJob.state === 'done' ? 'завершена' : refreshJob.state === 'interrupted' ? 'прервана' : 'есть ошибки' }}</p>
                     <Message v-for="text in refreshJob.errors || []" :key="text" type="error" class="mt-2">{{ text }}</Message>
                 </Card>
-                <Card v-for="[type,title,count] in [['projects','Проекты',snapshot?.projects.length],['accesses','Доступы',snapshot?.accesses.length]]" :key="type" :title="title">
-                    <dl class="grid gap-2 text-xs"><div class="flex justify-between gap-3"><dt class="text-ui-muted">Записей</dt><dd>{{ count || 0 }}</dd></div><div class="flex justify-between gap-3"><dt class="text-ui-muted">Последняя успешная загрузка</dt><dd>{{ date(snapshot?.[`${type}UpdatedAt`]) }}</dd></div><div class="flex justify-between gap-3"><dt class="text-ui-muted">Состояние</dt><dd>{{ freshness(type) }}</dd></div></dl>
+                <Card v-for="[type, title, field, status] in apiSources" :key="type" :title="title">
+                    <Input :model-value="settings[field]" :aria-label="`URL API: ${title}`" :aria-invalid="Boolean(autosave.states[field].error)" :aria-describedby="autosave.states[field].status !== 'idle' ? `api-${field}-status` : undefined" placeholder="URL веб-приложения Apps Script" :disabled="Boolean(busy)" @update:model-value="value => autosave.update(field, value)" @blur="autosave.flush(field)" @keydown.enter.prevent="autosave.flush(field)" />
+                    <p v-if="autosave.states[field].status !== 'idle'" :id="`api-${field}-status`" role="status" aria-live="polite" class="mt-2 text-xs" :class="autosave.states[field].error ? 'text-ui-danger' : 'text-ui-muted'">{{ autosave.states[field].error || saveLabels[autosave.states[field].status] }}</p>
+                    <p v-if="type === 'projects'" class="mt-2 text-xs text-ui-muted">Адрес из таблицы «База знаний 5th».</p>
+                    <CopyAccessApiCode v-else class="mt-2" />
+                    <Message v-if="data?.[status]" type="warning" class="mt-2">{{ data[status] === 'access_denied' ? 'Доступ к таблице ограничен. Обратитесь к владельцу.' : 'Войдите в Google и подтвердите доступ, затем повторите загрузку.' }}</Message>
+                    <Button v-if="needsAuthorization(type)" size="sm" variant="ghost" class="mt-2" :disabled="Boolean(busy)" @click="authorize(type)">Открыть API / авторизацию</Button>
+                    <dl class="mt-3 grid gap-2 border-t border-ui-border pt-3 text-xs">
+                        <div class="flex justify-between gap-3"><dt class="text-ui-muted">Записей</dt><dd>{{ snapshot?.[type]?.length || 0 }}</dd></div>
+                        <div class="flex justify-between gap-3"><dt class="text-ui-muted">Последняя успешная загрузка</dt><dd>{{ date(snapshot?.[`${type}UpdatedAt`]) }}</dd></div>
+                        <div class="flex justify-between gap-3"><dt class="text-ui-muted">Состояние</dt><dd>{{ freshness(type) }}</dd></div>
+                    </dl>
                 </Card>
             </template>
             <Card v-if="section === 'security'" title="Защита паролей">
@@ -151,14 +151,10 @@ const reset = () => {
                 </div>
             </Card>
             <template v-if="section === 'maintenance'">
-                <MaintenanceCard title="Текущий тикет">
-                    <p v-if="activeSupportTicket">№{{ activeSupportTicket.ticketId }} · Отсчёт с {{ date(activeSupportTicket.startedAt) }}</p>
-                    <p v-else>Нет тикета в работе.</p>
-                    <template #actions>
-                        <Button size="sm" variant="secondary" :disabled="Boolean(busy) || !activeSupportTicket"
-                            @click="run('ticket', resetActiveSupportTicket, 'Тикет сброшен')">Сбросить тикет</Button>
-                    </template>
-                </MaintenanceCard>
+                <Card title="Интерфейс">
+                    <ToggleSwitch class="mb-3" label="Показывать последние проекты" :model-value="projectShortcuts.enabled" :disabled="Boolean(busy)" @update:model-value="value => run('shortcuts', () => updateProjectShortcuts({kind:'configure',enabled:value}))" />
+                    <ToggleSwitch label="Показывать статус pipeline в проекте" :model-value="pipelineBadgePreference.enabled" :disabled="!pipelineBadgePreference.ready || Boolean(busy)" @update:model-value="value => run('pipeline', () => setPipelineBadgeEnabled(value))" />
+                </Card>
                 <IconCacheControls />
                 <MaintenanceCard title="Журнал ошибок">
                     <p v-if="!errors.length">Ошибок загрузки нет.</p>

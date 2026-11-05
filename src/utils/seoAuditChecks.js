@@ -1,7 +1,7 @@
 import { evaluateRobotsFile, indexingRulesFromMeta } from './seoRules.js'
 import { summarizeAuditPages, normalizeAuditText } from './seoAuditPages.js'
 import { META_LENGTH_RANGES } from './seoValidation.js'
-import { CWV_THRESHOLDS, cwvRatingStatus } from './cwv.js'
+import { cwvMetrics, cwvRatingStatus } from './cwv.js'
 import { withoutFragment } from './linkCheckStatus.js'
 import { auditLlmCheck } from './seoAuditLlm.js'
 const check = (id, label, status, hint = '') => ({ id, label, status, hint })
@@ -137,60 +137,17 @@ export const buildAuditChecks = (data, audit) => {
         check('lang', 'Атрибут lang в DOM', data.lang ? 'pass' : 'warning', data.lang || 'Не указан'),
         check('viewport', 'Meta viewport в DOM', data.viewport ? 'pass' : 'warning', data.viewport ? 'Указан' : 'Не указан')
     ]
-    // Core Web Vitals check
-    const cwv = data.cwv
-    if (cwv) {
-        const metrics = []
-        const cwvStatuses = []
-
-        if (cwv.lcp) {
-            const label = `LCP: ${(cwv.lcp.value / 1000).toFixed(2)}с`
-            metrics.push(label)
-            cwvStatuses.push(cwv.lcp.rating)
-        }
-        if (cwv.cls != null) {
-            const label = `CLS: ${cwv.cls.toFixed(3)}`
-            metrics.push(label)
-            cwvStatuses.push(cwv.clsRating)
-        }
-        if (cwv.inp) {
-            const label = `INP: ${cwv.inp.value}мс`
-            metrics.push(label)
-            cwvStatuses.push(cwv.inp.rating)
-        }
-        if (cwv.fcp) {
-            const label = `FCP: ${(cwv.fcp.value / 1000).toFixed(2)}с`
-            metrics.push(label)
-            cwvStatuses.push(cwv.fcp.rating)
-        }
-
-        const hasGood = cwvStatuses.some(r => r === 'good')
-        const hasPoor = cwvStatuses.some(r => r === 'poor')
-        const cwvStatus = cwvStatuses.length === 0 ? 'unknown' : hasPoor ? 'fail' : hasGood && cwvStatuses.every(r => r === 'good') ? 'pass' : 'warning'
-
-        list.push(check('cwv', 'Core Web Vitals', cwvStatus, metrics.join(' · ') || 'Не измерено'))
-
-        // Individual CWV metric checks
-        if (cwv.lcp) {
-            const lcpStatus = cwvRatingStatus(cwv.lcp.rating)
-            const hint = cwv.lcp.element ? `${(cwv.lcp.value / 1000).toFixed(2)}с — элемент: ${cwv.lcp.element}` : `${(cwv.lcp.value / 1000).toFixed(2)}с; ориентир ≤${CWV_THRESHOLDS.lcp.good / 1000}с`
-            list.push(check('cwv-lcp', 'LCP: крупнейший контент', lcpStatus, hint))
-        }
-        if (cwv.cls != null) {
-            const clsStatus = cwvRatingStatus(cwv.clsRating)
-            list.push(check('cwv-cls', 'CLS: сдвиг макета', clsStatus, cwv.clsRating === 'good' ? `Сдвиг минимальный: ${cwv.cls.toFixed(3)}` : `Сдвиг макета: ${cwv.cls.toFixed(3)}; ориентир ≤${CWV_THRESHOLDS.cls.good}`))
-        }
-        if (cwv.inp) {
-            const inpStatus = cwvRatingStatus(cwv.inp.rating)
-            const note = cwv.inp.note ? ` (${cwv.inp.note})` : ''
-            list.push(check('cwv-inp', 'INP: отклик ввода', inpStatus, `${cwv.inp.value}мс${note}; ориентир ≤${CWV_THRESHOLDS.inp.good}мс`))
-        }
-        if (cwv.fcp) {
-            const fcpStatus = cwvRatingStatus(cwv.fcp.rating)
-            list.push(check('cwv-fcp', 'FCP: первая отрисовка', fcpStatus, `${(cwv.fcp.value / 1000).toFixed(2)}с; ориентир ≤${CWV_THRESHOLDS.fcp.good / 1000}с`))
-        }
-    } else {
-        list.push(check('cwv', 'Core Web Vitals', 'unknown', 'Метрики не собраны'))
+    const metrics = cwvMetrics(data.cwv)
+    const coreMetrics = metrics.filter(metric => metric.key !== 'fcp')
+    const coreStatuses = coreMetrics.map(metric => cwvRatingStatus(metric.rating))
+    const coreStatus = coreStatuses.includes('fail') ? 'fail'
+        : coreStatuses.includes('warning') ? 'warning'
+            : coreStatuses.includes('unknown') ? 'unknown' : 'pass'
+    const coreValues = coreMetrics.map(metric => `${metric.name}: ${metric.value || metric.unavailable.toLowerCase()}`)
+    list.push(check('cwv', 'Core Web Vitals', coreStatus, `Исходная вкладка · ${coreValues.join(' · ')}`))
+    for (const metric of metrics) {
+        const hint = metric.value ? `${metric.value} · ${metric.hint}` : metric.unavailable
+        list.push(check(`cwv-${metric.key}`, metric.label, cwvRatingStatus(metric.rating), hint))
     }
     for (const [field, label, count, duplicates] of [['title', 'Title', pages.titleCount, pages.duplicateTitles], ['description', 'Description', pages.descriptionCount, pages.duplicateDescriptions]]) {
         list.push(check(`duplicates-${field}`, `Нет совпадений ${label} в полученных HTML`, count < 2 ? 'unknown' : duplicates.length ? 'warning' : 'pass', `Уникальных конечных URL с ${label}: ${count}; групп совпадений: ${duplicates.length}`))

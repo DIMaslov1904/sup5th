@@ -13,6 +13,7 @@
     "build:firefox": "npm run typecheck && vite build --mode firefox",
     "build:release": "npm run build",
     "build:all": "npm run typecheck && vite build && vite build --mode firefox",
+    "verify:seo-audit": "node scripts/verify-seo-audit.mjs",
     "lint:firefox": "addons-linter --self-hosted dist-firefox"
   },
   "dependencies": {

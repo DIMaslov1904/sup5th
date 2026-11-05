@@ -1,3 +1,5 @@
+import { encodeAuditCsv } from './seoAuditCsv.js'
+
 export const AUDIT_KIND_LABELS = { page: 'Страница', image: 'Изображение', document: 'Файл', resource: 'Ресурс' }
 export const AUDIT_HTTP_FILTERS = [
     { value: 'all', label: 'Все статусы' }, { value: 'problems', label: 'Ошибки и ограничения' },
@@ -27,10 +29,9 @@ export const paginateAuditResults = (results, page = 1, pageSize = 25) => {
     const start = (current - 1) * size
     return { items: results.slice(start, start + size), page: current, count, start: results.length ? start + 1 : 0, end: Math.min(start + size, results.length) }
 }
-const csvCell = value => `"${String(value ?? '').replace(/"/g, '""')}"`
-export const auditResultsCsv = (results, directionOf = null) => '\uFEFF' + [
+export const auditResultsCsv = (results, directionOf = null) => encodeAuditCsv([
     ['URL', 'HTTP', 'Тип', 'Конечный URL', ...(directionOf ? ['Направление'] : []), 'Страницы-источники', 'Sitemap', 'Результат'],
     ...results.map(item => [item.url, item.status || '', AUDIT_KIND_LABELS[item.kind] || '', item.finalUrl,
         ...(directionOf ? [directionOf(item) || ''] : []),
         (item.sources || []).join('\n'), (item.sitemaps || []).join('\n'), item.label])
-].map(row => row.map(csvCell).join(';')).join('\r\n')
+])

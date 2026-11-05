@@ -1,3 +1,4 @@
+import { encodeAuditCsv } from './seoAuditCsv.js'
 import { normalizeAuditUrl } from './seoAuditLinks.js'
 
 export const AUDIT_AVAILABILITY_LABELS = { available: 'Доступна', unavailable: 'Недоступна', redirect: 'Редирект', unknown: 'Не удалось подтвердить' }
@@ -18,7 +19,7 @@ export const inspectAuditAvailability = (url, info) => {
     }
 }
 
-export const auditAvailabilityCsv = results => '\uFEFF' + [
+export const auditAvailabilityCsv = results => encodeAuditCsv([
     ['URL', 'Метод', 'HTTP', 'Доступность', 'Куда ведёт редирект'],
     ...results.map(item => [item.url, 'HEAD', item.status || '', item.label, item.redirectUrl || item.location || ''])
-].map(row => row.map(value => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n')
+])

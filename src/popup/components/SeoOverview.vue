@@ -2,18 +2,19 @@
 import { computed } from 'vue'
 import { primaryMetadata, advancedMetadata, evaluateHttpStatus } from '../../utils/seoValidation.js'
 import { pageWeightRows } from '../../utils/pageWeightDisplay.js'
-import { CWV_THRESHOLDS } from '../../utils/cwv.js'
+import { cwvMetrics } from '../../utils/cwv.js'
 import PropertyList from './ui/PropertyList.vue'
 import Card from './ui/Card.vue'
 
-const props = defineProps({ report: { type: Object, required: true }, serverIp: String, serverIpLoading: Boolean })
+const props = defineProps({ report: { type: Object, required: true } })
+const metricColors = { good: 'success', 'needs-fix': 'warning', poor: 'danger' }
 
 const page = computed(() => {
     const data = props.report
-    const rows = [
+    return [
         { label: 'URL', value: data.url, copyValue: data.url },
         { label: 'Base', value: data.baseDisplay + (data.baseDeclared ? '' : ' (не задан)') },
-        { label: 'IP сервера', value: props.serverIpLoading ? 'Определяем…' : props.serverIp || 'Не получен' },
+        { label: 'IP сервера', value: data.response.pending ? 'Определяем…' : data.response.ip || 'Не получен' },
         { label: 'HTTP', value: data.response.pending ? 'Проверяем…' : data.response.status || 'Не получен', ...(data.response.pending ? {} : evaluateHttpStatus(data.response.status, data.redirected)) },
         { label: 'Редирект', value: data.response.pending ? 'Проверяем…' : data.redirected ? data.finalUrl : 'Нет' },
         {
@@ -29,45 +30,11 @@ const page = computed(() => {
         { label: 'Кодировка', ...charsetRow(data) },
         { label: 'Проверено', value: new Date(data.scannedAt).toLocaleString('ru-RU') },
         { label: 'TTFB повторного запроса', value: data.response.ttfb == null ? 'Не измерен' : data.response.ttfb + ' мс' },
-        ...pageWeightRows(data.pageWeight)
+        ...pageWeightRows(data.pageWeight),
+        ...cwvMetrics(data.cwv).map(metric => ({
+            label: metric.name, value: metric.value || metric.unavailable, status: metricColors[metric.rating], hint: metric.hint
+        }))
     ]
-    // Core Web Vitals at the bottom
-    const cwv = data.cwv
-    if (cwv) {
-        if (cwv.lcp) {
-            rows.push({
-                label: 'LCP',
-                value: `${(cwv.lcp.value / 1000).toFixed(2)}с`,
-                status: cwv.lcp.rating === 'good' ? 'success' : cwv.lcp.rating === 'poor' ? 'danger' : 'warning',
-                hint: cwv.lcp.element ? `Элемент: ${cwv.lcp.element}` : `Ориентир: ≤${CWV_THRESHOLDS.lcp.good / 1000}с / ≤${CWV_THRESHOLDS.lcp.poor / 1000}с`
-            })
-        }
-        if (cwv.cls != null) {
-            rows.push({
-                label: 'CLS',
-                value: cwv.cls.toFixed(3),
-                status: cwv.clsRating === 'good' ? 'success' : cwv.clsRating === 'poor' ? 'danger' : 'warning',
-                hint: `Сдвиг макета за время загрузки; ориентир ≤${CWV_THRESHOLDS.cls.good} / ≤${CWV_THRESHOLDS.cls.poor}`
-            })
-        }
-        if (cwv.inp) {
-            rows.push({
-                label: 'INP',
-                value: `${cwv.inp.value}мс`,
-                status: cwv.inp.rating === 'good' ? 'success' : cwv.inp.rating === 'poor' ? 'danger' : 'warning',
-                hint: cwv.inp.note || `Отклик на взаимодействие; ориентир ≤${CWV_THRESHOLDS.inp.good}мс / ≤${CWV_THRESHOLDS.inp.poor}мс`
-            })
-        }
-        if (cwv.fcp) {
-            rows.push({
-                label: 'FCP',
-                value: `${(cwv.fcp.value / 1000).toFixed(2)}с`,
-                status: cwv.fcp.rating === 'good' ? 'success' : cwv.fcp.rating === 'poor' ? 'danger' : 'warning',
-                hint: `Первый видимый контент; ориентир ≤${CWV_THRESHOLDS.fcp.good / 1000}с / ≤${CWV_THRESHOLDS.fcp.poor / 1000}с`
-            })
-        }
-    }
-    return rows
 })
 
 const charsetRow = data => {

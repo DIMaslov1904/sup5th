@@ -19,12 +19,14 @@ export const parseAuditExclusionRules = value => {
     return { text, hasRules, content: /^user-agent\s*:/i.test(first) ? text : `User-agent: *\n${text}` }
 }
 
-export const matchAuditExclusion = (rules, url) => {
-    if (!rules.hasRules) return null
+export const createAuditExclusionMatcher = rules => {
+    if (!rules.hasRules) return () => null
     const file = { exists: true, status: 200, content: rules.content }
-    for (const agent of ['googlebot', 'yandex']) {
-        const result = evaluateRobotsFile(file, url, agent)
-        if (result.allowed === false) return result.rules[0]
+    return url => {
+        for (const agent of ['googlebot', 'yandex']) {
+            const result = evaluateRobotsFile(file, url, agent)
+            if (result.allowed === false) return result.rules[0]
+        }
+        return null
     }
-    return null
 }

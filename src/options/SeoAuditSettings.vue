@@ -30,10 +30,13 @@ const exclusionHint = 'Правила Allow: и Disallow: с путями от /
             <ToggleSwitch v-model="excludeNonIndexable" label="Исключать неиндексируемые страницы" :disabled="busy" />
             <SeoAuditInfo label="Пояснение исключения неиндексируемых страниц" text="Учитывает robots.txt, meta noindex и X-Robots-Tag для Googlebot и Яндекса. Robots.txt проверяется до запроса, noindex — после получения ответа. Исключённые страницы не участвуют в дальнейшем обходе." />
         </div>
-        <div class="grid min-w-0 gap-1">
-            <div class="flex items-center gap-1"><label for="audit-custom-exclusions" class="text-xs">Свои исключения</label><SeoAuditInfo :text="exclusionHint" label="Синтаксис своих исключений" /></div>
-            <textarea id="audit-custom-exclusions" v-model="customExclusions" name="customExclusions" rows="2" :disabled="busy" class="ui-field h-auto min-h-16 resize-y py-2 font-mono text-xs" placeholder="Disallow: /private/&#10;Allow: /private/public/" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off"></textarea>
-        </div>
+        <details class="min-w-0 border-t border-ui-border/60 pt-2 text-xs">
+            <summary class="cursor-pointer text-ui-accent">Дополнительно<span v-if="customExclusions.trim()" class="ml-1 text-ui-muted">· есть свои правила</span></summary>
+            <div class="mt-2 grid gap-1">
+                <div class="flex items-center gap-1"><label for="audit-custom-exclusions">Свои исключения</label><SeoAuditInfo :text="exclusionHint" label="Синтаксис своих исключений" /></div>
+                <textarea id="audit-custom-exclusions" v-model="customExclusions" name="customExclusions" rows="2" :disabled="busy" class="ui-field h-auto min-h-16 resize-y py-2 font-mono text-xs" placeholder="Disallow: /private/&#10;Allow: /private/public/" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off"></textarea>
+            </div>
+        </details>
     </section>
 </template>
 <style scoped>

@@ -28,10 +28,10 @@ onMounted(() => { extensionApi.storage.onChanged.addListener(changed); load() })
 onUnmounted(() => { alive = false; revision++; extensionApi.storage.onChanged.removeListener(changed) })
 </script>
 <template>
-    <section class="min-h-full min-w-0 w-full px-4 text-ui-text">
+    <section class="flex min-w-0 flex-1 flex-col px-4 text-ui-text">
         <p v-if="!loaded" class="text-[13px] text-ui-muted">Загрузка…</p>
         <Message v-else-if="error" type="error">{{ error }}</Message>
-        <EmptyState v-else-if="!project" title="Данный сайт не является нашим проектом." description="Найдите проект в поиске или откройте SEO для проверки текущей страницы." />
+        <EmptyState v-else-if="!project" title="Сайта нет в каталоге." />
         <ProjectDetails v-else :key="project.url" :project="project" />
     </section>
 </template>

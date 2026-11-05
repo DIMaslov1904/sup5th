@@ -17,7 +17,7 @@ export const createIconFetcher = repository => {
         await repository.setNextRequestAt(Date.now() + ICON_REQUEST_GAP)
         const timeout = AbortSignal.timeout(15000)
         const combined = AbortSignal.any([signal, timeout])
-        const response = await fetch(url, { credentials: 'omit', referrerPolicy: 'no-referrer', signal: combined })
+        const response = await fetch(url, { cache: 'no-cache', credentials: 'omit', referrerPolicy: 'no-referrer', signal: combined })
         if (!response.ok || Number(response.headers.get('content-length')) > limit) {
             await response.body?.cancel().catch(() => {})
             throw new Error(!response.ok ? `HTTP ${response.status}` : 'Файл иконки слишком большой')

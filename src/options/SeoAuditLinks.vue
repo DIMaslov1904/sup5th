@@ -8,6 +8,7 @@ import Button from '../popup/components/ui/Button.vue'
 import Card from '../popup/components/ui/Card.vue'
 import Select from '../popup/components/ui/Select.vue'
 import SeoAuditSources from './SeoAuditSources.vue'
+import SeoAuditPagination from './SeoAuditPagination.vue'
 import HoverHint from '../popup/components/ui/HoverHint.vue'
 
 const props = defineProps({
@@ -15,7 +16,7 @@ const props = defineProps({
     mode: String,
     pageUrl: { type: String, default: '' }
 })
-const status = ref('all'), kind = ref('all'), direction = ref('all'), query = ref(''), page = ref(1), pageSize = ref(25)
+const status = ref('all'), kind = ref('all'), query = ref(''), page = ref(1), pageSize = ref(25)
 const table = ref(null)
 const directionLabels = { internal: 'Внутренняя', external: 'Внешняя', service: 'Служебная' }
 const origin = computed(() => {
@@ -26,18 +27,13 @@ const directionOf = item => {
     try { return new URL(item.url).origin === origin.value ? 'internal' : 'external' } catch { return 'service' }
 }
 const httpHint = item => evaluateHttpStatus(item.status, item.redirected).hint
-const filtered = computed(() => filterAuditResults(props.results, { status: status.value, kind: kind.value, query: query.value })
-    .filter(item => direction.value === 'all' || directionOf(item) === direction.value))
+const filtered = computed(() => filterAuditResults(props.results, { status: status.value, kind: kind.value, query: query.value }))
 const pagination = computed(() => paginateAuditResults(filtered.value, page.value, pageSize.value))
 const summary = computed(() => summarizeAuditPages(props.results))
-const directionCounts = computed(() => ({
-    internal: props.results.filter(item => directionOf(item) === 'internal').length,
-    external: props.results.filter(item => directionOf(item) === 'external').length,
-    redirects: props.results.filter(item => item.redirected === true).length
-}))
-watch([status, kind, direction, query, pageSize], () => { page.value = 1 })
+const redirects = computed(() => props.results.filter(item => item.redirected === true).length)
+watch([status, kind, query, pageSize], () => { page.value = 1 })
 watch(() => pagination.value.page, value => { page.value = value })
-watch([() => pagination.value.page, status, kind, direction, query, pageSize], () => { table.value?.scrollTo({ top: 0, left: 0 }) }, { flush: 'post' })
+watch([() => pagination.value.page, status, kind, query, pageSize], () => { table.value?.scrollTo({ top: 0, left: 0 }) }, { flush: 'post' })
 const exportCsv = () => downloadText(
     auditResultsCsv(filtered.value, item => directionLabels[directionOf(item)]),
     `seo-audit-links-${props.mode || 'pages'}-${new Date().toISOString().slice(0, 10)}.csv`,
@@ -47,14 +43,13 @@ const exportCsv = () => downloadText(
 <template>
     <Card title="Ссылки и проверенные URL">
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p class="text-xs text-ui-muted">Всего: {{ results.length }} · внутренних: {{ directionCounts.internal }} · внешних: {{ directionCounts.external }} · 4xx: {{ summary.clientErrors }} · 404/410: {{ summary.broken }} · 5xx: {{ summary.serverErrors }} · редиректы: {{ directionCounts.redirects }} · неизвестно: {{ summary.uncertain }}</p>
+            <p class="text-xs text-ui-muted">Всего: {{ results.length }} · 4xx: {{ summary.clientErrors }} · 404/410: {{ summary.broken }} · 5xx: {{ summary.serverErrors }} · редиректы: {{ redirects }} · неизвестно: {{ summary.uncertain }}</p>
             <Button variant="secondary" size="sm" :disabled="!filtered.length" @click="exportCsv">Скачать CSV ({{ filtered.length }})</Button>
         </div>
-        <div class="mb-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="mb-3 grid gap-2 sm:grid-cols-3">
             <label class="grid gap-1 text-xs text-ui-muted">Поиск URL или страницы-источника<input v-model="query" type="search" class="ui-field" placeholder="Адрес или часть пути" /></label>
             <label class="grid gap-1 text-xs text-ui-muted">HTTP-статус<Select v-model="status" aria-label="HTTP-статус"><option v-for="item in AUDIT_HTTP_FILTERS" :key="item.value" :value="item.value">{{ item.label }}</option></Select></label>
             <label class="grid gap-1 text-xs text-ui-muted">Тип URL<Select v-model="kind" aria-label="Тип URL"><option value="all">Все типы</option><option v-for="(label,value) in AUDIT_KIND_LABELS" :key="value" :value="value">{{ label }}</option></Select></label>
-            <label class="grid gap-1 text-xs text-ui-muted">Направление<Select v-model="direction" aria-label="Направление ссылки"><option value="all">Все ссылки</option><option value="internal">Внутренние</option><option value="external">Внешние</option></Select></label>
         </div>
         <p class="mb-2 text-xs text-ui-muted" role="status">Найдено по фильтрам: {{ filtered.length }} из {{ results.length }}. Показаны {{ pagination.start }}–{{ pagination.end }}.</p>
         <p v-if="!filtered.length" class="py-3 text-xs text-ui-muted">По выбранным фильтрам результатов нет.</p>
@@ -66,7 +61,7 @@ const exportCsv = () => downloadText(
                     <tr v-for="link in pagination.items" :key="link.url" data-audit-result>
                         <th scope="row" class="min-w-0 border-t border-ui-border/60 bg-ui-panel p-2 align-top font-normal">
                             <a :href="link.url" :title="link.url" target="_blank" rel="noreferrer" class="block wrap-anywhere text-ui-accent">{{ link.url }}</a>
-                            <span class="mt-1 flex flex-wrap gap-x-2 text-[11px] text-ui-muted"><span>{{ AUDIT_KIND_LABELS[link.kind] || 'Тип не определён' }}</span><span>· {{ directionLabels[directionOf(link)] }}</span></span>
+                            <span class="mt-1 block text-[11px] text-ui-muted">{{ AUDIT_KIND_LABELS[link.kind] || 'Тип не определён' }}</span>
                             <a v-if="link.redirected" :href="link.finalUrl" :title="link.finalUrl" target="_blank" rel="noreferrer" class="mt-1 block wrap-anywhere text-ui-muted">→ {{ link.finalUrl }}</a>
                         </th>
                         <td data-label="Ответ и пояснение" class="border-t border-ui-border/60 p-2 align-top">
@@ -79,16 +74,8 @@ const exportCsv = () => downloadText(
                 </tbody>
             </table>
         </div>
-        <nav class="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs" aria-label="Страницы результатов">
-            <label class="flex items-center gap-2 text-ui-muted">На странице<Select v-model="pageSize" aria-label="Результатов на странице" class="w-20"><option :value="25">25</option><option :value="50">50</option><option :value="100">100</option></Select></label>
-            <div class="flex flex-wrap items-center gap-2">
-                <Button variant="secondary" size="sm" :disabled="pagination.page === 1" aria-label="Первая страница результатов" @click="page = 1">«</Button>
-                <Button variant="secondary" size="sm" :disabled="pagination.page === 1" @click="page = pagination.page - 1">Назад</Button>
-                <span aria-live="polite">{{ pagination.page }} / {{ pagination.count }}</span>
-                <Button variant="secondary" size="sm" :disabled="pagination.page >= pagination.count" @click="page = pagination.page + 1">Далее</Button>
-                <Button variant="secondary" size="sm" :disabled="pagination.page >= pagination.count" aria-label="Последняя страница результатов" @click="page = pagination.count">»</Button>
-            </div>
-        </nav>
+        <SeoAuditPagination v-model:page-size="pageSize" :page="pagination.page" :count="pagination.count"
+            label="Страницы результатов" size-label="Результатов на странице" class="mt-3" jump @update:page="page = $event" />
     </Card>
 </template>
 <style src="../styles/seoAuditTable.css"></style>

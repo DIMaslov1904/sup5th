@@ -4,10 +4,10 @@ import { filterAuditResults, paginateAuditResults, AUDIT_HTTP_FILTERS } from '..
 import { buildAuditPageRows } from '../utils/seoAuditPageRows.js'
 import { evaluateHttpStatus } from '../utils/seoValidation.js'
 import Card from '../popup/components/ui/Card.vue'
-import Button from '../popup/components/ui/Button.vue'
 import Select from '../popup/components/ui/Select.vue'
 import SeoAuditSources from './SeoAuditSources.vue'
 import SeoAuditPageDetails from './SeoAuditPageDetails.vue'
+import SeoAuditPagination from './SeoAuditPagination.vue'
 const props = defineProps({ results: { type: Array, default: () => [] }, issues: { type: Array, default: () => [] } })
 const emit = defineEmits(['select-issue'])
 const query = ref(''), status = ref('all'), problemFilter = ref('all'), page = ref(1), pageSize = ref(25), selectedUrl = ref('')
@@ -57,10 +57,8 @@ watch([page, query, status, problemFilter, pageSize], () => table.value?.scrollT
                 </tbody>
             </table>
         </div>
-        <nav class="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs" aria-label="Страницы списка страниц">
-            <label class="flex items-center gap-2 text-ui-muted">На странице<Select v-model="pageSize" aria-label="Страниц в таблице" class="w-20"><option :value="25">25</option><option :value="50">50</option><option :value="100">100</option></Select></label>
-            <div class="flex items-center gap-2"><Button variant="secondary" size="sm" :disabled="pagination.page === 1" @click="page--">Назад</Button><span aria-live="polite">{{ pagination.page }} / {{ pagination.count }}</span><Button variant="secondary" size="sm" :disabled="pagination.page === pagination.count" @click="page++">Далее</Button></div>
-        </nav>
+        <SeoAuditPagination v-model:page-size="pageSize" :page="pagination.page" :count="pagination.count"
+            label="Страницы списка страниц" size-label="Страниц в таблице" class="mt-3" @update:page="page = $event" />
     </Card>
 </template>
 <style src="../styles/seoAuditTable.css"></style>

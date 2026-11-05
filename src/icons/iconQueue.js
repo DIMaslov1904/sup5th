@@ -11,7 +11,7 @@ export const createIconQueue = ({ repository, fetchIcon, schedule, notify, now =
         const state = await repository.getState() || emptyQueue()
         return { active: state.pending.length > 0, total: state.total, completed: state.completed, failed: state.failed }
     }
-    const announce = async origin => notify({ ...(await status()), origin })
+    const announce = async (change = {}) => notify({ ...(await status()), ...change })
     const reconcile = (targets, { force = false } = {}) => serial(async () => {
         const state = await repository.getState() || emptyQueue()
         const records = await repository.list()
@@ -32,12 +32,25 @@ export const createIconQueue = ({ repository, fetchIcon, schedule, notify, now =
         await announce()
         return status()
     })
+    const refresh = origin => serial(async () => {
+        const state = await repository.getState() || emptyQueue()
+        if (state.pending[0] === origin) return
+        const alreadyPending = state.pending.includes(origin)
+        await repository.setState({
+            ...state, pending: [origin, ...state.pending.filter(item => item !== origin)],
+            ...(state.pending.length
+                ? { total: state.total + Number(!alreadyPending) }
+                : { total: 1, completed: 0, failed: 0, runId: crypto.randomUUID() })
+        })
+        await schedule(true)
+        await announce()
+    })
     const cancel = () => serial(async () => {
         controller?.abort()
         const state = await repository.getState() || emptyQueue()
         await repository.setState({ ...state, pending: [], runId: crypto.randomUUID() })
         await schedule(false)
-        await announce()
+        await announce({ cancelled: true })
         return status()
     })
     const processNext = async () => {
@@ -61,7 +74,7 @@ export const createIconQueue = ({ repository, fetchIcon, schedule, notify, now =
                 })
             } catch (error) { failure = error }
             await repository.setState({ ...state, pending: state.pending.filter(origin => origin !== job.origin), completed: state.completed + 1, failed: state.failed + Number(Boolean(failure)) })
-            await announce(job.origin)
+            await announce({ origin: job.origin, succeeded: !failure })
         })
         controller = null
         return true
@@ -74,5 +87,5 @@ export const createIconQueue = ({ repository, fetchIcon, schedule, notify, now =
         })().finally(() => { running = null })
         return running
     }
-    return { reconcile, cancel, status, drain }
+    return { reconcile, refresh, cancel, status, drain }
 }

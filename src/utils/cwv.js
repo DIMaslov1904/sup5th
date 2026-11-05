@@ -1,13 +1,7 @@
-// Core Web Vitals collection via the Performance API.
-// LCP, CLS, INP and long tasks are delivered only to PerformanceObserver, even
-// with `buffered: true`; getEntriesByType returns nothing for these types.
-// Observers live for the lifetime of the injected content script and keep
-// running totals, so repeated scans neither add listeners nor lose entries.
-
-// Google thresholds: good ≤ good, needs improvement ≤ poor, poor above.
+// Local measurements from the top document's Performance Timeline.
 export const CWV_THRESHOLDS = {
     lcp: { good: 2500, poor: 4000 }, // milliseconds
-    cls: { good: 0.05, poor: 0.25 }, // cumulative layout shift
+    cls: { good: 0.1, poor: 0.25 }, // cumulative layout shift
     inp: { good: 200, poor: 500 }, // milliseconds
     fcp: { good: 1800, poor: 3000 } // milliseconds
 }
@@ -17,69 +11,120 @@ const rating = (value, thresholds) => {
     return value <= thresholds.good ? 'good' : value <= thresholds.poor ? 'needs-fix' : 'poor'
 }
 
-// Short readable selector for the reported LCP element.
 const describeElement = element => {
-    try {
-        const name = element.tagName.toLowerCase()
-        const id = element.id ? `#${element.id}` : ''
-        const className = typeof element.className === 'string' ? element.className.trim() : ''
-        return (name + id + (className ? `.${className.split(/\s+/).join('.')}` : '')).slice(0, 120)
-    } catch { return null }
+    if (!element) return null
+    const name = element.tagName.toLowerCase()
+    const id = element.id ? `#${element.id}` : ''
+    const className = typeof element.className === 'string' ? element.className.trim() : ''
+    return (name + id + (className ? `.${className.split(/\s+/).join('.')}` : '')).slice(0, 120)
 }
 
-let observersStarted = false
-let lcpEntries = []
-let clsValue = 0
-let maxEventDuration = 0
-let maxTaskDuration = 0
+let supported
+let lcp = null
+let cls = 0, sessionValue = 0, firstShift = -Infinity, previousShift = -Infinity
+const interactions = new Map(), observers = []
 
-const observe = (type, onEntries) => {
+const observe = (type, onEntries, options = {}) => {
+    if (!globalThis.PerformanceObserver?.supportedEntryTypes?.includes(type)) return false
     try {
-        new PerformanceObserver(list => onEntries(list.getEntries())).observe({ type, buffered: true })
-    } catch { /* entry type is not supported by this browser */ }
+        const observer = new PerformanceObserver(list => onEntries(list.getEntries()))
+        observer.observe({ type, buffered: true, ...options })
+        observers.push({ observer, onEntries })
+        return true
+    } catch { return false }
+}
+
+const activationStart = () => performance.getEntriesByType('navigation')[0]?.activationStart || 0
+const firstHiddenTime = activation => performance.getEntriesByType('visibility-state')
+    .find(entry => entry.name === 'hidden' && entry.startTime >= activation)?.startTime ?? Infinity
+
+const recordLcp = entries => {
+    if (!entries.length) return
+    const activation = activationStart()
+    const hidden = firstHiddenTime(activation)
+    for (const entry of entries) {
+        if (entry.startTime >= hidden) continue
+        const value = Math.max(entry.startTime - activation, 0)
+        if (!lcp || value >= lcp.value) lcp = { value, element: describeElement(entry.element) }
+    }
+}
+
+const recordShifts = entries => {
+    for (const entry of entries) {
+        if (entry.hadRecentInput) continue
+        const time = entry.startTime
+        // Score the largest burst. A gap of 1 s or a 5 s window starts a new burst.
+        if (time - previousShift < 1000 && time - firstShift < 5000) {
+            sessionValue += entry.value
+        } else {
+            firstShift = time
+            sessionValue = entry.value
+        }
+        previousShift = time
+        cls = Math.max(cls, sessionValue)
+    }
+}
+
+const recordInteractions = entries => {
+    for (const entry of entries) {
+        if (!entry.interactionId) continue
+        const previous = interactions.get(entry.interactionId) ?? 0
+        interactions.set(entry.interactionId, Math.max(previous, entry.duration))
+    }
 }
 
 const startObservers = () => {
-    if (observersStarted || typeof PerformanceObserver === 'undefined') return
-    observersStarted = true
-    observe('largest-contentful-paint', entries => { lcpEntries.push(...entries) })
-    observe('layout-shift', entries => {
-        for (const entry of entries) if (!entry.hadRecentInput) clsValue += entry.value
-    })
-    observe('event', entries => {
-        for (const entry of entries) maxEventDuration = Math.max(maxEventDuration, entry.duration)
-    })
-    observe('longtask', entries => {
-        for (const entry of entries) maxTaskDuration = Math.max(maxTaskDuration, entry.duration)
-    })
+    if (supported) return
+    supported = {
+        lcp: observe('largest-contentful-paint', recordLcp),
+        cls: observe('layout-shift', recordShifts),
+        inp: typeof performance.interactionCount === 'number' && observe('event', recordInteractions, { durationThreshold: 16 }),
+        fcp: Boolean(globalThis.PerformanceObserver?.supportedEntryTypes?.includes('paint'))
+    }
+    // First Input Timing also includes the first interaction when it is faster than 16 ms.
+    if (supported.inp) observe('first-input', recordInteractions)
 }
 
-// Buffered observer callbacks arrive on a later task, so the first scan waits
-// briefly before reading the collected totals.
-export const waitForCwv = () => {
-    startObservers()
-    return new Promise(resolve => setTimeout(resolve, 150))
-}
-
-const collectFcp = () => {
-    const entry = performance.getEntriesByType('paint').find(item => item.name === 'first-contentful-paint')
-    return entry ? { value: Math.round(entry.startTime), rating: rating(entry.startTime, CWV_THRESHOLDS.fcp) } : null
-}
+const timing = (value, name) => value == null ? null : { value: Math.round(value), rating: rating(value, CWV_THRESHOLDS[name]) }
 
 export const collectCwv = () => {
     startObservers()
-    const last = lcpEntries[lcpEntries.length - 1]
-    const lcp = last
-        ? { value: Math.round(last.startTime), rating: rating(last.startTime, CWV_THRESHOLDS.lcp), element: describeElement(last.element) }
-        : null
-    const cls = Math.round(clsValue * 1000) / 1000
-    const inp = maxEventDuration > 0
-        ? { value: Math.round(maxEventDuration), rating: rating(maxEventDuration, CWV_THRESHOLDS.inp) }
-        : maxTaskDuration > 0
-            ? { value: Math.round(maxTaskDuration), rating: rating(maxTaskDuration, CWV_THRESHOLDS.inp), note: 'Approximated from longtask entries (INP not directly available)' }
-            : null
-    return { lcp, cls, clsRating: rating(cls, CWV_THRESHOLDS.cls), inp, fcp: collectFcp() }
+    // Include buffered entries before a scheduled observer callback is delivered.
+    for (const { observer, onEntries } of observers) onEntries(observer.takeRecords())
+
+    const activation = activationStart()
+    const paint = performance.getEntriesByType('paint').find(entry => entry.name === 'first-contentful-paint')
+    const fcp = paint && paint.startTime < firstHiddenTime(activation) ? timing(Math.max(paint.startTime - activation, 0), 'fcp') : null
+    const clsValue = supported.cls && (fcp || cls > 0) ? cls : null
+    const interactionCount = supported.inp ? performance.interactionCount : null
+    const rank = Math.floor(interactionCount / 50)
+    const duration = interactionCount ? [...interactions.values()].sort((a, b) => b - a)[rank] : undefined
+    return {
+        lcp: lcp && { ...timing(lcp.value, 'lcp'), element: lcp.element },
+        cls: clsValue,
+        clsRating: rating(clsValue, CWV_THRESHOLDS.cls),
+        inp: timing(duration, 'inp'),
+        fcp,
+        supported,
+        interactionCount
+    }
 }
 
-const RATING_STATUS = { good: 'pass', 'needs-fix': 'warning', poor: 'fail', unknown: 'unknown' }
+const seconds = value => value == null ? '' : `${(value / 1000).toFixed(2)} с`
+
+export const cwvMetrics = cwv => [
+    { key: 'lcp', name: 'LCP', label: 'LCP: крупнейший контент', value: seconds(cwv?.lcp?.value), rating: cwv?.lcp?.rating, unit: ' с', scale: 1000, detail: cwv?.lcp?.element ? `Элемент: ${cwv.lcp.element}` : '' },
+    { key: 'cls', name: 'CLS', label: 'CLS: сдвиг макета', value: cwv?.cls?.toFixed(3) ?? '', rating: cwv?.clsRating, unit: '', scale: 1, detail: 'Максимальный суммарный сдвиг за окно до 5 с' },
+    { key: 'inp', name: 'INP', label: 'INP: отклик ввода', value: cwv?.inp ? `${cwv.inp.value} мс` : '', rating: cwv?.inp?.rating, unit: ' мс', scale: 1, detail: 'Отклик на взаимодействия в этой вкладке' },
+    { key: 'fcp', name: 'FCP', label: 'FCP: первая отрисовка', value: seconds(cwv?.fcp?.value), rating: cwv?.fcp?.rating, unit: ' с', scale: 1000 }
+].map(({ unit, scale, detail, ...metric }) => {
+    const { good, poor } = CWV_THRESHOLDS[metric.key]
+    const thresholds = `Хорошо: ≤${good / scale}${unit} · Плохо: >${poor / scale}${unit}`
+    const unavailable = cwv?.supported?.[metric.key] === false
+        ? 'Не поддерживается браузером'
+        : metric.key === 'inp' && cwv?.interactionCount === 0 ? 'Нет взаимодействий' : 'Нет данных'
+    return { ...metric, hint: metric.value ? [detail, thresholds].filter(Boolean).join(' · ') : '', unavailable }
+})
+
+const RATING_STATUS = { good: 'pass', 'needs-fix': 'warning', poor: 'fail' }
 export const cwvRatingStatus = rating => RATING_STATUS[rating] || 'unknown'

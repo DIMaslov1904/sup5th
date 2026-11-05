@@ -25,6 +25,7 @@ export interface PopupResults {
     'data:job:get': unknown
     'icons:status': unknown
     'icons:refresh': unknown
+    'icons:refreshOne': void
     'icons:cancel': unknown
     'auth:start': { started: boolean }
     'services:get': unknown

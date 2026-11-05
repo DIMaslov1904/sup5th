@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { sendSeoToTab, withActiveTab, fetchSeo, openSeoApp, canPinSeoPage, pinSeoPage } from '../../utils/seoClient.js'
+import { SeoTabUnavailableError } from '../../utils/seoMessaging.js'
 import { callBackground } from '../../utils/backgroundClient.js'
 import { SEO_SECTIONS, normalizeSeoSection } from '../../utils/seoSections.js'
 import { evaluateHttpStatus } from '../../utils/seoValidation.js'
@@ -12,6 +13,7 @@ import { classifyLinkCheck, withoutFragment } from '../../utils/linkCheckStatus.
 import Preloader from './ui/Preloader.vue'
 import Button from './ui/Button.vue'
 import Card from './ui/Card.vue'
+import EmptyState from './ui/EmptyState.vue'
 import Notification from './ui/Notification.vue'
 import Tabs from './ui/Tabs.vue'
 import Input from './ui/Input.vue'
@@ -24,7 +26,7 @@ import SeoImagePreview from './SeoImagePreview.vue'
 import SeoToolIcon from './SeoToolIcon.vue'
 import CopyButton from './ui/CopyButton.vue'
 
-const props = defineProps({ tab: Object, autoScan: { type: Boolean, default: true }, session: Object, initialSection: { type: String, default: '' }, expanded: Boolean, docked: Boolean })
+const props = defineProps({ tab: Object, session: Object, initialSection: { type: String, default: '' }, expanded: Boolean, docked: Boolean })
 const emit = defineEmits(['section-change'])
 const notification = ref('')
 const pinning = ref(false)
@@ -35,10 +37,9 @@ const pin = async () => {
     catch (reason) { if (alive) error.value = reason.message }
     finally { if (alive) pinning.value = false }
 }
-const serverIp = computed(() => report.value?.response.ip || '')
-const serverIpLoading = computed(() => report.value?.response.pending === true)
 const headingTree = computed(() => buildHeadingTree(report.value?.headingRows || []))
 const section = ref(normalizeSeoSection(props.initialSection)), report = shallowRef(null), loading = ref(true), error = ref('')
+const unavailable = ref('')
 const linkFilter = ref('all'), relFilter = ref('all'), protocolFilter = ref('all'), statusFilter = ref('all'), imageFilter = ref('all'), query = ref(''), visible = ref(100)
 const checked = shallowRef({}), checking = ref(false), checkProgress = ref(0)
 const ogPreviewOpen = ref(false)
@@ -54,38 +55,42 @@ const tabs = SEO_SECTIONS
 watch(section, value => emit('section-change', value))
 watch(() => props.initialSection, value => { if (value) section.value = normalizeSeoSection(value) })
 const selectSection = () => { visible.value = 100; notification.value = '' }
-const enrich = data => {
-    const revision = ++scanRevision
-    loadSeoNetwork(data, (url, method, options) => fetchSeo(url, method, undefined, options), next => {
-        if (alive && revision === scanRevision) report.value = next
+const enrich = (data, revision) => {
+    loadSeoNetwork(data, (url, method, options) => fetchSeo(url, method, undefined, options), patch => {
+        if (alive && revision === scanRevision) report.value = { ...report.value, ...patch }
     }).catch(reason => { if (alive && revision === scanRevision) error.value = reason.message })
+}
+const refreshCwv = async revision => {
+    try {
+        const { documentId, cwv } = await sendSeoToTab(props.tab?.id, 'seo:cwv')
+        if (alive && revision === scanRevision && cwv && report.value?.documentId === documentId) {
+            report.value = { ...report.value, cwv }
+        }
+    } catch { /* Keep the measurement from the DOM snapshot. */ }
 }
 const scan = async () => {
     if (loading.value) return
-    ++scanRevision
+    const revision = ++scanRevision
     loading.value = true; error.value = ''
-    notification.value = ''
+    notification.value = ''; unavailable.value = ''
     try {
-        const context = await sendSeoToTab(props.tab?.id, 'seo:context')
-        sessionContext = { tabId: props.tab.id, url: context.url, documentId: context.documentId }
         const data = await withActiveTab(props.tab?.id, () => sendSeoToTab(props.tab?.id, 'seo:dom'))
         if (alive) {
+            sessionContext = { tabId: props.tab.id, url: data.url, documentId: data.documentId }
             report.value = data; checked.value = {}; visible.value = 100
-            enrich(data)
-            // Async CWV update with accurate CLS
-            try {
-                const cwv = await sendSeoToTab(props.tab?.id, 'seo:cwv')
-                if (alive && cwv?.ok) {
-                    report.value = { ...report.value, cwv: cwv.data }
-                }
-            } catch { /* CWV update failed, keep initial values */ }
+            enrich(data, revision)
+            refreshCwv(revision)
         }
     }
-    catch (e) { if (alive) error.value = e.message }
+    catch (e) {
+        if (!alive) return
+        if (e instanceof SeoTabUnavailableError) unavailable.value = e.message
+        else error.value = e.message
+    }
     finally { if (alive) loading.value = false }
 }
 let persistTimer, reportDirty = false
-const uiSnapshot = () => ({ section: section.value, serverIp: serverIp.value,
+const uiSnapshot = () => ({ section: section.value,
     linkFilter: linkFilter.value, relFilter: relFilter.value, protocolFilter: protocolFilter.value,
     statusFilter: statusFilter.value, imageFilter: imageFilter.value, query: query.value,
     visible: visible.value, checked: checked.value, checkProgress: checkProgress.value })
@@ -99,7 +104,7 @@ const persist = () => {
 }
 const schedulePersist = () => { clearTimeout(persistTimer); persistTimer = setTimeout(persist, 200) }
 watch(report, () => { if (!restoring) { reportDirty = true; schedulePersist() } }, { flush: 'sync' })
-watch([section, serverIp, linkFilter, relFilter, protocolFilter, statusFilter, imageFilter, query, visible, checked, checkProgress], schedulePersist)
+watch([section, linkFilter, relFilter, protocolFilter, statusFilter, imageFilter, query, visible, checked, checkProgress], schedulePersist)
 onBeforeUnmount(persist)
 onMounted(async () => {
     if (props.session && props.tab?.id) {
@@ -111,7 +116,8 @@ onMounted(async () => {
             if (!alive) return
             if (saved?.report) {
                 restoring = true
-                report.value = { ...saved.report, actions: context.actions }
+                const cwv = saved.report.cwv?.supported ? saved.report.cwv : null
+                report.value = { ...saved.report, actions: context.actions, cwv }
                 section.value = normalizeSeoSection(props.initialSection || saved.section)
                 linkFilter.value = saved.linkFilter || 'all'; relFilter.value = saved.relFilter || 'all'
                 protocolFilter.value = saved.protocolFilter || 'all'; statusFilter.value = saved.statusFilter || 'all'
@@ -119,12 +125,21 @@ onMounted(async () => {
                 visible.value = saved.visible || 100; checked.value = saved.checked || {}; checkProgress.value = saved.checkProgress || 0
                 restoring = false
             }
-        } catch { /* Нет доступного content script/кеша — обычная проверка ниже. */ }
+        } catch (reason) {
+            if (alive && reason instanceof SeoTabUnavailableError) unavailable.value = reason.message
+        }
         finally { if (alive) loading.value = false }
     }
     loading.value = false
-    if (alive && props.autoScan && !report.value) scan()
-    else if (alive && [report.value?.response, report.value?.robotsFile, report.value?.sitemap].some(item => item?.pending)) enrich(report.value)
+    if (!alive) return
+    if (!report.value) {
+        if (!unavailable.value) scan()
+        return
+    }
+    const revision = ++scanRevision
+    const { response, robotsFile, sitemap, llmTxt } = report.value
+    if ([response, robotsFile, sitemap, llmTxt].some(item => item?.pending)) enrich(report.value, revision)
+    refreshCwv(revision)
 })
 onUnmounted(() => { alive = false; cancelled = true; clearTimeout(persistTimer) })
 const links = computed(() => (report.value?.linkRows || []).filter(item => {
@@ -155,8 +170,11 @@ const checkLinks = async () => {
     finally { if (alive) checking.value = false }
 }
 const toggle = async (action) => {
-    try { report.value = { ...report.value, actions: await sendSeoToTab(props.tab.id, 'seo:action', { action, enabled: !report.value.actions[action] }) } }
-    catch (e) { error.value = e.message }
+    const revision = scanRevision
+    try {
+        const actions = await sendSeoToTab(props.tab.id, 'seo:action', { action, enabled: !report.value.actions[action] })
+        if (alive && revision === scanRevision) report.value = { ...report.value, actions }
+    } catch (e) { if (alive && revision === scanRevision) error.value = e.message }
 }
 const goToHeading = async item => {
     notification.value = ''; error.value = ''
@@ -201,11 +219,14 @@ const tools = computed(() => {
         <Notification v-if="error" :text="error" />
         <Notification v-if="notification" type="warning" :text="notification" />
         <Preloader v-if="loading" label="Получаем данные страницы…" />
+        <EmptyState v-else-if="unavailable"
+            :title="report ? 'Не удалось обновить анализ.' : (expanded ? 'Страница недоступна для анализа.' : 'Страница недоступна.')"
+            :description="expanded ? unavailable : ''" />
         <div v-if="report" class="grid min-w-0 gap-3">
         <Tabs v-model="section" :items="tabs" label="Разделы SEO" wrap @update:model-value="selectSection" />
         <Transition name="ui-view" mode="out-in"><div :key="section" class="grid min-w-0 gap-3">
             <template v-if="section === 'overview'">
-                <SeoOverview :report="report" :server-ip="serverIp" :server-ip-loading="serverIpLoading" />
+                <SeoOverview :report="report" />
             </template>
             <template v-if="section === 'headings'">
                 <Button size="sm" variant="secondary" @click="toggle('headings')">{{ report.actions.headings ? 'Убрать подсветку' : 'Подсветить H1–H6' }}</Button>
@@ -258,7 +279,7 @@ const tools = computed(() => {
                 <Card title="Индексация"><div class="grid gap-2 text-xs"><p>Meta robots: {{ report.robots || 'Не задан' }}</p><p>X-Robots-Tag: {{ report.response.pending ? 'Проверяем…' : report.xRobots || 'Не задан' }}</p><p :class="report.robotsAllowed && report.xRobotsAllowed && robotsRules.allowed !== false ? 'text-ui-success' : 'text-ui-warning'">Noindex в meta/HTTP: {{ !report.robotsAllowed || report.xRobotsAllowed === false ? 'есть запрет' : report.response.pending ? 'Проверяем HTTP…' : report.xRobotsAllowed === null ? 'не определён: результат неполный' : robotsRules.allowed === false ? 'запрета нет, но обход закрыт robots.txt' : 'запрета нет' }}</p><p :class="robotsRules.allowed === false ? 'text-ui-warning' : ''">robots.txt: {{ report.robotsFile.pending ? 'Проверяем…' : report.robotsFile.exists ? 'HTTP ' + report.robotsFile.status : 'Недоступен' }} · {{ robotsRules.allowed === null ? 'Правила не удалось определить' : robotsRules.allowed ? 'Путь разрешён для *' : 'Путь запрещён для *' }}</p><p v-for="item in report.indexingAgents" :key="item.agent" :class="robotsRules.allowed === false ? 'text-ui-warning' : ''">{{ item.agent }}: {{ item.allowed === null ? 'область действия noindex неизвестна' : item.allowed ? 'запрета noindex не найдено' : 'есть запрет noindex' }}{{ report.xRobotsAllowed === null ? ' (HTTP-проверка неполная)' : '' }}{{ robotsRules.allowed === false ? ` · обход запрещён (${robotsRuleText})` : '' }}</p><p class="text-ui-muted">Отсутствие запрета не гарантирует индексацию. Правила конкретного робота могут отличаться.</p></div></Card>
                 <a :href="report.robotsFile.url" target="_blank" rel="noreferrer" class="text-xs text-ui-accent">Открыть robots.txt ↗</a>
                 <Card title="Canonical / hreflang"><p v-for="(item,index) in report.canonicals" :key="index" class="break-all text-xs">{{ item.href || '(пустой)' }} {{ item.inHead ? '' : 'вне head' }}</p><p v-for="(item,index) in report.hreflang" :key="index" class="break-all text-xs">{{ item.hreflang }}: {{ item.href }}</p></Card>
-                <Button variant="secondary" size="sm" @click="openSeoApp(tab.id,'sitemap')">Открыть единый sitemap ↗</Button>
+                <Button v-if="!expanded" variant="secondary" size="sm" @click="openSeoApp(tab.id,'sitemap')">Открыть единый sitemap ↗</Button>
             </template>
             <template v-if="section === 'page'">
                 <p class="text-xs text-ui-muted">Изменения действуют только на этой странице до выключения или её закрытия/перезагрузки.</p>
@@ -274,7 +295,7 @@ const tools = computed(() => {
             <Button size="sm" variant="secondary" :disabled="!tab?.id || loading || checking" @click="scan">Обновить</Button>
             <Button v-if="canPinSeoPage && !docked" size="sm" variant="ghost" :disabled="!tab?.id || pinning" @click="pin">Закрепить</Button>
             <Button v-if="!expanded" size="sm" variant="ghost" :disabled="!tab?.id" @click="expand">На весь экран ↗</Button>
-            <Button size="sm" variant="ghost" :disabled="!tab?.id" @click="openSeoApp(tab.id)">Аудит ↗</Button>
+            <Button v-if="!expanded" size="sm" variant="ghost" :disabled="!tab?.id" @click="openSeoApp(tab.id)">Аудит ↗</Button>
         </div>
     </div>
 </template>

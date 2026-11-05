@@ -2,6 +2,7 @@
 import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { extensionApi } from '../platform/extensionApi.js'
 import { sendSeoToTab, withActiveTab, fetchSeo, downloadText } from '../utils/seoClient.js'
+import { SeoTabUnavailableError } from '../utils/seoMessaging.js'
 import { createAuditControl, runSeoAuditRequests } from '../utils/seoAuditRunner.js'
 import { normalizeAuditPageLimit, DEFAULT_AUDIT_PAGE_LIMIT } from '../utils/seoAuditPages.js'
 import { buildAuditChecks } from '../utils/seoAuditChecks.js'
@@ -10,6 +11,7 @@ import { buildAuditExport } from '../utils/seoAuditExport.js'
 import { useSeoAuditView } from './useSeoAuditView.js'
 import { withoutFragment } from '../utils/linkCheckStatus.js'
 import Button from '../popup/components/ui/Button.vue'
+import EmptyState from '../popup/components/ui/EmptyState.vue'
 import Notification from '../popup/components/ui/Notification.vue'
 import Tabs from '../popup/components/ui/Tabs.vue'
 import SeoAuditSummary from './SeoAuditSummary.vue'
@@ -106,7 +108,8 @@ const runAudit = async () => {
     } catch (error) {
         if (!alive || current !== revision) return
         if (signal.aborted) { state.value = 'idle'; return }
-        message.value = error.message; state.value = 'error'
+        message.value = error.message
+        state.value = error instanceof SeoTabUnavailableError ? 'unavailable' : 'error'
     }
 }
 const exportReport = () => downloadText(JSON.stringify(buildAuditExport(report.value, audit.value, issues.value,
@@ -124,7 +127,8 @@ const exportReport = () => downloadText(JSON.stringify(buildAuditExport(report.v
             </div>
         </header>
         <SeoAuditSettings v-model:mode="mode" v-model:page-limit="pageLimit" v-model:crawl-page-limit="crawlPageLimit" v-model:exclude-non-indexable="excludeNonIndexable" v-model:custom-exclusions="customExclusions" :busy="busy" :state="state" :minimum-limit="minimumLimit" :minimum-crawl-limit="minimumCrawlLimit" :pages-pending="audit?.pagesPending" :crawl-pending="audit?.crawl.pending" @normalize="normalizeLimits" />
-        <Notification v-if="message" :text="message" />
+        <EmptyState v-if="state === 'unavailable'" title="Страница недоступна для анализа." :description="message" />
+        <Notification v-else-if="state === 'error'" :text="message" />
         <div v-if="busy && audit" class="ui-panel text-xs" role="status">
             HTTP{{ audit.mode === 'external' ? ' внешних URL' : '' }}: {{ progress.current }} из {{ progress.total }}<span v-if="audit.mode === 'external'"> · Обход страниц: {{ audit.crawl.current }} из {{ audit.crawl.total }}</span><span v-if="audit.sitemap.pending"> · sitemap загружается</span>
             <p v-if="state === 'paused'" class="mt-1 text-ui-warning">На паузе. Уже отправленные запросы завершаются.</p>

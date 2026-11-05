@@ -6,7 +6,7 @@ import { getSshCommand } from '../../utils/ssh.js'
 import { useCardAction } from '../useCardAction.js'
 import CredentialCard from './CredentialCard.vue'
 
-const props = defineProps({ access: Object, projectUrl: String, index: Number })
+const props = defineProps({ access: Object, projectUrl: String })
 const card = ref(null)
 const { busy, message, error, run } = useCardAction(card)
 const copy = field => run(async () => {

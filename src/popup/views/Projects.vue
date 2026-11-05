@@ -12,7 +12,6 @@ import SiteIcon from '../components/SiteIcon.vue'
 import ProjectDetails from '../components/ProjectDetails.vue'
 import Button from '../components/ui/Button.vue'
 import Message from '../components/ui/Message.vue'
-import Notification from '../components/ui/Notification.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import CopyButton from '../components/ui/CopyButton.vue'
 import ProjectShortcutStrip from '../components/ProjectShortcutStrip.vue'
@@ -21,18 +20,18 @@ const projects = ref([]), services = ref([]), copying = ref(''), loaded = ref(fa
 let alive = true, revision = 0
 const downloaded = ref(false), loadError = ref('')
 const search = defineModel('search', { type: String, default: '' })
-const message = ref({ type: 'error', text: '' })
 const selectedProjectUrl = defineModel('selectedProjectUrl', { type: String, default: '' })
 const selectedServiceId = defineModel('selectedServiceId', { type: String, default: '' })
 const selectedService = computed(() => services.value.find(item => item.id === selectedServiceId.value) || null)
+const serviceHasLogin = computed(() => Boolean(selectedService.value?.hasLogin || selectedService.value?.login))
+const serviceHasPassword = computed(() => Boolean(selectedService.value?.hasPassword || selectedService.value?.password))
 const selectedProject = computed(() => projects.value.find(item => item.url === selectedProjectUrl.value) || null)
 const selectedItem = computed(() => selectedService.value || selectedProject.value)
 const catalogueSearch = computed(() => createCatalogueSearch(services.value, projects.value))
 const filteredProjects = computed(() => catalogueSearch.value(search.value))
 const linkHref = siteHref
-const back = () => { selectedProjectUrl.value = ''; selectedServiceId.value = ''; message.value.text = '' }
+const back = () => { selectedProjectUrl.value = ''; selectedServiceId.value = '' }
 const openItem = item => {
-    message.value.text = ''
     if (item.kind === 'service') { selectedProjectUrl.value = ''; selectedServiceId.value = item.id }
     else { selectedServiceId.value = ''; selectedProjectUrl.value = item.url }
 }
@@ -65,7 +64,7 @@ onUnmounted(() => { alive = false; revision++; extensionApi.storage.onChanged.re
 </script>
 <template>
     <section class="min-w-0 w-full px-4 text-ui-text">
-        <ProjectShortcutStrip v-if="loaded && !selectedItem" @select="url => { selectedServiceId = ''; selectedProjectUrl = url }" />
+        <ProjectShortcutStrip v-if="loaded && !selectedItem" :projects="projects" @select="url => { selectedServiceId = ''; selectedProjectUrl = url }" />
         <Preloader v-if="!loaded || (refreshJob.running && !projects.length && !services.length)" label="Загрузка каталога…" />
         <Message v-else-if="loadError" type="error">{{ loadError }}</Message>
         <EmptyState v-else-if="!connected && !projects.length && !services.length" title="Данные ещё не подключены" description="Добавьте адреса API в настройках." />
@@ -99,18 +98,17 @@ onUnmounted(() => { alive = false; revision++; extensionApi.storage.onChanged.re
                 <h1 :title="selectedService.name" class="ui-title min-w-0 line-clamp-2 wrap-anywhere">{{ selectedService.name }}</h1>
             </div>
             <a :href="linkHref(selectedService.url)" :title="displayUrl(selectedService.url)" target="_blank" rel="noreferrer" class="min-w-0 truncate text-[13px] text-ui-accent">{{ displayUrl(selectedService.url) }} ↗</a>
-            <article class="grid gap-3 ui-panel">
+            <article v-if="serviceHasLogin || serviceHasPassword" class="grid gap-3 ui-panel">
                 <h2 class="text-[13px] font-semibold">Доступ</h2>
-                <p class="break-all text-xs text-ui-muted">Логин: {{ selectedService.login || (selectedService.hasLogin ? 'Доступен после первой разблокировки' : 'Не указан') }}</p>
+                <p v-if="serviceHasLogin" class="break-all text-xs text-ui-muted">Логин: {{ selectedService.login || 'Доступен после первой разблокировки' }}</p>
                 <div class="flex flex-wrap gap-2">
-                    <CopyButton v-if="selectedService.hasLogin || selectedService.login" :disabled="Boolean(copying)" :action="() => copyService('login')" label="Скопировать логин" />
-                    <CopyButton v-if="selectedService.hasPassword || selectedService.password" :disabled="Boolean(copying)" :action="() => copyService('password')" label="Скопировать пароль" />
+                    <CopyButton v-if="serviceHasLogin" :disabled="Boolean(copying)" :action="() => copyService('login')" label="Скопировать логин" />
+                    <CopyButton v-if="serviceHasPassword" :disabled="Boolean(copying)" :action="() => copyService('password')" label="Скопировать пароль" />
                 </div>
             </article>
         </div>
         <ProjectDetails v-else-if="selectedProject" :key="selectedProject.url" :project="selectedProject">
             <template #leading><Button variant="ghost" size="sm" aria-label="Назад к списку" title="Назад к списку" @click="back">←</Button></template>
         </ProjectDetails>
-        <Notification v-if="message.text" :type="message.type" :text="message.text" />
     </section>
 </template>

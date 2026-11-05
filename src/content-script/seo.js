@@ -1,36 +1,22 @@
 import { extensionApi } from '../platform/extensionApi.js'
 import { collectSeoDom } from '../utils/seoDom.js'
 import { collectIndexingRules } from '../utils/seoRules.js'
-import { loadSeoNetwork } from '../utils/seoNetwork.js'
 import { getSeoActions, setSeoAction } from './seoActions.js'
 import { captureHeadings, focusHeading } from './headingNavigation.js'
 import { collectPageWeight } from './pageWeight.js'
-import { collectCwv, waitForCwv } from '../utils/cwv.js'
+import { collectCwv } from '../utils/cwv.js'
 import { AUDIT_DISCOVERY_LIMIT } from '../utils/seoAuditDiscovery.js'
 import { collectAuditTargets } from '../utils/seoAuditLinks.js'
 const documentId = [...crypto.getRandomValues(new Uint32Array(4))].join('-')
 /**
  * SEO-анализ текущей страницы.
  * Выполняется в контексте content script (доступ к DOM).
- * Сетевые запросы (robots.txt, sitemap, проверка ссылок) выполняются в
- * фоновом процессе через сообщение 'seo:fetch' — это обходит CSP страницы
- * и не нагружает вкладку.
+ * Интерфейс расширения отдельно запрашивает robots.txt, sitemap и ответы HTTP
+ * через фоновый процесс.
  * Внедряется в страницу как IIFE из utils/seoClient.js; обработчики сообщений — ниже.
  */
 
 const getMeta = (selector) => document.querySelector(selector)?.getAttribute('content')?.trim() || ''
-
-
-// Запрос выполняется в background (нет ограничений CSP страницы)
-const fetchViaBackground = async (url, options = {}) => {
-    const failed = { ok: false, status: 0, url: '', headers: {}, text: '', ttfb: null }
-    try {
-        const response = await extensionApi.runtime.sendMessage({ type: 'seo:fetch', payload: { url, ...options, method: options.method || 'GET' } })
-        if (!response?.ok) return failed
-        const data = response.data || {}
-        return { ...failed, ...data }
-    } catch { return failed }
-}
 
 // Mixed content: незащищённые ресурсы на HTTPS-странице.
 const insecureResourceSelectors = 'img[src], script[src], iframe[src], source[src], video[src], audio[src], embed[src], input[src], link[href], form[action]'
@@ -46,7 +32,7 @@ const collectSsl = () => {
 const declaredCharset = () => document.querySelector('meta[charset]')?.getAttribute('charset')?.trim()
     || getMeta('meta[http-equiv="Content-Type" i]').match(/charset=([\w-]+)/i)?.[1]?.trim() || ''
 
-export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = false } = {}) => {
+const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = false } = {}) => {
     const dom = collectSeoDom(document, location.href)
 
     const robotsUrl = new URL('/robots.txt', location.href).href
@@ -146,12 +132,6 @@ export const collectSeoReport = ({ internalLinkLimit = 50, includeAuditLinks = f
     }
 }
 
-export const scanSeo = async () => {
-    await waitForCwv()
-    return loadSeoNetwork(collectSeoReport(), (url, method, options) => fetchViaBackground(url, { method, ...options }))
-}
-
-/** Регистрирует обработчик сообщений 'seo:scan' */
 const registerSeoHandler = () => {
     extensionApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         if (message?.type === 'seo:context') {
@@ -169,28 +149,15 @@ const registerSeoHandler = () => {
             return false
         }
         if (message?.type === 'seo:dom') {
-            ;(async () => {
-                try {
-                    await waitForCwv()
-                    sendResponse({ ok: true, data: collectSeoReport(message.payload || {}) })
-                } catch (error) { sendResponse({ ok: false, error: error.message }) }
-            })()
-            return true
+            try { sendResponse({ ok: true, data: collectSeoReport(message.payload || {}) }) }
+            catch (error) { sendResponse({ ok: false, error: error.message }) }
+            return false
         }
         if (message?.type === 'seo:cwv') {
-            ;(async () => {
-                try {
-                    await waitForCwv()
-                    sendResponse({ ok: true, data: collectCwv() })
-                } catch (error) { sendResponse({ ok: false, error: error.message }) }
-            })()
-            return true
+            try { sendResponse({ ok: true, data: { documentId, cwv: collectCwv() } }) }
+            catch (error) { sendResponse({ ok: false, error: error.message }) }
         }
-        if (message?.type !== 'seo:scan') return false
-        scanSeo()
-            .then((data) => sendResponse({ ok: true, data }))
-            .catch((error) => sendResponse({ ok: false, error: error.message }))
-        return true
+        return false
     })
 }
 

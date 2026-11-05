@@ -5,7 +5,7 @@ import { fetchSeoResource } from './seoFetch.js'
 import { getProjectShortcuts, updateProjectShortcuts } from './projectShortcuts.js'
 import { getPipelineAbsence, setPipelineAbsence } from './pipelineBadges.js'
 import { downloadSeoImage } from './imageDownload.js'
-import { syncSiteIcons, getSiteIconStatus, cancelSiteIcons, clearSiteIcons } from '../icons/iconService.js'
+import { syncSiteIcons, refreshSiteIcon, getSiteIconStatus, cancelSiteIcons, clearSiteIcons } from '../icons/iconService.js'
 import { registerPopupSession } from './popupSession.js'
 import { storageReady, SCHEMA_VERSION, SERVICES_KEY, ERRORS_KEY, storageGet, storageSet, getStoredData, mutateStorage, invalidateOperations } from './storageRepository.js'
 import { getSecurityStatus, enableHelloProtection, unlockWithHelloKey, enablePinProtection, unlockWithPin, lockCredentialVault, disableCredentialProtection, registerVaultIdleLock } from './credentialVault.js'
@@ -27,10 +27,11 @@ const ready = storageReady.then(async reset => {
 })
 registerSupportTicketTracking(ready)
 registerExtensionUpdates(ready)
-const syncCatalogueIcons = async options => {
+const catalogueIconItems = async () => {
     const [data, services] = await Promise.all([getStoredData(), storageGet(SERVICES_KEY, [])])
-    return syncSiteIcons([...toPublicData(data).lastSuccessfulData.projects, ...services], options)
+    return [...toPublicData(data).lastSuccessfulData.projects, ...services]
 }
+const syncCatalogueIcons = async options => syncSiteIcons(await catalogueIconItems(), options)
 const loadData = async options => {
     const data = await refreshAll(options)
     syncCatalogueIcons().catch(error => console.error('[icons] catalogue', error))
@@ -64,6 +65,7 @@ const handlers = {
     'support:ticket:open': openSupportTicket, 'support:auth:page': supportAuthPage,
     'seo:fetch': fetchSeoResource, 'seo:downloadImage': downloadSeoImage,
     'icons:status': getSiteIconStatus, 'icons:refresh': () => syncCatalogueIcons({ force: true }), 'icons:cancel': cancelSiteIcons,
+    'icons:refreshOne': async ({ url }) => refreshSiteIcon(url, await catalogueIconItems()),
     'services:get': getServices, 'services:field': getServiceField,
     'data:settings:get': readApiSettings,
     'data:settings:set': async payload => { const settings = await saveApiSettings(payload); await scheduleRefresh(); return settings },

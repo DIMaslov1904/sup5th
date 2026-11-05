@@ -1,6 +1,6 @@
 import { extensionApi } from '../platform/extensionApi.js'
 import { iconRepository } from './iconRepository.js'
-import { catalogueOrigins, ICON_CACHE_WARNING } from './iconPolicy.js'
+import { catalogueOrigins, iconOrigin, ICON_CACHE_WARNING } from './iconPolicy.js'
 import { createIconQueue } from './iconQueue.js'
 import { createIconFetcher } from './iconFetcher.js'
 import { closeIconDecoder } from './iconDecoder.js'
@@ -36,6 +36,13 @@ export const syncSiteIcons = async (items, options) => {
     const result = await queue.reconcile(allowed, options)
     resumeSiteIcons()
     return result
+}
+export const refreshSiteIcon = async (url, items) => {
+    const origin = iconOrigin(url)
+    if (!origin || !catalogueOrigins(items).includes(origin)) throw new Error('Сайт не найден в каталоге')
+    if (!await hasOrigin(origin)) throw new Error('Предоставьте расширению доступ к сайту, чтобы обновить иконку')
+    await queue.refresh(origin)
+    resumeSiteIcons()
 }
 export const getSiteIconStatus = async () => {
     const records = await iconRepository.list()
