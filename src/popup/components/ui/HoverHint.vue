@@ -39,6 +39,10 @@ const hideLater = () => {
     clearTimeout(timer)
     timer = setTimeout(() => { if (!hovered && !focused && !popupHovered) close() }, 120)
 }
+const enterPopup = () => {
+    popupHovered = true
+    clearTimeout(timer)
+}
 watch(() => props.text, close)
 onUnmounted(close)
 onDeactivated(close)
@@ -48,6 +52,6 @@ onDeactivated(close)
         @mouseenter="hovered = true; show()" @mouseleave="hovered = false; hideLater()" @focus="focused = true; show()" @blur="focused = false; hideLater()"><slot /></span>
     <Teleport to="body">
         <div v-if="open" :id="id" ref="popup" role="tooltip" class="ui-preview fixed z-50 max-h-[calc(100dvh-24px)] overflow-auto whitespace-pre-line rounded-control border border-ui-border bg-ui-panel px-3 py-2 text-xs leading-5 wrap-anywhere text-ui-text shadow-lg" :style="position"
-            @mouseenter="popupHovered = true; clearTimeout(timer)" @mouseleave="popupHovered = false; hideLater()">{{ text }}</div>
+            @mouseenter="enterPopup" @mouseleave="popupHovered = false; hideLater()">{{ text }}</div>
     </Teleport>
 </template>

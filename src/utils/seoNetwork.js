@@ -7,6 +7,22 @@ export const requestWithHeadFallback = async (request, url, options = {}) => {
     return [0, 405, 501].includes(head.status) ? request(url, 'GET', options) : head
 }
 
+export const seoResponsePatch = (initial, info, requestedUrl = initial.url) => {
+    const xRobots = info.headers?.['x-robots-tag'] || ''
+    const indexing = indexingRulesFromMeta(initial.indexingMeta || initial.metaTags || [], info.xRobotsTags || xRobots)
+    const metaCharset = initial.charset?.document || initial.charset?.meta || ''
+    const httpCharset = String(info.headers?.['content-type'] || '').match(/charset\s*=\s*["']?([\w-]+)/i)?.[1] || ''
+    return {
+        ...indexing, xRobots, xRobotsAllowed: info.status ? indexing.xRobotsAllowed : null,
+        finalUrl: info.url || initial.url, redirected: Boolean(info.url && withoutFragment(info.url) !== withoutFragment(requestedUrl)),
+        charset: {
+            meta: metaCharset, http: httpCharset,
+            consistent: metaCharset && httpCharset ? metaCharset.toLowerCase() === httpCharset.toLowerCase() : null
+        },
+        response: { status: info.status, ok: info.ok, ttfb: info.ttfb ?? null, headers: info.headers || {}, ip: info.ip || '', chain: info.chain || [], traceComplete: info.traceComplete === true, pending: false }
+    }
+}
+
 export const loadSeoNetwork = async (initial, fetchResource, publish) => {
     let sitemapRevision = 0
     const request = async (url, method = 'GET', options = {}) => {
@@ -22,20 +38,9 @@ export const loadSeoNetwork = async (initial, fetchResource, publish) => {
     }
     const defaultSitemap = new URL('/sitemap.xml', initial.url).href
     const pageWork = (async () => {
+        if (initial.source === 'html') return
         const info = await head(initial.url, true)
-        const xRobots = info.headers?.['x-robots-tag'] || ''
-        const indexing = indexingRulesFromMeta(initial.indexingMeta || initial.metaTags || [], info.xRobotsTags || xRobots)
-        const metaCharset = initial.charset?.document || initial.charset?.meta || ''
-        const httpCharset = String(info.headers?.['content-type'] || '').match(/charset=([\w-]+)/i)?.[1]?.trim() || ''
-        publish({
-            ...indexing, xRobots, xRobotsAllowed: info.status ? indexing.xRobotsAllowed : null,
-            finalUrl: info.url || initial.url, redirected: Boolean(info.url && withoutFragment(info.url) !== withoutFragment(initial.url)),
-            charset: {
-                meta: metaCharset, http: httpCharset,
-                consistent: metaCharset && httpCharset ? metaCharset.toLowerCase() === httpCharset.toLowerCase() : null
-            },
-            response: { status: info.status, ok: info.ok, ttfb: info.ttfb ?? null, headers: info.headers || {}, ip: info.ip || '', chain: info.chain || [], traceComplete: info.traceComplete === true, pending: false }
-        })
+        publish(seoResponsePatch(initial, info))
     })()
     const robotsWork = (async () => {
         const url = new URL('/robots.txt', initial.url).href, info = await request(url)

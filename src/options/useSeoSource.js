@@ -9,6 +9,7 @@ const tool = value => ['overview', 'seo', 'sitemap'].includes(value) ? value : '
 
 export const useSeoSource = (docked, params) => {
     const tab = ref(null), error = ref(''), ready = ref(false), sourceRevision = ref(0)
+    const manualUrl = ref('')
     const address = ref(''), addressError = ref(''), opening = ref(false)
     const section = ref(tool(params.get('tool')))
     const seoSection = ref(normalizeSeoSection(params.get('section')))
@@ -40,7 +41,13 @@ export const useSeoSource = (docked, params) => {
         if (replace || !address.value || address.value === sourceAddress) address.value = url
         sourceAddress = url
     }
-    const load = async id => {
+    const selectManual = url => {
+        revision++; sourceId = null
+        tab.value = null; manualUrl.value = url; error.value = ''; ready.value = true
+        setAddress(url, true)
+        sourceRevision.value++
+    }
+    const load = async (id, expectedUrl) => {
         const current = ++revision
         sourceId = id; ready.value = false; error.value = ''; tab.value = null
         let loading = false
@@ -49,6 +56,7 @@ export const useSeoSource = (docked, params) => {
             const value = await extensionApi.tabs.get(id)
             if (!alive || current !== revision) return
             const url = value.pendingUrl || value.url
+            if (expectedUrl && url !== expectedUrl) return
             const isSite = /^https?:\/\//.test(url || '')
             loading = value.status === 'loading' || Boolean(value.pendingUrl && isSite)
             if (isSite) setAddress(url)
@@ -86,7 +94,12 @@ export const useSeoSource = (docked, params) => {
     }
     onMounted(async () => {
         extensionApi.tabs.onUpdated.addListener(updated); extensionApi.tabs.onRemoved.addListener(removed)
-        if (!docked) { await load(Number(params.get('tabId'))); return }
+        if (!docked) {
+            const url = siteHref(params.get('url'))
+            if (url) selectManual(url)
+            else await load(Number(params.get('tabId')))
+            return
+        }
         extensionApi.storage.onChanged.addListener(changed)
         const current = contextRevision
         try {
@@ -115,7 +128,8 @@ export const useSeoSource = (docked, params) => {
         const current = new URLSearchParams(location.search)
         current.set('tool', section.value); current.set('section', seoSection.value)
         if (newSource) {
-            current.set('tabId', String(sourceId))
+            current.delete('tabId')
+            current.set('url', manualUrl.value)
             for (const name of ['tab', 'check', 'status']) current.delete(name)
         }
         history.replaceState(history.state, '', `?${current}`)
@@ -131,25 +145,15 @@ export const useSeoSource = (docked, params) => {
         addressError.value = ''
         if (!url) { addressError.value = 'Введите адрес сайта, например https://example.com.'; return }
         if (!ready.value && sourceId && url === sourceAddress) return
-        opening.value = true
-        try {
-            if (tab.value?.url === url) {
-                setAddress(url, true)
-                await load(tab.value.id)
-                return
-            }
-            const target = await extensionApi.tabs.create({ url, active: false })
-            if (!alive) return
-            if (!Number.isInteger(target?.id) || target.id <= 0) throw new Error('Не получена вкладка для проверки')
+        if (tab.value?.url === url) {
+            opening.value = true
             setAddress(url, true)
-            const pending = load(target.id)
-            save(true)
-            await pending
-        } catch {
-            if (alive) addressError.value = 'Не удалось открыть сайт. Проверьте адрес и попробуйте ещё раз.'
-        } finally {
-            if (alive) opening.value = false
+            try { await load(tab.value.id, url) }
+            finally { if (alive) opening.value = false }
+            if (!alive || tab.value || !ready.value) return
         }
+        selectManual(url)
+        save(true)
     }
-    return { tab, error, ready, address, addressError, opening, inspectAddress, section, seoSection, sourceRevision, select, selectSeoSection, rememberAnnotations }
+    return { tab, manualUrl, error, ready, address, addressError, opening, inspectAddress, section, seoSection, sourceRevision, select, selectSeoSection, rememberAnnotations }
 }

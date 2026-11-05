@@ -1,6 +1,15 @@
 import { extensionApi } from '../platform/extensionApi.js'
 import { observeSeoRequest, seoResponseHeaders } from './seoRequestTrace.js'
 import { hasOrigin } from '../utils/hostPermissions.js'
+
+const decodeBody = (bytes, contentType, htmlOnly) => {
+    const charset = htmlOnly && contentType.match(/charset\s*=\s*["']?([^;\s"']+)/i)?.[1]
+    if (charset) {
+        try { return new TextDecoder(charset).decode(bytes) } catch { /* Fall back when the charset label is unknown. */ }
+    }
+    return new TextDecoder().decode(bytes)
+}
+
 export const fetchSeoResource = async ({ url, method = 'GET', timeout = 20000, maxBytes = 200000, trace = false, fresh = false, htmlOnly = false, manualRedirect = false }, sender = {}) => {
     const empty = { ok: false, status: 0, url: '', headers: {}, text: '', ttfb: null }
     let parsed
@@ -47,7 +56,7 @@ export const fetchSeoResource = async ({ url, method = 'GET', timeout = 20000, m
         }
         const bytes = new Uint8Array(size); let offset = 0
         for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length }
-        return { ok: response.ok, status: response.status, url: response.url || parsed.href, headers: seoResponseHeaders(Object.fromEntries(response.headers.entries())), text: new TextDecoder().decode(bytes), ttfb, truncated, ...(observer?.result(response) || {}) }
+        return { ok: response.ok, status: response.status, url: response.url || parsed.href, headers: seoResponseHeaders(Object.fromEntries(response.headers.entries())), text: decodeBody(bytes, contentType, htmlOnly), ttfb, truncated, ...(observer?.result(response) || {}) }
     } catch (error) { return { ...empty, error: error.message, failure: controller.signal.aborted ? 'timeout' : 'network' } }
     finally { clearTimeout(timer); observer?.dispose() }
 }

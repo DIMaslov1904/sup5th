@@ -14,7 +14,7 @@ import Tabs from '../popup/components/ui/Tabs.vue'
 const params = new URLSearchParams(location.search)
 const props = defineProps({ docked: Boolean })
 const homeUrl = extensionApi.runtime.getURL('src/options/index.html')
-const { tab, error, ready, address, addressError, opening, inspectAddress, section, seoSection, sourceRevision, select, selectSeoSection, rememberAnnotations } = useSeoSource(props.docked, params)
+const { tab, manualUrl, error, ready, address, addressError, opening, inspectAddress, section, seoSection, sourceRevision, select, selectSeoSection, rememberAnnotations } = useSeoSource(props.docked, params)
 </script>
 <template>
     <main class="min-h-screen ui-background flex flex-col text-ui-text">
@@ -32,10 +32,10 @@ const { tab, error, ready, address, addressError, opening, inspectAddress, secti
             </header>
             <p v-if="!ready" class="text-[13px] text-ui-muted" role="status">Загружаем страницу…</p>
             <Message v-else-if="error">{{ error }}</Message>
-            <KeepAlive v-if="tab" :key="sourceRevision">
-                <SeoAudit v-if="section === 'seo'" :tab="tab" />
-                <SitemapView v-else-if="section === 'sitemap'" :tab="tab" />
-                <SeoPanel v-else-if="section === 'overview'" :tab="tab" :initial-section="seoSection" :docked="docked" expanded
+            <KeepAlive v-if="tab || manualUrl" :key="sourceRevision">
+                <SeoAudit v-if="section === 'seo'" :tab="tab" :manual-url="manualUrl" :docked="docked" />
+                <SitemapView v-else-if="section === 'sitemap'" :source-url="manualUrl || tab?.url" />
+                <SeoPanel v-else-if="section === 'overview'" :tab="tab" :manual-url="manualUrl" :initial-section="seoSection" :docked="docked" expanded
                     @section-change="selectSeoSection" @annotations-change="rememberAnnotations" />
             </KeepAlive>
         </div>

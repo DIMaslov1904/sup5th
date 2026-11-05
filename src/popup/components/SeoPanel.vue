@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { extensionApi } from '../../platform/extensionApi.js'
 import { sendSeoToTab, withActiveTab, fetchSeo, openSeoApp, openSocialPreview, canPinSeoPage, pinSeoPage } from '../../utils/seoClient.js'
+import { loadSeoHtml } from '../../utils/seoHtml.js'
 import { SeoTabUnavailableError } from '../../utils/seoMessaging.js'
 import { callBackground } from '../../utils/backgroundClient.js'
 import { SEO_SECTIONS, normalizeSeoSection } from '../../utils/seoSections.js'
@@ -27,7 +28,7 @@ import SeoImagePreview from './SeoImagePreview.vue'
 import SeoToolIcon from './SeoToolIcon.vue'
 import CopyButton from './ui/CopyButton.vue'
 
-const props = defineProps({ tab: Object, session: Object, initialSection: { type: String, default: '' }, expanded: Boolean, docked: Boolean })
+const props = defineProps({ tab: Object, manualUrl: String, session: Object, initialSection: { type: String, default: '' }, expanded: Boolean, docked: Boolean })
 const emit = defineEmits(['section-change', 'annotations-change'])
 const notification = ref('')
 const pinning = ref(false)
@@ -74,13 +75,14 @@ const scan = async () => {
     loading.value = true; error.value = ''
     notification.value = ''; unavailable.value = ''
     try {
-        const data = await withActiveTab(props.tab?.id, () => sendSeoToTab(props.tab?.id, 'seo:dom'))
+        const data = props.manualUrl ? await loadSeoHtml(props.manualUrl)
+            : await withActiveTab(props.tab?.id, () => sendSeoToTab(props.tab?.id, 'seo:dom'))
         if (alive) {
-            sessionContext = { tabId: props.tab.id, url: data.url, documentId: data.documentId }
+            if (props.tab) sessionContext = { tabId: props.tab.id, url: data.url, documentId: data.documentId }
             report.value = data; checked.value = {}; visible.value = 100
             if (props.docked) emit('annotations-change', props.tab.id, data.actions)
             enrich(data, revision)
-            refreshCwv(revision)
+            if (!props.manualUrl) refreshCwv(revision)
         }
     }
     catch (e) {
@@ -211,7 +213,7 @@ const expand = async () => {
     catch (reason) { error.value = reason.message }
 }
 const previewLinks = async () => {
-    try { await openSocialPreview(props.tab.id) }
+    try { await openSocialPreview(props.tab?.id, report.value?.requestedUrl) }
     catch (reason) { error.value = reason.message }
 }
 const linkStatusClass = info => ({ success: 'text-ui-success', warning: 'text-ui-warning', danger: 'text-ui-danger' })[evaluateHttpStatus(info.status, info.redirected).status]
@@ -240,20 +242,21 @@ const tools = computed(() => {
     <div class="flex flex-1 flex-col gap-3 text-ui-text">
         <Notification v-if="error" :text="error" />
         <Notification v-if="notification" type="warning" :text="notification" />
-        <Preloader v-if="loading" label="Получаем данные страницы…" />
+        <Preloader v-if="loading" :label="manualUrl ? 'Загружаем HTML…' : 'Получаем данные страницы…'" />
         <EmptyState v-else-if="unavailable"
             :title="report ? 'Не удалось обновить анализ.' : (expanded ? 'Страница недоступна для анализа.' : 'Страница недоступна.')"
             :description="expanded ? unavailable : ''" />
         <div v-if="report" class="grid min-w-0 gap-3">
+        <p v-if="manualUrl" class="text-xs text-ui-muted">Анализ исходного HTML без выполнения JavaScript.</p>
         <Tabs v-model="section" :items="tabs" label="Разделы SEO" wrap @update:model-value="selectSection" />
         <Transition name="ui-view" mode="out-in"><div :key="section" class="grid min-w-0 gap-3">
             <template v-if="section === 'overview'">
-                <SeoOverview :report="report" />
+                <SeoOverview :report="report" :hide-unavailable-metrics="expanded && !docked" />
             </template>
             <template v-if="section === 'headings'">
-                <Button size="sm" variant="secondary" @click="toggle('headings')">{{ report.actions.headings ? 'Убрать подсветку' : 'Подсветить H1–H6' }}</Button>
+                <Button v-if="!manualUrl" size="sm" variant="secondary" @click="toggle('headings')">{{ report.actions.headings ? 'Убрать подсветку' : 'Подсветить H1–H6' }}</Button>
                 <p class="text-xs text-ui-muted">H1: {{ report.h1Count }} · Дубли H1: {{ report.duplicateH1.length }}</p>
-                <HeadingTree :nodes="headingTree" @select="goToHeading" />
+                <HeadingTree :nodes="headingTree" :interactive="!manualUrl" @select="goToHeading" />
             </template>
             <template v-if="section === 'links'">
                 <div class="grid grid-cols-2 gap-2 text-xs">
@@ -272,11 +275,11 @@ const tools = computed(() => {
                 <Button v-if="links.length > visible" size="sm" variant="ghost" @click="visible += 100">Показать ещё</Button>
             </template>
             <template v-if="section === 'images'">
-                <div class="flex items-center gap-2"><Select v-model="imageFilter" aria-label="Alt изображений" class="min-w-0 flex-1"><option value="all">Все изображения</option><option value="missing">Без атрибута alt</option><option value="empty">Пустой alt</option><option value="filled">Заполненный alt</option></Select><Button size="sm" variant="secondary" @click="toggle('alt')">{{ report.actions.alt ? 'Убрать alt' : 'Показать alt' }}</Button></div>
-                <Button size="sm" variant="secondary" @click="toggle('downloads')">{{ report.actions.downloads ? 'Убрать ссылки скачивания' : 'Ссылки скачивания на странице' }}</Button>
+                <div class="flex items-center gap-2"><Select v-model="imageFilter" aria-label="Alt изображений" class="min-w-0 flex-1"><option value="all">Все изображения</option><option value="missing">Без атрибута alt</option><option value="empty">Пустой alt</option><option value="filled">Заполненный alt</option></Select><Button v-if="!manualUrl" size="sm" variant="secondary" @click="toggle('alt')">{{ report.actions.alt ? 'Убрать alt' : 'Показать alt' }}</Button></div>
+                <Button v-if="!manualUrl" size="sm" variant="secondary" @click="toggle('downloads')">{{ report.actions.downloads ? 'Убрать ссылки скачивания' : 'Ссылки скачивания на странице' }}</Button>
                 <p class="text-xs text-ui-muted">Всего: {{ report.images.total }} · Без alt: {{ report.images.withoutAlt }} · Пустой alt: {{ report.images.emptyAlt }}</p>
-                <article v-for="item in images.slice(0,visible)" :key="item.id" class="relative isolate flex gap-3 ui-panel text-xs hover:bg-ui-raised">
-                    <button type="button" aria-label="Показать изображение на странице" title="Показать изображение на странице"
+                <article v-for="item in images.slice(0,visible)" :key="item.id" class="relative isolate flex gap-3 ui-panel text-xs" :class="{ 'hover:bg-ui-raised': !manualUrl }">
+                    <button v-if="!manualUrl" type="button" aria-label="Показать изображение на странице" title="Показать изображение на странице"
                         class="absolute inset-0 cursor-pointer rounded-panel focus-visible:outline-2 focus-visible:outline-ui-accent" @click="goToImage(item)"></button>
                     <div v-if="/^https?:/.test(item.src)" class="relative z-10 shrink-0 self-start">
                         <SeoImagePreview :src="item.src" :alt="item.alt" />
@@ -285,7 +288,7 @@ const tools = computed(() => {
                         <a v-if="/^https?:/.test(item.src)" :href="item.src" target="_blank" rel="noreferrer" class="relative z-10 break-all text-ui-accent">{{ item.src }}</a>
                         <span v-else class="break-all text-ui-muted">{{ item.src || 'Источник отсутствует' }}</span>
                         <span>Alt: {{ item.alt === null ? 'Отсутствует' : item.alt || '(пустой)' }}</span>
-                        <span>Title: {{ item.title || 'Нет' }} · {{ item.width }} × {{ item.height }} · {{ item.loading || 'eager' }}</span>
+                        <span>Title: {{ item.title || 'Нет' }}<template v-if="!manualUrl || item.width && item.height"> · {{ item.width }} × {{ item.height }}</template> · {{ item.loading || 'eager' }}</span>
                         <button v-if="/^https?:/.test(item.src)" type="button" class="relative z-10 w-fit cursor-pointer text-ui-accent hover:underline" @click="downloadImage(item.src)">Скачать</button>
                     </div>
                 </article>
@@ -307,9 +310,11 @@ const tools = computed(() => {
                 <Button v-if="!expanded" variant="secondary" size="sm" @click="openSeoApp(tab.id,'sitemap')">Открыть единый sitemap ↗</Button>
             </template>
             <template v-if="section === 'page'">
-                <p class="text-xs text-ui-muted">{{ docked ? 'Подсветки сохраняются при переходах в этой вкладке. Отключение CSS действует на текущей странице.' : 'Изменения действуют только на этой странице до выключения или её закрытия/перезагрузки.' }}</p>
-                <Button v-for="[action,label] in [['external','Внешние ссылки'],['noindex','Noindex / nofollow'],['headings','Заголовки H1–H6'],['alt','Alt изображений'],['downloads','Ссылки скачивания изображений'],['css','Отключить CSS']]" :key="action" size="sm" variant="secondary" @click="toggle(action)">{{ report.actions[action] ? '✓ ' : '' }}{{ label }}</Button>
-                <Card title="Статистика текста"><p class="text-xs">Слов: {{ report.statistics.words }} · Символов: {{ report.statistics.characters }} · Без пробелов: {{ report.statistics.withoutSpaces }}</p><p class="text-xs">Выделенный текст: {{ report.statistics.selection.words }} слов, {{ report.statistics.selection.characters }} символов</p>
+                <template v-if="!manualUrl">
+                    <p class="text-xs text-ui-muted">{{ docked ? 'Подсветки сохраняются при переходах в этой вкладке. Отключение CSS действует на текущей странице.' : 'Изменения действуют только на этой странице до выключения или её закрытия/перезагрузки.' }}</p>
+                    <Button v-for="[action,label] in [['external','Внешние ссылки'],['noindex','Noindex / nofollow'],['headings','Заголовки H1–H6'],['alt','Alt изображений'],['downloads','Ссылки скачивания изображений'],['css','Отключить CSS']]" :key="action" size="sm" variant="secondary" @click="toggle(action)">{{ report.actions[action] ? '✓ ' : '' }}{{ label }}</Button>
+                </template>
+                <Card title="Статистика текста"><p class="text-xs">Слов: {{ report.statistics.words }} · Символов: {{ report.statistics.characters }} · Без пробелов: {{ report.statistics.withoutSpaces }}</p><p v-if="!manualUrl" class="text-xs">Выделенный текст: {{ report.statistics.selection.words }} слов, {{ report.statistics.selection.characters }} символов</p>
                     <details v-for="[key,label] in [['top','Частые слова'],['bigrams','Биграммы'],['withoutAnchors','Без анкоров'],['anchors','Анкоры'],['imageText','Alt и title изображений']]" :key="key" class="mt-3 text-xs"><summary class="cursor-pointer text-ui-accent">{{ label }}</summary><p v-for="row in (Array.isArray(report.statistics[key]) ? report.statistics[key] : report.statistics[key].top)" :key="row.word">{{ row.word }} — {{ row.count }} ({{ row.density }}%)</p></details>
                 </Card>
             </template>
@@ -317,8 +322,8 @@ const tools = computed(() => {
         </div></Transition>
         </div>
         <div class="sticky bottom-0 z-20 -mx-1 mt-auto flex shrink-0 flex-wrap gap-2 rounded-panel border border-ui-border bg-ui-panel px-2 py-2 shadow-sm">
-            <Button size="sm" variant="secondary" :disabled="!tab?.id || loading || checking" @click="scan">Обновить</Button>
-            <Button v-if="canPinSeoPage && !docked" size="sm" variant="ghost" :disabled="!tab?.id || pinning" @click="pin">Закрепить</Button>
+            <Button size="sm" variant="secondary" :disabled="(!tab?.id && !manualUrl) || loading || checking" @click="scan">Обновить</Button>
+            <Button v-if="canPinSeoPage && !docked && !manualUrl" size="sm" variant="ghost" :disabled="!tab?.id || pinning" @click="pin">Закрепить</Button>
             <Button v-if="!expanded" size="sm" variant="ghost" :disabled="!tab?.id" @click="expand">На весь экран ↗</Button>
             <Button v-if="!expanded" size="sm" variant="ghost" :disabled="!tab?.id" @click="openSeoApp(tab.id)">Аудит ↗</Button>
         </div>

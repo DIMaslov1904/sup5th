@@ -9,7 +9,7 @@ import Input from '../popup/components/ui/Input.vue'
 import Message from '../popup/components/ui/Message.vue'
 import Notification from '../popup/components/ui/Notification.vue'
 
-const props = defineProps({ tab: Object })
+const props = defineProps({ sourceUrl: String })
 const result = shallowRef(null), loading = ref(false), paused = ref(false), message = ref(''), search = ref(''), root = ref(''), progress = ref({ files: 0, urls: 0 }), visible = ref(200)
 let controller, control, alive = true
 const togglePause = () => { if (paused.value) control.resume(); else control.pause(); paused.value = !paused.value }
@@ -20,13 +20,14 @@ const load = async () => {
     controller = new AbortController()
     control = createAuditControl(controller.signal)
     try {
-        if (!props.tab?.url || !/^https?:/.test(props.tab.url)) throw new Error('Откройте сайт и запустите sitemap из расширения')
+        const source = props.sourceUrl
+        if (!/^https?:/.test(source || '')) throw new Error('Укажите адрес сайта для загрузки sitemap')
         let roots
-        if (root.value.trim()) roots = [new URL(root.value.trim(), props.tab.url).href]
+        if (root.value.trim()) roots = [new URL(root.value.trim(), source).href]
         else {
-            const robots = await fetchSeo(new URL('/robots.txt', props.tab.url).href)
+            const robots = await fetchSeo(new URL('/robots.txt', source).href)
             controller.signal.throwIfAborted()
-            roots = sitemapRoots(robots.ok ? robots.text : '', props.tab.url)
+            roots = sitemapRoots(robots.ok ? robots.text : '', robots.ok && robots.url ? robots.url : source)
         }
         const value = await collectSitemap(roots, url => fetchSeo(url, 'GET', 8 * 1024 * 1024), {
             signal: controller.signal, waitForResume: control.waitForResume,
@@ -50,7 +51,7 @@ const exportXml = () => {
 </script>
 <template>
     <section class="grid gap-4">
-        <div><h1 class="ui-title">Единый sitemap</h1><p class="mt-1 break-all text-[13px] text-ui-muted">{{ tab?.url || 'Сайт не выбран' }}</p></div>
+        <div><h1 class="ui-title">Единый sitemap</h1><p class="mt-1 break-all text-[13px] text-ui-muted">{{ sourceUrl || 'Сайт не выбран' }}</p></div>
         <p class="text-[13px] text-ui-muted">Объединяет карты из robots.txt и вложенных sitemap-index. Можно указать свой начальный файл.</p>
         <div class="flex flex-wrap gap-2"><Input v-model="root" :disabled="loading" placeholder="Автоматически из robots.txt или /sitemap.xml" class="min-w-64 flex-1"/><Button :loading="loading" @click="load">Загрузить sitemap</Button><Button v-if="loading" variant="secondary" :disabled="controller.signal.aborted" @click="togglePause">{{ paused ? 'Продолжить' : 'Пауза' }}</Button><Button v-if="loading" variant="secondary" :disabled="controller.signal.aborted" @click="controller.abort()">Остановить</Button></div>
         <p v-if="loading" role="status" class="text-[13px] text-ui-accent">Файлов: {{ progress.files }} · URL: {{ progress.urls }}<span v-if="paused" class="text-ui-warning"> · На паузе. Уже отправленный запрос завершается.</span></p>

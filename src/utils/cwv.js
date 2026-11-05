@@ -126,5 +126,16 @@ export const cwvMetrics = cwv => [
     return { ...metric, hint: metric.value ? [detail, thresholds].filter(Boolean).join(' · ') : '', unavailable }
 })
 
+export const cwvMissingHint = (cwv, source) => {
+    if (source === 'html') return 'Проверка по адресу читает HTML без отрисовки. Для LCP, CLS и FCP запустите SEO из активной вкладки сайта. Для INP также нужен клик, касание или нажатие клавиши на сайте.'
+    const missing = cwvMetrics(cwv).filter(metric => !metric.value)
+    const measurable = missing.filter(metric => cwv?.supported?.[metric.key] !== false)
+    return [
+        measurable.some(metric => metric.key !== 'inp') && 'LCP, CLS и FCP зависят от отрисовки видимой страницы. При фоновой загрузке замеры могут отсутствовать.',
+        measurable.some(metric => metric.key === 'inp') && 'Для INP нужен клик, касание или нажатие клавиши на сайте.',
+        measurable.length < missing.length && 'Часть метрик недоступна в этом браузере.'
+    ].filter(Boolean).join(' ')
+}
+
 const RATING_STATUS = { good: 'pass', 'needs-fix': 'warning', poor: 'fail' }
 export const cwvRatingStatus = rating => RATING_STATUS[rating] || 'unknown'

@@ -2,12 +2,14 @@
 import { computed } from 'vue'
 import { primaryMetadata, advancedMetadata, evaluateHttpStatus } from '../../utils/seoValidation.js'
 import { pageWeightRows } from '../../utils/pageWeightDisplay.js'
-import { cwvMetrics } from '../../utils/cwv.js'
+import { cwvMetrics, cwvMissingHint } from '../../utils/cwv.js'
 import PropertyList from './ui/PropertyList.vue'
 import Card from './ui/Card.vue'
+import SeoAnalyticsCard from './SeoAnalyticsCard.vue'
 
-const props = defineProps({ report: { type: Object, required: true } })
+const props = defineProps({ report: { type: Object, required: true }, hideUnavailableMetrics: Boolean })
 const metricColors = { good: 'success', 'needs-fix': 'warning', poor: 'danger' }
+const metricsHint = computed(() => cwvMissingHint(props.report.cwv, props.report.source))
 
 const page = computed(() => {
     const data = props.report
@@ -29,9 +31,9 @@ const page = computed(() => {
         },
         { label: 'Кодировка', ...charsetRow(data) },
         { label: 'Проверено', value: new Date(data.scannedAt).toLocaleString('ru-RU') },
-        { label: 'TTFB повторного запроса', value: data.response.ttfb == null ? 'Не измерен' : data.response.ttfb + ' мс' },
+        { label: data.source === 'html' ? 'TTFB запроса HTML' : 'TTFB повторного запроса', value: data.response.ttfb == null ? 'Не измерен' : data.response.ttfb + ' мс' },
         ...pageWeightRows(data.pageWeight),
-        ...cwvMetrics(data.cwv).map(metric => ({
+        ...cwvMetrics(data.cwv).filter(metric => metric.value || (!props.hideUnavailableMetrics && data.source !== 'html')).map(metric => ({
             label: metric.name, value: metric.value || metric.unavailable, status: metricColors[metric.rating], hint: metric.hint
         }))
     ]
@@ -59,5 +61,9 @@ const advanced = computed(() => [
             <PropertyList :items="advanced" class="mt-3" />
         </details>
     </Card>
-    <Card title="Данные страницы"><PropertyList :items="page" /></Card>
+    <SeoAnalyticsCard :analytics="report.analytics" :source="report.source" />
+    <Card title="Данные страницы">
+        <PropertyList :items="page" />
+        <p v-if="metricsHint" class="mt-3 text-xs text-ui-muted">{{ metricsHint }}</p>
+    </Card>
 </template>

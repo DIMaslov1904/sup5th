@@ -10,21 +10,22 @@ const lengthCheck = (field, value) => {
     return check(`${field}-length`, `${field === 'title' ? 'Title' : 'Description'}: длина (ориентир)`, !length ? 'na' : length >= min && length <= max ? 'pass' : 'warning', `${length} символов; ориентир ${min}–${max}`)
 }
 
-const canonicalCheck = (data, finalUrl) => {
+const canonicalCheck = (data, finalUrl, snapshot) => {
+    const label = `Canonical в ${snapshot}`
     const tags = data.canonicals || []
-    if (!tags.length) return check('canonical', 'Canonical в DOM', 'warning', 'Не указан; необходимость зависит от дублей страницы')
+    if (!tags.length) return check('canonical', label, 'warning', 'Не указан; необходимость зависит от дублей страницы')
     let valid = tags.length === 1 && tags[0].inHead !== false && Boolean(tags[0].raw?.trim())
     try { const url = new URL(tags[0].href); valid &&= /^https?:$/.test(url.protocol) && !url.username && !url.password && !url.hash } catch { valid = false }
-    if (!valid) return check('canonical', 'Canonical в DOM', 'fail', 'Нужен один непустой HTTP(S) URL без фрагмента в head')
+    if (!valid) return check('canonical', label, 'fail', 'Нужен один непустой HTTP(S) URL без фрагмента в head')
     let consistency = ''
     try {
         if (finalUrl && withoutFragment(tags[0].href) !== withoutFragment(finalUrl)) {
             consistency = `Canonical не совпадает с конечным URL страницы (${withoutFragment(finalUrl)}); проверьте консистентность. Ответ целевого адреса не проверялся.`
         }
     } catch { /* finalUrl некорректен — консистентность не оценить */ }
-    return check('canonical', 'Canonical в DOM', consistency ? 'warning' : 'pass', consistency || `${tags[0].href} — совпадает с конечным URL; ответ целевой страницы не проверялся`)
+    return check('canonical', label, consistency ? 'warning' : 'pass', consistency || `${tags[0].href} — совпадает с конечным URL; ответ целевой страницы не проверялся`)
 }
-const h1Check = (data, h1) => {
+const h1Check = (data, h1, snapshot) => {
     const first = h1.map(item => item.text.trim()).find(Boolean) || ''
     const problems = [], notes = []
     if (!h1.length) problems.push('H1 отсутствует')
@@ -39,7 +40,7 @@ const h1Check = (data, h1) => {
         if (topWords.length && !topWords.some(word => first.toLowerCase().includes(word))) notes.push('H1 не содержит частотные слова страницы')
     }
     const status = h1.length === 1 && first ? problems.length ? 'warning' : 'pass' : 'warning'
-    return check('h1', 'H1 в DOM', status, [...problems, ...notes].join('; ') || first)
+    return check('h1', `H1 в ${snapshot}`, status, [...problems, ...notes].join('; ') || first)
 }
 const charsetCheck = (data, http) => {
     const meta = (data.charset?.document || data.charset?.meta || '').trim()
@@ -98,7 +99,8 @@ const sslCheck = data => {
         ? `Страница по HTTPS, но найдено незащищённых ресурсов: ${ssl.mixedContent}`
         : 'Страница по HTTPS, незащищённых ресурсов не найдено')
 }
-export const buildAuditChecks = (data, audit) => {
+export const buildAuditChecks = (data, audit, { hideUnavailableMetrics = false } = {}) => {
+    const snapshot = data.source === 'html' ? 'HTML' : 'DOM'
     const pages = summarizeAuditPages(audit.pageResults || audit.results), targets = summarizeAuditPages(audit.results)
     const current = (audit.pageResults || audit.results).find(item => item.url === new URL(data.url).href.split('#')[0])
     const http = current?.response, headerKnown = http?.ok && http.status === 200 && /^(?:text\/html|application\/xhtml\+xml)(?:;|$)/i.test(http.headers['content-type'] || '')
@@ -112,12 +114,12 @@ export const buildAuditChecks = (data, audit) => {
     const titleProblems = [!data.title ? 'Title отсутствует или пустой' : '', titles.length > 1 ? `Тегов Title: ${titles.length}` : '', titles.some(item => item.inHead === false) ? 'Title вне head' : ''].filter(Boolean)
     const descriptionProblems = [descriptions.length > 1 ? `Тегов Description: ${descriptions.length}` : '', descriptions.some(item => item.inHead === false) ? 'Description вне head' : ''].filter(Boolean)
     const list = [
-        check('title', 'Title в DOM', titleProblems.length ? 'fail' : 'pass', titleProblems.join('; ') || data.title),
+        check('title', `Title в ${snapshot}`, titleProblems.length ? 'fail' : 'pass', titleProblems.join('; ') || data.title),
         lengthCheck('title', data.title),
-        check('description', 'Description в DOM', descriptionProblems.length ? 'fail' : data.description ? 'pass' : 'warning', descriptionProblems.join('; ') || data.description || 'Не указан'),
+        check('description', `Description в ${snapshot}`, descriptionProblems.length ? 'fail' : data.description ? 'pass' : 'warning', descriptionProblems.join('; ') || data.description || 'Не указан'),
         lengthCheck('description', data.description),
-        h1Check(data, h1),
-        canonicalCheck(data, finalUrl),
+        h1Check(data, h1, snapshot),
+        canonicalCheck(data, finalUrl, snapshot),
         charsetCheck(data, http),
         twitterCheck(data),
         sslCheck(data),
@@ -125,27 +127,31 @@ export const buildAuditChecks = (data, audit) => {
         check('index-meta', 'Общий meta robots: нет noindex', meta.robotsAllowed ? 'pass' : 'fail', meta.robots || 'Директива не указана'),
         xRobotsChainCheck(current, data),
         check('index-xrobots', 'X-Robots-Tag: нет общего noindex', indexing.xRobotsAllowed === false ? 'fail' : headerKnown && indexing.xRobotsAllowed !== null ? 'pass' : 'unknown', indexing.xRobotsAllowed === null ? 'Объединённые заголовки: область действия noindex неизвестна' : http?.headers?.['x-robots-tag'] || (headerKnown ? 'Директива не указана' : 'HTML-ответ страницы не подтверждён')),
-        ...meta.indexingAgents.map(item => check(`index-${item.agent}`, `DOM: нет noindex для ${item.agent}`, item.allowed ? 'pass' : 'fail', item.allowed ? 'В метатегах DOM запрета нет' : 'В метатегах DOM найден noindex')),
+        ...meta.indexingAgents.map(item => check(`index-${item.agent}`, `${snapshot}: нет noindex для ${item.agent}`, item.allowed ? 'pass' : 'fail', item.allowed ? `В метатегах ${snapshot} запрета нет` : `В метатегах ${snapshot} найден noindex`)),
         ...serverIndexing.indexingAgents.map(item => check(`index-server-${item.agent}`, `HTML / HTTP GET: нет noindex для ${item.agent}`, item.allowed === false ? 'fail' : item.allowed !== null && headerKnown && current?.metaState === 'complete' ? 'pass' : 'unknown', item.allowed === false ? 'В HTML или HTTP-ответе найден noindex' : item.allowed === null ? 'Границы X-Robots-Tag недоступны; действие для робота неизвестно' : headerKnown && current?.metaState === 'complete' ? 'В полученных директивах запрета нет' : 'Полный HTML-ответ не подтверждён')),
         ...['googlebot', 'yandex'].map(agent => { const rule = evaluateRobotsFile(audit.robotsFile, data.url, agent); return check(`crawl-${agent}`, `robots.txt: обход для ${agent}`, rule.allowed === null ? 'unknown' : rule.allowed ? 'pass' : 'fail', rule.rules[0] ? `${rule.rules[0].directive}: ${rule.rules[0].value}` : rule.allowed === null ? 'Правила не получены полностью' : 'Подходящих ограничений не найдено') }),
         check('http', 'HTTP повторного GET-запроса', !current || !['ok', 'broken', 'server'].includes(current.outcome) ? 'unknown' : current.outcome !== 'ok' ? 'fail' : current.status === 200 ? 'pass' : 'warning', current?.label || 'Ответ не получен'),
         check('redirect', 'Конечный URL повторного запроса', !http?.status ? 'unknown' : current.redirected ? 'warning' : 'pass', http?.status ? current.finalUrl : 'Ответ не получен'),
-        check('representation', 'DOM и HTML повторного GET: метаданные', current?.metaState !== 'complete' ? 'unknown' : current.title === normalizeAuditText(data.title) && current.description === normalizeAuditText(data.description) ? 'pass' : 'warning', current?.metaState !== 'complete' ? 'Полный HTML не получен' : current.title === normalizeAuditText(data.title) && current.description === normalizeAuditText(data.description) ? 'Title и Description совпадают' : 'Title/Description различаются; проверьте JavaScript, авторизацию и защиту сайта'),
+        ...(snapshot === 'DOM' ? [check('representation', 'DOM и HTML повторного GET: метаданные', current?.metaState !== 'complete' ? 'unknown' : current.title === normalizeAuditText(data.title) && current.description === normalizeAuditText(data.description) ? 'pass' : 'warning', current?.metaState !== 'complete' ? 'Полный HTML не получен' : current.title === normalizeAuditText(data.title) && current.description === normalizeAuditText(data.description) ? 'Title и Description совпадают' : 'Title/Description различаются; проверьте JavaScript, авторизацию и защиту сайта')] : []),
         check('links-http', 'HTTP-ошибки проверенных URL', targets.broken || targets.serverErrors ? 'fail' : targets.uncertain || audit.partial || audit.results.length < audit.sample.total || audit.sample.limited || audit.crawl?.complete === false ? 'unknown' : 'pass', `404/410: ${targets.broken}; 5xx: ${targets.serverErrors}; неизвестно: ${targets.uncertain}; проверено: ${audit.results.length}/${audit.sample.total}`),
-        check('links-text', 'Ссылки: текст или подпись в DOM', !links.length ? 'na' : links.some(item => !(item.accessibleName ?? item.text)?.trim()) ? 'warning' : 'pass', `Без текста/подписи: ${links.filter(item => !(item.accessibleName ?? item.text)?.trim()).length}`),
-        check('images-alt', 'Изображения: атрибут alt в DOM', !images.total ? 'na' : images.withoutAlt ? 'warning' : 'pass', `Изображений: ${images.total}; без атрибута alt: ${images.withoutAlt}`),
-        check('lang', 'Атрибут lang в DOM', data.lang ? 'pass' : 'warning', data.lang || 'Не указан'),
-        check('viewport', 'Meta viewport в DOM', data.viewport ? 'pass' : 'warning', data.viewport ? 'Указан' : 'Не указан')
+        check('links-text', `Ссылки: текст или подпись в ${snapshot}`, !links.length ? 'na' : links.some(item => !(item.accessibleName ?? item.text)?.trim()) ? 'warning' : 'pass', `Без текста/подписи: ${links.filter(item => !(item.accessibleName ?? item.text)?.trim()).length}`),
+        check('images-alt', `Изображения: атрибут alt в ${snapshot}`, !images.total ? 'na' : images.withoutAlt ? 'warning' : 'pass', `Изображений: ${images.total}; без атрибута alt: ${images.withoutAlt}`),
+        check('lang', `Атрибут lang в ${snapshot}`, data.lang ? 'pass' : 'warning', data.lang || 'Не указан'),
+        check('viewport', `Meta viewport в ${snapshot}`, data.viewport ? 'pass' : 'warning', data.viewport ? 'Указан' : 'Не указан')
     ]
     const metrics = cwvMetrics(data.cwv)
     const coreMetrics = metrics.filter(metric => metric.key !== 'fcp')
-    const coreStatuses = coreMetrics.map(metric => cwvRatingStatus(metric.rating))
-    const coreStatus = coreStatuses.includes('fail') ? 'fail'
-        : coreStatuses.includes('warning') ? 'warning'
-            : coreStatuses.includes('unknown') ? 'unknown' : 'pass'
-    const coreValues = coreMetrics.map(metric => `${metric.name}: ${metric.value || metric.unavailable.toLowerCase()}`)
-    list.push(check('cwv', 'Core Web Vitals', coreStatus, `Исходная вкладка · ${coreValues.join(' · ')}`))
-    for (const metric of metrics) {
+    const visibleMetrics = hideUnavailableMetrics || data.source === 'html' ? metrics.filter(metric => metric.value) : metrics
+    const visibleCore = visibleMetrics.filter(metric => metric.key !== 'fcp')
+    if (visibleCore.length) {
+        const coreStatuses = coreMetrics.map(metric => cwvRatingStatus(metric.rating))
+        const coreStatus = coreStatuses.includes('fail') ? 'fail'
+            : coreStatuses.includes('warning') ? 'warning'
+                : coreStatuses.includes('unknown') ? 'unknown' : 'pass'
+        const coreValues = visibleCore.map(metric => `${metric.name}: ${metric.value || metric.unavailable.toLowerCase()}`)
+        list.push(check('cwv', 'Core Web Vitals', coreStatus, `Исходная вкладка · ${coreValues.join(' · ')}`))
+    }
+    for (const metric of visibleMetrics) {
         const hint = metric.value ? `${metric.value} · ${metric.hint}` : metric.unavailable
         list.push(check(`cwv-${metric.key}`, metric.label, cwvRatingStatus(metric.rating), hint))
     }

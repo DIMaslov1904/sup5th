@@ -1,3 +1,5 @@
+import { seoDocumentBase } from './seoDom.js'
+
 export const AUDIT_MODES = [
     { value: 'pages', label: 'Страницы', hint: 'Обход внутренних страниц и sitemap. Известные файлы и ресурсы пропускаются; llm.txt проверяется отдельно.' },
     { value: 'internal', label: 'Внутренние ссылки', hint: 'Проверка страниц, документов, изображений и ресурсов. llm.txt проверяется отдельно.' },
@@ -45,8 +47,7 @@ export const auditSrcsetUrls = value => {
 }
 
 export const collectAuditTargets = (doc, pageUrl) => {
-    let base = pageUrl
-    try { base = new URL(doc.querySelector('base[href]')?.getAttribute('href') || pageUrl, pageUrl).href } catch { /* Use the response URL. */ }
+    const base = seoDocumentBase(doc, pageUrl)
     const targets = new Map()
     const add = (raw, kind) => {
         const url = normalizeAuditUrl(raw, base)

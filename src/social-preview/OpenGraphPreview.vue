@@ -4,12 +4,15 @@ import { extensionApi } from '../platform/extensionApi.js'
 import { displayUrl } from '../utils/displayUrl.js'
 import { buildOpenGraphPreview, buildTwitterPreview } from '../utils/openGraphPreview.js'
 import { sendSeoToTab, withActiveTab } from '../utils/seoClient.js'
+import { collectMetaTags } from '../utils/seoDom.js'
+import { fetchSeoDocument } from '../utils/seoHtml.js'
 import EmptyState from '../popup/components/ui/EmptyState.vue'
 import Preloader from '../popup/components/ui/Preloader.vue'
 
-const sourceId = Number(new URLSearchParams(location.search).get('tabId'))
+const params = new URLSearchParams(location.search)
+const sourceId = Number(params.get('tabId')), sourceAddress = params.get('url')
 const report = shallowRef(null)
-const loading = ref(true)
+const loading = ref(true), error = ref('')
 const failedImages = reactive(new Set())
 const openGraph = computed(() => buildOpenGraphPreview(report.value))
 const twitter = computed(() => buildTwitterPreview(report.value, openGraph.value))
@@ -29,11 +32,20 @@ const showImage = url => url && !failedImages.has(url)
 
 onMounted(async () => {
     try {
+        if (sourceAddress) {
+            const { document, url, baseUrl } = await fetchSeoDocument(sourceAddress)
+            report.value = {
+                url, baseUrl, title: document.title.trim(),
+                description: document.head?.querySelector('meta[name="description" i]')?.content?.trim() || '',
+                metaTags: collectMetaTags(document.head).filter(tag => /^(?:og|twitter):/i.test(tag.name))
+            }
+            return
+        }
         if (!Number.isInteger(sourceId) || sourceId <= 0) return
         const tab = await extensionApi.tabs.get(sourceId)
         if (!/^https?:\/\//.test(tab.url || '')) return
         report.value = await withActiveTab(sourceId, () => sendSeoToTab(sourceId, 'seo:social'))
-    } catch { /* A closed or restricted source tab cannot provide metadata. */ }
+    } catch (reason) { if (sourceAddress) error.value = reason.message }
     finally { loading.value = false }
 })
 </script>
@@ -48,7 +60,7 @@ onMounted(async () => {
             </header>
             <Preloader v-if="loading" label="Читаем метатеги страницы…" />
             <EmptyState v-else-if="!report" title="Страница недоступна для предпросмотра."
-                description="Откройте исходный сайт и заново запустите предпросмотр из раздела «Разметка»." />
+                :description="error || 'Откройте исходный сайт и заново запустите предпросмотр из раздела «Разметка».'" />
             <template v-else>
                 <div class="grid gap-1 text-xs leading-5 text-ui-muted">
                     <p>Карточки построены по метатегам открытой страницы. Размеры, обрезка и порядок элементов могут отличаться в приложениях.</p>

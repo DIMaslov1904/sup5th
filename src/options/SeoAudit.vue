@@ -2,6 +2,7 @@
 import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { extensionApi } from '../platform/extensionApi.js'
 import { sendSeoToTab, withActiveTab, fetchSeo, downloadText } from '../utils/seoClient.js'
+import { loadSeoHtml } from '../utils/seoHtml.js'
 import { SeoTabUnavailableError } from '../utils/seoMessaging.js'
 import { createAuditControl, runSeoAuditRequests } from '../utils/seoAuditRunner.js'
 import { normalizeAuditPageLimit, DEFAULT_AUDIT_PAGE_LIMIT } from '../utils/seoAuditPages.js'
@@ -24,7 +25,7 @@ import SeoAuditSettings from './SeoAuditSettings.vue'
 import SeoAuditAvailability from './SeoAuditAvailability.vue'
 import SeoAuditInfo from './SeoAuditInfo.vue'
 
-const props = defineProps({ tab: Object })
+const props = defineProps({ tab: Object, manualUrl: String, docked: Boolean })
 const state = ref('idle'), message = ref(''), notice = ref('')
 const progress = ref({ current: 0, total: 0, started: 0, crawl: { started: 0 } }), report = shallowRef(null), audit = shallowRef(null)
 const pageLimit = ref(DEFAULT_AUDIT_PAGE_LIMIT), crawlPageLimit = ref(DEFAULT_AUDIT_PAGE_LIMIT), mode = ref('pages')
@@ -36,9 +37,9 @@ const normalizeLimits = () => {
     pageLimit.value = Math.max(minimumLimit.value, normalizeAuditPageLimit(pageLimit.value))
     crawlPageLimit.value = Math.max(minimumCrawlLimit.value, normalizeAuditPageLimit(crawlPageLimit.value))
 }
-const checks = computed(() => report.value && audit.value && audit.value.mode !== 'external' ? buildAuditChecks(report.value, audit.value) : [])
+const checks = computed(() => report.value && audit.value && audit.value.mode !== 'external' ? buildAuditChecks(report.value, audit.value, { hideUnavailableMetrics: !props.docked }) : [])
 const issues = computed(() => report.value && audit.value && audit.value.mode !== 'external' ? buildAuditIssues(report.value, audit.value, checks.value) : [])
-const { section, filter, focusId, openIssue, closeIssue, showStatus, resetView } = useSeoAuditView(props.tab)
+const { section, filter, focusId, openIssue, closeIssue, showStatus, resetView } = useSeoAuditView(props.tab || { url: props.manualUrl })
 const runId = ref(0)
 const issueCount = computed(() => issues.value.filter(isAuditProblem).length)
 const excludedCount = computed(() => audit.value?.exclusions?.items?.length || 0)
@@ -77,10 +78,13 @@ const runAudit = async () => {
     state.value = 'scanning'; message.value = ''; notice.value = ''; audit.value = null; report.value = null
     progress.value = { current: 0, total: 0, started: 0, crawl: { started: 0 } }
     try {
-        const tab = props.tab?.id ? await extensionApi.tabs.get(props.tab.id) : (await extensionApi.tabs.query({ active: true, lastFocusedWindow: true }))[0]
-        if (!tab?.id || !/^https?:\/\//.test(tab.url || '')) throw new Error('Откройте проверяемый сайт')
-        const data = await withActiveTab(tab.id, () => sendSeoToTab(tab.id, 'seo:dom', { includeAuditLinks: true }))
+        const tab = props.manualUrl ? null : await extensionApi.tabs.get(props.tab.id)
+        if (tab && !/^https?:\/\//.test(tab.url || '')) throw new Error('Откройте проверяемый сайт')
+        const data = tab
+            ? await withActiveTab(tab.id, () => sendSeoToTab(tab.id, 'seo:dom', { includeAuditLinks: true }))
+            : await loadSeoHtml(props.manualUrl, { includeAuditLinks: true })
         if (!alive || current !== revision) return
+        signal.throwIfAborted()
         report.value = data
         if (!signal.aborted) state.value = 'checking'
         const result = await runSeoAuditRequests(data, fetchSeo, {
@@ -92,6 +96,7 @@ const runAudit = async () => {
         if (!alive || current !== revision) return
         audit.value = result
         if (result.partial) { notice.value = 'Проверка остановлена. Показаны только полученные результаты.'; state.value = 'partial'; return }
+        if (!tab) { state.value = 'done'; return }
         try {
             const context = await sendSeoToTab(tab.id, 'seo:context')
             if (!alive || current !== revision) return
@@ -118,7 +123,7 @@ const exportReport = () => downloadText(JSON.stringify(buildAuditExport(report.v
 <template>
     <section class="flex min-w-0 w-full flex-col gap-4 text-ui-text">
         <header class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-1"><h1 class="ui-title">SEO-аудит сайта</h1><SeoAuditInfo label="Как выполняется аудит" text="Ссылки собираются из гостевого HTML и sitemap исходного сайта. Cookies не отправляются. DOM и показатели скорости относятся к исходной странице. Лимиты можно изменить на паузе; режим и правила — перед новым запуском." /></div>
+            <div class="flex items-center gap-1"><h1 class="ui-title">SEO-аудит сайта</h1><SeoAuditInfo label="Как выполняется аудит" :text="manualUrl ? 'Аудит использует исходный HTML и sitemap сайта. Cookies не отправляются. Лимиты можно изменить на паузе; режим и правила — перед новым запуском.' : 'Ссылки собираются из гостевого HTML и sitemap исходного сайта. Cookies не отправляются. DOM и показатели скорости относятся к исходной странице. Лимиты можно изменить на паузе; режим и правила — перед новым запуском.'" /></div>
             <div class="flex flex-wrap gap-2">
                 <Button v-if="audit && report" variant="secondary" size="md" @click="exportReport">Скачать отчёт (JSON)</Button>
                 <Button v-if="state === 'checking' || state === 'paused'" variant="secondary" size="md" @click="togglePause">{{ state === 'paused' ? 'Продолжить' : 'Пауза' }}</Button>
