@@ -1,10 +1,18 @@
 <script setup>
+import { nextTick } from 'vue'
 import Button from '../popup/components/ui/Button.vue'
 import Select from '../popup/components/ui/Select.vue'
 
 const page = defineModel('page', { type: Number, required: true })
 const pageSize = defineModel('pageSize', { type: Number })
-defineProps({ count: Number, label: String, sizeLabel: String, jump: Boolean })
+const props = defineProps({ count: Number, label: String, sizeLabel: String, jump: Boolean, scrollTarget: Object })
+const goToPage = async value => {
+    page.value = value
+    if (!props.scrollTarget) return
+    await nextTick()
+    props.scrollTarget?.focus({ preventScroll: true })
+    props.scrollTarget?.scrollIntoView({ block: 'start', inline: 'nearest' })
+}
 </script>
 <template>
     <nav class="flex flex-wrap items-center gap-2 text-xs" :class="{ 'justify-between': pageSize !== undefined }" :aria-label="label">
@@ -17,11 +25,11 @@ defineProps({ count: Number, label: String, sizeLabel: String, jump: Boolean })
             </Select>
         </label>
         <div class="flex flex-wrap items-center gap-2">
-            <Button v-if="jump" variant="secondary" size="sm" :disabled="page === 1" aria-label="Первая страница результатов" @click="page = 1">«</Button>
-            <Button variant="secondary" size="sm" :disabled="page === 1" @click="page--">Назад</Button>
+            <Button v-if="jump" variant="secondary" size="sm" :disabled="page === 1" aria-label="Первая страница результатов" @click="goToPage(1)">«</Button>
+            <Button variant="secondary" size="sm" :disabled="page === 1" @click="goToPage(page - 1)">Назад</Button>
             <span>{{ page }} / {{ count }}</span>
-            <Button variant="secondary" size="sm" :disabled="page === count" @click="page++">Далее</Button>
-            <Button v-if="jump" variant="secondary" size="sm" :disabled="page === count" aria-label="Последняя страница результатов" @click="page = count">»</Button>
+            <Button variant="secondary" size="sm" :disabled="page === count" @click="goToPage(page + 1)">Далее</Button>
+            <Button v-if="jump" variant="secondary" size="sm" :disabled="page === count" aria-label="Последняя страница результатов" @click="goToPage(count)">»</Button>
         </div>
     </nav>
 </template>

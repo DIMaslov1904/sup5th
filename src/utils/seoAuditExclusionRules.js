@@ -1,31 +1,56 @@
 import { evaluateRobotsFile } from './seoRules.js'
 
-export const parseAuditExclusionRules = value => {
-    const text = String(value || '').replace(/^\uFEFF/, '').trim()
+export const AUDIT_EXCLUSION_LABELS = {
+    customExclusions: 'Свои исключения',
+    queryExclusions: 'GET-параметры',
+    cmsExclusions: 'Пути CMS'
+}
+
+export const DEFAULT_AUDIT_EXCLUSIONS = {
+    customExclusions: '',
+    queryExclusions: ['limit=', 'sort=', 'order=', 'set_filter=', 'filter=', 'utm_*=', 'gclid=', 'yclid=', 'ysclid=', 'fbclid=']
+        .flatMap(key => [`Disallow: /*?${key}`, `Disallow: /*?*&${key}`]).join('\n'),
+    cmsExclusions: ['/bitrix/', '/admin/', '/wp-admin/', '/wp-login.php', '/xmlrpc.php', '/administrator/', '/administrator$']
+        .map(path => `Disallow: ${path}`).join('\n')
+}
+
+export const parseAuditExclusionRules = (value, label = AUDIT_EXCLUSION_LABELS.customExclusions) => {
+    const text = String(value || '').replace(/^\uFEFF/, '')
+    let first = ''
     let hasRules = false
     for (const [index, raw] of text.split(/\r?\n/).entries()) {
         const line = raw.replace(/#.*/, '').trim()
         if (!line) continue
+        first ||= line
+        const location = `«${label}», строка ${index + 1}.`
         const match = line.match(/^(user-agent|allow|disallow)\s*:\s*(.*)$/i)
-        if (!match) throw new Error(`Свои исключения, строка ${index + 1}: используйте Allow:, Disallow: или User-agent:.`)
+        if (!match) throw new Error(`${location} Используйте Allow:, Disallow: или User-agent:.`)
         const directive = match[1].toLowerCase(), path = match[2].trim()
-        if (directive === 'user-agent' && !path) throw new Error(`Свои исключения, строка ${index + 1}: не указан User-agent.`)
+        if (directive === 'user-agent' && !path) throw new Error(`${location} Укажите имя User-agent.`)
         if (directive !== 'user-agent' && path) {
-            if (!path.startsWith('/') && !path.startsWith('*')) throw new Error(`Свои исключения, строка ${index + 1}: укажите путь от / или шаблон с *.`)
+            if (!path.startsWith('/') && !path.startsWith('*')) throw new Error(`${location} Укажите путь от / или шаблон с *.`)
             hasRules = true
         }
     }
-    const first = text.split(/\r?\n/).map(line => line.replace(/#.*/, '').trim()).find(Boolean) || ''
-    return { text, hasRules, content: /^user-agent\s*:/i.test(first) ? text : `User-agent: *\n${text}` }
+    return { label, hasRules, content: /^user-agent\s*:/i.test(first) ? text : `User-agent: *\n${text}` }
 }
 
-export const createAuditExclusionMatcher = rules => {
-    if (!rules.hasRules) return () => null
-    const file = { exists: true, status: 200, content: rules.content }
+export const parseAuditExclusionLists = lists => Object.entries(AUDIT_EXCLUSION_LABELS)
+    .map(([key, label]) => parseAuditExclusionRules(lists[key], label))
+
+export const createAuditExclusionMatcher = (...lists) => {
+    const files = lists.filter(list => list.hasRules).map(({ content, label }) => ({ exists: true, status: 200, content, label }))
     return url => {
         for (const agent of ['googlebot', 'yandex']) {
-            const result = evaluateRobotsFile(file, url, agent)
-            if (result.allowed === false) return result.rules[0]
+            let best = null
+            for (const file of files) {
+                const [rule] = evaluateRobotsFile(file, url, agent).rules
+                if (!rule) continue
+                if (!best || rule.specificity > best.specificity || (rule.specificity === best.specificity && rule.directive === 'allow')) {
+                    best = { ...rule, label: file.label }
+                }
+            }
+            if (best?.directive === 'disallow') return best
         }
         return null
     }

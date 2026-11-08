@@ -35,11 +35,13 @@ export const runSeoAuditRequests = async (data, fetchResource, {
     signal, onProgress = () => { }, onUpdate = () => { }, pageLimit = DEFAULT_AUDIT_PAGE_LIMIT,
     getPageLimit = () => pageLimit, crawlPageLimit = DEFAULT_AUDIT_PAGE_LIMIT, mode = 'pages',
     getCrawlPageLimit = () => crawlPageLimit, waitForResume = async () => { }, parseMeta = parseMetaHtml, parseSitemap = parseSitemapXml, updateInterval = 100,
-    excludeNonIndexable = true, customExclusions = ''
+    excludeNonIndexable = true, customExclusions = '', queryExclusions = '', cmsExclusions = ''
 } = {}) => {
     mode = normalizeAuditMode(mode)
     let pool
-    const exclusions = createAuditIndexability(data.url, { enabled: excludeNonIndexable, customExclusions, maxExcluded: Infinity, onExclude: url => pool?.exclude(url) })
+    const exclusions = createAuditIndexability(data.url, {
+        enabled: excludeNonIndexable, customExclusions, queryExclusions, cmsExclusions, maxExcluded: Infinity, onExclude: url => pool?.exclude(url)
+    })
     pool = createAuditDiscovery(data, AUDIT_DISCOVERY_LIMIT, { mode, seedLinks: true, accept: exclusions.beforeRequest })
     const results = new Map(), pageResults = new Map()
     const started = new Set(), completed = new Set(), crawlStarted = new Set(), robotsUrl = new URL('/robots.txt', data.url).href
@@ -50,10 +52,11 @@ export const runSeoAuditRequests = async (data, fetchResource, {
     let robotsFile = { url: robotsUrl, exists: false, status: 0, content: '', pending: true }, sitemap = emptySitemap()
     const llmUrl = new URL('/llm.txt', data.url).href
     let llmTxt = { url: llmUrl, exists: false, status: 0, pending: mode !== 'external', skipped: mode === 'external' }
+    const targetLimit = () => normalizeAuditPageLimit(getPageLimit())
     const sample = () => {
-        const limit = normalizeAuditPageLimit(getPageLimit())
+        const limit = targetLimit()
         const urls = [...started].filter(url => !exclusions.has(url))
-        const pending = targets(limit - started.size)
+        const pending = targets((limit || Infinity) - started.size)
         return { ...pool.summary(), limit, urls: urls.concat(pending) }
     }
     const describeResult = result => {
@@ -61,17 +64,19 @@ export const runSeoAuditRequests = async (data, fetchResource, {
         return { ...details, ...result, kind: result.ok ? result.kind : details.kind || result.kind }
     }
     const snapshot = () => {
-        const selected = sample(), crawlLimit = normalizeAuditPageLimit(mode === 'external' ? getCrawlPageLimit() : getPageLimit())
+        const selected = sample(), crawlLimit = mode === 'external' ? normalizeAuditPageLimit(getCrawlPageLimit()) : selected.limit
         const crawled = pageResults.size, discovered = selected.pageTotal
         const unavailable = [...pageResults.values()].filter(item => item.metaState === 'unavailable' && item.outcome !== 'broken').length
         const crawl = {
-            current: crawled, started: crawlStarted.size, total: Math.min(discovered, crawlLimit), discovered, limit: crawlLimit,
+            current: crawled, started: crawlStarted.size, total: Math.min(discovered, crawlLimit || Infinity), discovered, limit: crawlLimit,
             unavailable, pending: mode === 'external' ? crawlPending : targetsPending,
             complete: finished && !signal?.aborted && !selected.limited && !unavailable && crawled >= discovered && (sitemap.state === 'missing' || sitemap.complete)
         }
+        const checked = [...results.values()].sort((a, b) => pool.order.get(a.url) - pool.order.get(b.url)).map(describeResult)
         return {
-            mode, sample: selected, results: [...results.values()].sort((a, b) => pool.order.get(a.url) - pool.order.get(b.url)).map(describeResult),
-            pageResults: [...pageResults.values()].map(describeResult), crawl, exclusions: exclusions.snapshot(), requests: completed.size,
+            mode, sample: selected, results: checked,
+            pageResults: mode === 'internal' ? checked.filter(item => item.kind === 'page') : [...pageResults.values()].map(describeResult),
+            crawl, exclusions: exclusions.snapshot(), requests: completed.size,
             robotsFile, sitemap, llmTxt, pagesPending: targetsPending || crawlPending,
             partial: !finished || signal?.aborted === true || results.size < selected.urls.length
         }
@@ -82,17 +87,29 @@ export const runSeoAuditRequests = async (data, fetchResource, {
         const value = snapshot()
         onUpdate(value)
     }
-    const publish = (force = false) => {
+    const activeRequests = new Set()
+    let requestId = 0
+    const publishProgress = () => {
         onProgress({
-            current: completed.size, total: Math.max(started.size, Math.min(pool.counts.total, normalizeAuditPageLimit(getPageLimit()))),
-            started: started.size, crawl: { started: crawlStarted.size }
+            current: completed.size, total: Math.max(started.size, Math.min(pool.counts.total, targetLimit() || Infinity)),
+            started: started.size, crawl: { started: crawlStarted.size }, activeRequests: [...activeRequests]
         })
+    }
+    const fetchWithProgress = async (url, method, maxBytes, options) => {
+        const request = { id: ++requestId, url, method }
+        activeRequests.add(request)
+        publishProgress()
+        try { return await fetchResource(url, method, maxBytes, options) }
+        finally { activeRequests.delete(request); publishProgress() }
+    }
+    const publish = (force = false) => {
+        publishProgress()
         const remaining = Math.max(0, Number(updateInterval) || 0) - (performance.now() - lastPublished)
         if (force || remaining <= 0) { emit(); return }
         publishTimer ??= setTimeout(emit, remaining)
     }
-    const get = createAuditFetch(fetchResource, { signal, waitForResume, exclusions, excludeNonIndexable })
-    const head = createAuditFetch(fetchResource, { signal, waitForResume, exclusions, excludeNonIndexable, method: 'HEAD', followRedirects: false })
+    const get = createAuditFetch(fetchWithProgress, { signal, waitForResume, exclusions, excludeNonIndexable })
+    const head = createAuditFetch(fetchWithProgress, { signal, waitForResume, exclusions, excludeNonIndexable, method: 'HEAD', followRedirects: false })
     // Динамический размер батча по скользящему среднему TTFB: быстрый сервер — больший батч, медленный — меньший
     let ttfbSamples = []
     const recordTtfb = info => {
@@ -115,10 +132,11 @@ export const runSeoAuditRequests = async (data, fetchResource, {
         const info = await get(url, AUDIT_HTML_LIMIT, url === currentUrl, true, true)
         signal?.throwIfAborted()
         recordTtfb(info)
-        const { internalLinks = [], auditLinks, ...result } = inspectAuditPage(url, info, parseMeta)
-        if (!exclusions.afterResponse(result, pool.describe(url))) return null
+        const target = pool.describe(url)
+        const { internalLinks = [], auditLinks, ...result } = inspectAuditPage(url, info, parseMeta, target.kind)
+        if (!exclusions.afterResponse(result, target)) return null
         if (new URL(url).origin === origin) {
-            if (pool.describe(url).kind === 'page') pageResults.set(url, result)
+            if (target.kind === 'page') pageResults.set(url, result)
             if (result.metaState === 'complete' && new URL(result.finalUrl).origin === origin) {
                 pool.add(auditLinks || internalLinks, 'links', result.finalUrl)
             }
@@ -139,12 +157,11 @@ export const runSeoAuditRequests = async (data, fetchResource, {
         if (excludeNonIndexable) await robotsTask
         while (true) {
             await waitForResume(); signal?.throwIfAborted()
-            const batch = targets(Math.min(batchSize(), normalizeAuditPageLimit(getPageLimit()) - started.size))
+            const remaining = (targetLimit() || Infinity) - started.size
+            const batch = targets(Math.min(batchSize(), remaining))
             if (!batch.length) {
                 if (mode === 'external' && crawlPending) { await crawlTask; continue }
-                if (started.size < normalizeAuditPageLimit(getPageLimit())) {
-                    if (sitemapPending) { await sitemapTask; continue }
-                }
+                if (sitemapPending && remaining > 0) { await sitemapTask; continue }
                 targetsPending = false; publish(); return
             }
             if (mode === 'internal' && sitemapPending && batch.every(url => pool.describe(url).kind !== 'page')) { await sitemapTask; continue }
@@ -157,7 +174,7 @@ export const runSeoAuditRequests = async (data, fetchResource, {
         if (excludeNonIndexable) await robotsTask
         while (true) {
             await waitForResume(); signal?.throwIfAborted()
-            const remaining = normalizeAuditPageLimit(getCrawlPageLimit()) - crawlStarted.size
+            const remaining = (normalizeAuditPageLimit(getCrawlPageLimit()) || Infinity) - crawlStarted.size
             const batch = crawlTargets(Math.min(batchSize(), remaining))
             if (!batch.length) {
                 if (sitemapPending && remaining > 0) { await sitemapTask; continue }

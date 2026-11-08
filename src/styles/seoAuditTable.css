@@ -1,9 +1,8 @@
-.audit-table-wrapper { overflow: auto; max-inline-size: 100%; max-block-size: min(38rem, 80vh); container-type: inline-size; }
-.audit-table-wrapper tbody th { position: sticky; inset-inline-start: 0; }
+.audit-table-wrapper { max-inline-size: 100%; container-type: inline-size; scroll-margin-block-start: .5rem; }
 @container (width < 560px) {
     .audit-table-wrapper :is(table, tbody, tr, th, td) { display: block; inline-size: 100%; }
     .audit-table-wrapper thead { display: none; }
-    .audit-table-wrapper tbody th { inset-block-start: 0; z-index: 2; }
+    .audit-table-wrapper tbody th { position: sticky; inset-block-start: 0; z-index: 2; }
     .audit-table-wrapper td::before { display: block; margin-block-end: .25rem; color: var(--color-ui-muted); content: attr(data-label) ': '; }
     .audit-table-wrapper tr + tr { border-block-start: 2px solid var(--color-ui-border); }
 }

@@ -2,7 +2,7 @@ import { seoDocumentBase } from './seoDom.js'
 
 export const AUDIT_MODES = [
     { value: 'pages', label: 'Страницы', hint: 'Обход внутренних страниц и sitemap. Известные файлы и ресурсы пропускаются; llm.txt проверяется отдельно.' },
-    { value: 'internal', label: 'Внутренние ссылки', hint: 'Проверка страниц, документов, изображений и ресурсов. llm.txt проверяется отдельно.' },
+    { value: 'internal', label: 'Внутренние ссылки', hint: 'Проверяются страницы и все найденные файлы сайта, включая документы, изображения, стили и скрипты.' },
     { value: 'external', label: 'Внешние ссылки', hint: 'Внутренние страницы используются для поиска ссылок. Каждый внешний URL получает один HEAD-запрос без перехода по редиректам и повторного GET. В отчёте — только ответ и Location.' }
 ]
 export const normalizeAuditMode = mode => AUDIT_MODES.some(item => item.value === mode) ? mode : 'pages'

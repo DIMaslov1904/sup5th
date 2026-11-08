@@ -21,7 +21,6 @@ const pagination = computed(() => paginateAuditResults(filtered.value, page.valu
 const httpHint = row => evaluateHttpStatus(row.status, row.redirected).hint
 watch([query, status, problemFilter, pageSize], () => { page.value = 1 })
 watch(() => pagination.value.page, value => { page.value = value })
-watch([page, query, status, problemFilter, pageSize], () => table.value?.scrollTo({ top: 0, left: 0 }), { flush: 'post' })
 </script>
 <template>
     <SeoAuditPageDetails v-if="selected" :page="selected" @back="selectedUrl = ''" @select-issue="emit('select-issue', $event)" />
@@ -34,7 +33,7 @@ watch([page, query, status, problemFilter, pageSize], () => table.value?.scrollT
         </div>
         <p class="mb-2 text-xs text-ui-muted" role="status">Найдено: {{ filtered.length }} из {{ rows.length }}. Показаны {{ pagination.start }}–{{ pagination.end }}.</p>
         <p v-if="!filtered.length" class="py-3 text-xs text-ui-muted">{{ rows.length ? 'По выбранным фильтрам страниц нет.' : 'Страницы ещё не получены. Запросы продолжаются либо доступные страницы исключены из обхода.' }}</p>
-        <div v-else ref="table" tabindex="0" role="region" aria-label="Страницы сайта, HTTP, ошибки и источники" class="audit-table-wrapper rounded-control border border-ui-border focus-visible:outline-2 focus-visible:outline-ui-accent">
+        <div v-else ref="table" tabindex="-1" role="region" aria-label="Страницы сайта, HTTP, ошибки и источники" class="audit-table-wrapper rounded-control border border-ui-border focus-visible:outline-2 focus-visible:outline-ui-accent">
             <table class="w-full table-fixed border-separate border-spacing-0 text-left text-xs">
                 <caption class="sr-only">Просканированные страницы и найденные на них проблемы</caption>
                 <thead class="sticky top-0 z-10 bg-ui-raised text-ui-muted"><tr><th scope="col" class="w-[30%] p-2 font-medium">URL</th><th scope="col" class="w-[15%] p-2 font-medium">HTTP</th><th scope="col" class="w-[30%] p-2 font-medium">Ошибки / рекомендации</th><th scope="col" class="w-[25%] p-2 font-medium">Источник ссылки</th></tr></thead>
@@ -58,7 +57,7 @@ watch([page, query, status, problemFilter, pageSize], () => table.value?.scrollT
             </table>
         </div>
         <SeoAuditPagination v-model:page-size="pageSize" :page="pagination.page" :count="pagination.count"
-            label="Страницы списка страниц" size-label="Страниц в таблице" class="mt-3" @update:page="page = $event" />
+            label="Страницы списка страниц" size-label="Страниц в таблице" :scroll-target="table" class="mt-3" @update:page="page = $event" />
     </Card>
 </template>
 <style src="../styles/seoAuditTable.css"></style>

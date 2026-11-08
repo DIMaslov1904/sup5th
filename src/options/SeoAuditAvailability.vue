@@ -9,6 +9,7 @@ import Select from '../popup/components/ui/Select.vue'
 import SeoAuditPagination from './SeoAuditPagination.vue'
 const props = defineProps({ results: { type: Array, default: () => [] } })
 const query = ref(''), status = ref('all'), page = ref(1)
+const table = ref(null)
 const colors = { available: 'text-ui-success', unavailable: 'text-ui-danger', redirect: 'text-ui-warning', unknown: 'text-ui-muted' }
 const filtered = computed(() => props.results.filter(item => (status.value === 'all' || item.availability === status.value)
     && (!query.value.trim() || [item.url, item.redirectUrl || item.location || ''].some(url => url.toLowerCase().includes(query.value.trim().toLowerCase())))))
@@ -26,7 +27,7 @@ const exportCsv = () => downloadText(auditAvailabilityCsv(filtered.value), 'seo-
         </div>
         <p class="mb-2 text-xs text-ui-muted" role="status">Проверено {{ results.length }} URL · По фильтру {{ filtered.length }}</p>
         <p v-if="!filtered.length" class="text-xs text-ui-muted">Внешних ссылок по выбранным условиям нет.</p>
-        <div v-else tabindex="0" role="region" aria-label="Ответы внешних URL" class="audit-table-wrapper rounded-control border border-ui-border focus-visible:outline-2 focus-visible:outline-ui-accent">
+        <div v-else ref="table" tabindex="-1" role="region" aria-label="Ответы внешних URL" class="audit-table-wrapper rounded-control border border-ui-border focus-visible:outline-2 focus-visible:outline-ui-accent">
             <table class="w-full table-fixed border-separate border-spacing-0 text-left text-xs">
                 <caption class="sr-only">Доступность, HTTP-статусы и адреса перенаправления внешних ссылок</caption>
                 <thead class="sticky top-0 z-10 bg-ui-raised text-ui-muted"><tr><th scope="col" class="w-[40%] p-2 font-medium">URL</th><th scope="col" class="w-[25%] p-2 font-medium">Ответ</th><th scope="col" class="w-[35%] p-2 font-medium">Куда ведёт редирект</th></tr></thead>
@@ -38,7 +39,7 @@ const exportCsv = () => downloadText(auditAvailabilityCsv(filtered.value), 'seo-
             </table>
         </div>
         <SeoAuditPagination v-if="pagination.count > 1" :page="pagination.page" :count="pagination.count"
-            label="Страницы внешних ссылок" class="mt-3" @update:page="page = $event" />
+            label="Страницы внешних ссылок" :scroll-target="table" class="mt-3" @update:page="page = $event" />
     </Card>
 </template>
 <style src="../styles/seoAuditTable.css"></style>

@@ -1,11 +1,11 @@
 import { evaluateRobotsFile, indexingRulesFromMeta } from './seoRules.js'
 import { normalizeAuditUrl } from './seoAuditLinks.js'
-import { parseAuditExclusionRules, createAuditExclusionMatcher } from './seoAuditExclusionRules.js'
+import { parseAuditExclusionLists, createAuditExclusionMatcher } from './seoAuditExclusionRules.js'
 
-export const createAuditIndexability = (siteUrl, { enabled = true, maxExcluded = 50000, customExclusions = '', onExclude = () => {} } = {}) => {
+export const createAuditIndexability = (siteUrl, { enabled = true, maxExcluded = 50000, customExclusions = '', queryExclusions = '', cmsExclusions = '', onExclude = () => {} } = {}) => {
     const origin = new URL(siteUrl).origin, excluded = new Map(), allowed = new Set()
-    const custom = parseAuditExclusionRules(customExclusions)
-    const matchCustomRule = createAuditExclusionMatcher(custom)
+    const lists = parseAuditExclusionLists({ customExclusions, queryExclusions, cmsExclusions })
+    const matchCustomRule = createAuditExclusionMatcher(...lists)
     let robots = { pending: true }, limited = false
     const internal = url => new URL(url).origin === origin
     const record = (url, reason, details = {}) => {
@@ -27,7 +27,7 @@ export const createAuditIndexability = (siteUrl, { enabled = true, maxExcluded =
         if (excluded.has(url)) return record(url, excluded.get(url).reason, details)
         if (allowed.has(url)) return true
         const customRule = matchCustomRule(url)
-        if (customRule) return record(url, `Свои исключения: ${customRule.directive}: ${customRule.value}`, details)
+        if (customRule) return record(url, `${customRule.label} · Disallow: ${customRule.value}`, details)
         if (!enabled || !internal(url)) return true
         if (robots.pending) return true
         for (const agent of ['googlebot', 'yandex']) {
@@ -50,8 +50,8 @@ export const createAuditIndexability = (siteUrl, { enabled = true, maxExcluded =
         return true
     }
     return {
-        beforeRequest, afterResponse, has: url => excluded.has(url), hasCustomRules: custom.hasRules,
+        beforeRequest, afterResponse, has: url => excluded.has(url), hasCustomRules: lists.some(list => list.hasRules),
         setRobots: file => { robots = file; allowed.clear() },
-        snapshot: () => ({ enabled, customExclusions: custom.text, limited, items: [...excluded.values()].map(item => ({ ...item, sources: [...item.sources], sitemaps: [...item.sitemaps] })) })
+        snapshot: () => ({ enabled, limited, items: [...excluded.values()].map(item => ({ ...item, sources: [...item.sources], sitemaps: [...item.sitemaps] })) })
     }
 }

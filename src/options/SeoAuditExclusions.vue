@@ -11,7 +11,7 @@ const pagination = computed(() => paginateAuditResults(props.exclusions?.items |
 </script>
 <template>
     <Card v-if="exclusions?.items.length" title="Исключённые URL">
-        <div class="flex items-center gap-1"><p class="text-xs text-ui-muted">Исключено URL: {{ exclusions.items.length }}{{ exclusions.limited ? '+' : '' }}</p><SeoAuditInfo label="Пояснение исключённых URL" text="Свои правила и robots.txt проверяются до запроса. Meta noindex и X-Robots-Tag определяются после ответа. Исключённые адреса не участвуют в дальнейшем обходе; причина указана у каждого URL." /></div>
+        <div class="flex items-center gap-1"><p class="text-xs text-ui-muted">Исключено URL: {{ exclusions.items.length }}{{ exclusions.limited ? '+' : '' }}</p><SeoAuditInfo label="Пояснение исключённых URL" text="Списки исключений и robots.txt проверяются до запроса. Meta noindex и X-Robots-Tag определяются после ответа. Причина исключения указана у каждого URL." /></div>
         <details class="mt-2 text-xs" @toggle="open = $event.target.open">
             <summary class="cursor-pointer text-ui-accent">Показать адреса и причины</summary>
             <div v-if="open" class="mt-2 grid gap-2">
