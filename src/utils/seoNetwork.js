@@ -1,10 +1,10 @@
 import { evaluateRobotsFile, indexingRulesFromMeta } from './seoRules.js'
 import { withoutFragment } from './linkCheckStatus.js'
 
-// Some servers reject HEAD (405/501) or fail it silently; retry those as GET.
+// Retry unsupported HEAD and network failures; a timeout or denied permission also affects GET.
 export const requestWithHeadFallback = async (request, url, options = {}) => {
     const head = await request(url, 'HEAD', options)
-    return [0, 405, 501].includes(head.status) ? request(url, 'GET', options) : head
+    return [0, 405, 501].includes(head.status) && !['timeout', 'permission'].includes(head.failure) ? request(url, 'GET', options) : head
 }
 
 export const seoResponsePatch = (initial, info, requestedUrl = initial.url) => {

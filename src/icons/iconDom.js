@@ -1,7 +1,14 @@
 import { ICON_SVG_LIMIT } from './iconPolicy.js'
 
+// Chromium checks inline handlers against CSP even while parsing detached HTML/SVG.
+const inertIconMarkup = markup => markup.replace(
+    /<[a-z][^\s/>]*(?:[\s/]+[^\s/>=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|(?!["'])[^\s>]*))?)*\s*\/?>/gi,
+    tag => tag.replace(/[\s/]+([^\s/>=]+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|(?!["'])[^\s>]*))?/g,
+        (attribute, name) => /^on/i.test(name) ? attribute.replace(name, `data-sup-icon-${name}`) : attribute)
+)
+
 export const findIconCandidates = (html, pageUrl) => {
-    const document = new DOMParser().parseFromString(html, 'text/html')
+    const document = new DOMParser().parseFromString(inertIconMarkup(html), 'text/html')
     let base = pageUrl
     try { base = new URL(document.querySelector('base[href]')?.getAttribute('href') || pageUrl, pageUrl).href } catch { /* use response URL */ }
     const links = [...document.querySelectorAll('link[href]')].filter(link => {
@@ -23,7 +30,7 @@ export const normalizeIcon = async blob => {
     const svg = blob.type.includes('svg') || /^\s*(?:<\?xml[^>]*>\s*)?(?:<!--[^]*?-->\s*)*<svg[\s>]/i.test(text)
     if (svg) {
         if (blob.size > ICON_SVG_LIMIT) throw new Error('SVG превышает 128 КБ')
-        const parsed = new DOMParser().parseFromString(await blob.text(), 'image/svg+xml')
+        const parsed = new DOMParser().parseFromString(inertIconMarkup(await blob.text()), 'image/svg+xml')
         if (parsed.querySelector('parsererror') || parsed.documentElement.localName !== 'svg') throw new Error('Некорректный SVG')
         // Use only as an image resource, never insert third-party markup into the UI.
         return new Blob([blob], { type: 'image/svg+xml' })

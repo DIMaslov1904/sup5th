@@ -43,7 +43,7 @@ const headingTree = computed(() => buildHeadingTree(report.value?.headingRows ||
 const section = ref(normalizeSeoSection(props.initialSection)), report = shallowRef(null), loading = ref(true), error = ref('')
 const unavailable = ref('')
 const linkFilter = ref('all'), relFilter = ref('all'), protocolFilter = ref('all'), statusFilter = ref('all'), imageFilter = ref('all'), query = ref(''), visible = ref(100)
-const checked = shallowRef({}), checking = ref(false), checkProgress = ref(0)
+const checked = shallowRef({}), checking = ref(false), checkProgress = ref(0), checkTotal = ref(0)
 const metaItems = tags => tags.map(item => ({ label: item.name, value: item.content, warning: item.inHead === false ? 'вне head' : '' }))
 const openGraphMeta = computed(() => metaItems((report.value?.metaTags || []).filter(item => /^og:/i.test(item.name))))
 const twitterMeta = computed(() => {
@@ -79,7 +79,7 @@ const scan = async () => {
             : await withActiveTab(props.tab?.id, () => sendSeoToTab(props.tab?.id, 'seo:dom'))
         if (alive) {
             if (props.tab) sessionContext = { tabId: props.tab.id, url: data.url, documentId: data.documentId }
-            report.value = data; checked.value = {}; visible.value = 100
+            report.value = data; checked.value = {}; checkProgress.value = 0; checkTotal.value = 0; visible.value = 100
             if (props.docked) emit('annotations-change', props.tab.id, data.actions)
             enrich(data, revision)
             if (!props.manualUrl) refreshCwv(revision)
@@ -96,7 +96,7 @@ let persistTimer, reportDirty = false
 const uiSnapshot = () => ({ section: section.value,
     linkFilter: linkFilter.value, relFilter: relFilter.value, protocolFilter: protocolFilter.value,
     statusFilter: statusFilter.value, imageFilter: imageFilter.value, query: query.value,
-    visible: visible.value, checked: checked.value, checkProgress: checkProgress.value })
+    visible: visible.value, checked: checked.value, checkProgress: checkProgress.value, checkTotal: checkTotal.value })
 const persist = () => {
     clearTimeout(persistTimer)
     if (!alive || restoring || !sessionContext || !report.value) return
@@ -107,7 +107,7 @@ const persist = () => {
 }
 const schedulePersist = () => { clearTimeout(persistTimer); persistTimer = setTimeout(persist, 200) }
 watch(report, () => { if (!restoring) { reportDirty = true; schedulePersist() } }, { flush: 'sync' })
-watch([section, linkFilter, relFilter, protocolFilter, statusFilter, imageFilter, query, visible, checked, checkProgress], schedulePersist)
+watch([section, linkFilter, relFilter, protocolFilter, statusFilter, imageFilter, query, visible, checked, checkProgress, checkTotal], schedulePersist)
 onBeforeUnmount(persist)
 onMounted(async () => {
     if (props.session && props.tab?.id) {
@@ -126,6 +126,7 @@ onMounted(async () => {
                 protocolFilter.value = saved.protocolFilter || 'all'; statusFilter.value = saved.statusFilter || 'all'
                 imageFilter.value = saved.imageFilter || 'all'; query.value = saved.query || ''
                 visible.value = saved.visible || 100; checked.value = saved.checked || {}; checkProgress.value = saved.checkProgress || 0
+                checkTotal.value = saved.checkTotal || 0
                 restoring = false
             }
         } catch (reason) {
@@ -160,14 +161,17 @@ const checkLinks = async () => {
     if (checking.value) return
     checking.value = true; cancelled = false; error.value = ''; checkProgress.value = 0
     const urls = [...new Set(links.value.filter(item => /^https?:/.test(item.url)).map(item => item.url))]
+    checkTotal.value = urls.length
     try {
         for (let i = 0; i < urls.length && !cancelled; i += 5) {
-            const batch = await Promise.all(urls.slice(i, i + 5).map(async url => {
-                const info = await requestWithHeadFallback((target, method) => fetchSeo(target, method), url)
-                return [url, { ok: info.ok, status: info.status, url: info.url, ...classifyLinkCheck(info), redirected: Boolean(info.url && withoutFragment(info.url) !== withoutFragment(url)) }]
+            await Promise.all(urls.slice(i, i + 5).map(async url => {
+                let info
+                try { info = await requestWithHeadFallback((target, method) => fetchSeo(target, method, 1000, { timeout: 10000 }), url) }
+                catch { info = { ok: false, status: 0, url, failure: 'network' } }
+                if (cancelled || !alive) return
+                checked.value = { ...checked.value, [url]: { ok: info.ok, status: info.status, url: info.url, ...classifyLinkCheck(info), redirected: Boolean(info.url && withoutFragment(info.url) !== withoutFragment(url)) } }
+                checkProgress.value++
             }))
-            if (cancelled || !alive) break
-            checked.value = { ...checked.value, ...Object.fromEntries(batch) }; checkProgress.value += batch.length
         }
     } catch (e) { if (alive) error.value = e.message }
     finally { if (alive) checking.value = false }
@@ -267,7 +271,7 @@ const tools = computed(() => {
                 </div>
                 <Input v-model="query" placeholder="Поиск по URL и анкору" />
                 <div class="flex flex-wrap gap-2"><Button size="sm" variant="secondary" :disabled="checking" @click="checkLinks">Проверить ссылки</Button><Button v-if="checking" size="sm" variant="ghost" @click="cancelled = true">Остановить</Button><CopyButton :value="links.map(item => item.url).join('\n')" label="Копировать URL" /></div>
-                <p class="text-xs text-ui-muted">Ссылок: {{ links.length }} · Проверено: {{ checkProgress }}. Проверка выполняется без cookies.</p>
+                <p class="text-xs text-ui-muted">Ссылок: {{ links.length }} · Проверено уникальных HTTP(S) URL: {{ checkProgress }}<template v-if="checkTotal"> из {{ checkTotal }}</template>. Проверка выполняется без cookies.</p>
                 <article v-for="item in links.slice(0, visible)" :key="item.id" class="grid gap-1 ui-panel text-xs">
                     <a :href="/^https?:/.test(item.url) ? item.url : undefined" target="_blank" rel="noreferrer" class="break-all text-ui-accent">{{ item.url }}</a>
                     <span>{{ item.text || 'Без анкора' }}</span><span class="text-ui-muted">{{ item.external ? 'Внешняя' : 'Внутренняя' }} · {{ item.rel || 'follow' }} <b v-if="checked[item.url]" :class="linkStatusClass(checked[item.url])" :title="evaluateHttpStatus(checked[item.url].status, checked[item.url].redirected).hint">· {{ checked[item.url].label }}{{ checked[item.url].redirected ? ' → ' + checked[item.url].url : '' }}</b></span>

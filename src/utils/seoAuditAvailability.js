@@ -20,6 +20,6 @@ export const inspectAuditAvailability = (url, info) => {
 }
 
 export const auditAvailabilityCsv = results => encodeAuditCsv([
-    ['URL', 'Метод', 'HTTP', 'Доступность', 'Куда ведёт редирект'],
-    ...results.map(item => [item.url, 'HEAD', item.status || '', item.label, item.redirectUrl || item.location || ''])
+    ['URL', 'Метод', 'HTTP', 'Доступность', 'Куда ведёт редирект', 'Страницы-источники'],
+    ...results.map(item => [item.url, 'HEAD', item.status || '', item.label, item.redirectUrl || item.location || '', (item.sources || []).join('\n')])
 ])
