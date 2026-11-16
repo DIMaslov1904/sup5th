@@ -1,8 +1,11 @@
 export type SetupStep = 'intro' | 'security' | 'projects' | 'accesses' | 'done'
 
 export interface ApiSettings {
+    source: 'google' | 'panel'
     projectsUrl: string
     accessUrl: string
+    panelUrl: string
+    panelTokenSaved: boolean
     setupStep?: SetupStep
 }
 

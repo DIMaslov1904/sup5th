@@ -7,6 +7,7 @@ import { createCatalogueSearch } from '../../utils/catalogue.js'
 import { displayUrl } from '../../utils/displayUrl.js'
 import { siteHref } from '../../utils/siteAddress.js'
 import { refreshJob } from '../backgroundState.js'
+import { apiUrls } from '../../utils/apiSource.js'
 import Preloader from '../components/ui/Preloader.vue'
 import SiteIcon from '../components/SiteIcon.vue'
 import ProjectDetails from '../components/ProjectDetails.vue'
@@ -48,7 +49,8 @@ const load = async () => {
     try {
         const [data, savedServices, settings] = await Promise.all([loadProjectData(), loadServices(), loadApiSettings()])
         if (!alive || current !== revision) return
-        connected.value = Boolean(settings.projectsUrl || settings.accessUrl)
+        const urls = apiUrls(settings)
+        connected.value = Boolean(urls.projects || urls.accesses)
         downloaded.value = Boolean(data.lastSuccessfulData.projectsUpdatedAt || data.lastSuccessfulData.accessesUpdatedAt)
         loadError.value = ''
         services.value = savedServices
@@ -67,7 +69,7 @@ onUnmounted(() => { alive = false; revision++; extensionApi.storage.onChanged.re
         <ProjectShortcutStrip v-if="loaded && !selectedItem" :projects="projects" @select="url => { selectedServiceId = ''; selectedProjectUrl = url }" />
         <Preloader v-if="!loaded || (refreshJob.running && !projects.length && !services.length)" label="Загрузка каталога…" />
         <Message v-else-if="loadError" type="error">{{ loadError }}</Message>
-        <EmptyState v-else-if="!connected && !projects.length && !services.length" title="Данные ещё не подключены" description="Добавьте адреса API в настройках." />
+        <EmptyState v-else-if="!connected && !projects.length && !services.length" title="Данные ещё не подключены" description="Выберите и подключите источник в настройках загрузки." />
         <EmptyState v-else-if="!downloaded && !projects.length && !services.length" title="Данные ещё не загружены" description="API подключён. Запустите первую загрузку в настройках." />
         <EmptyState v-else-if="!projects.length && !services.length && !selectedItem" title="Каталог пуст" description="Загрузите данные в настройках. Если загрузка выполнена, проверьте содержимое источника." />
         <EmptyState v-else-if="!selectedItem && !filteredProjects.length" title="Ничего не найдено" description="Попробуйте другое название или адрес сайта." />

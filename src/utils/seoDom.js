@@ -22,6 +22,17 @@ export const collectMetaTags = root => [...(root?.querySelectorAll('meta') || []
 }))
 export const seoImageSource = element => element.currentSrc || element.dataset.src || element.src
 
+export const isSeoElementVisible = element => {
+    if (!element.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return false
+    if (![...element.getClientRects()].some(rect => rect.width && rect.height)) return false
+    for (let parent = element; parent; parent = parent.parentElement) {
+        const { contentVisibility, overflowY } = getComputedStyle(parent)
+        if (contentVisibility === 'hidden') return false
+        if ((overflowY === 'hidden' || overflowY === 'clip') && parent.getBoundingClientRect().height === 0) return false
+    }
+    return true
+}
+
 export const resolveSeoUrl = (value, base) => {
     if (value == null) return ''
     try { return new URL(value, base).href } catch { return value }
@@ -59,7 +70,9 @@ export const collectSeoDom = (doc, pageUrl, {
     return {
         metaTags, titles: [...doc.querySelectorAll('title')].map(el => ({ text: el.textContent.trim(), inHead: Boolean(el.closest('head')) })),
         canonicals: [...doc.querySelectorAll('link[rel~="canonical" i]')].map(el => ({ href: live ? el.href : resolveSeoUrl(el.getAttribute('href'), baseUrl), raw: el.getAttribute('href'), inHead: Boolean(el.closest('head')) })),
-        headingRows: [...doc.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((el, id) => ({ id, level: Number(el.tagName[1]), text: el.textContent.trim() })),
+        headingRows: [...doc.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((el, id) => ({
+            id, level: Number(el.tagName[1]), text: el.textContent.trim(), ...(live ? { hidden: !isSeoElementVisible(el) } : {})
+        })),
         linkRows, imageRows, jsonLd,
         microdata: [...doc.querySelectorAll('[itemscope]')].map(el => ({ type: el.getAttribute('itemtype') || '', properties: [...el.querySelectorAll('[itemprop]')].map(p => ({ name: p.getAttribute('itemprop'), value: p.getAttribute('content') || p.getAttribute('href') || p.textContent.trim() })) })),
         rdfa: [...doc.querySelectorAll('[typeof]')].map(el => ({ type: el.getAttribute('typeof'), text: el.textContent.trim().slice(0, 500) })),

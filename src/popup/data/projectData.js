@@ -14,8 +14,7 @@ export const checkExtensionUpdate = () => callBackground('updates:check')
 export const loadActiveSupportTicket = () => callBackground('support:ticket:get')
 export const resetActiveSupportTicket = () => callBackground('support:ticket:reset')
 
-// Patch-сохранение: передаются только изменённые поля ({ projectsUrl } и/или { accessUrl })
-/** @param {Partial<import('../../types/extension.js').ApiSettings>} patch */
+/** @param {Partial<Pick<import('../../types/extension.js').ApiSettings, 'source' | 'projectsUrl' | 'accessUrl' | 'setupStep'>> & { panelConnection?: string }} patch */
 export const saveApiSettings = (patch) =>
     callBackground('data:settings:set', patch)
 

@@ -1,8 +1,9 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { isFirefox } from '../../platform/extensionApi.js'
 import { saveApiSettings, refreshAll, authorizeProjectsApi, authorizeAccessApi, enablePinProtection } from '../data/projectData.js'
 import { getBiometricCapabilities } from '../../utils/biometricHello.js'
-import { enableCredentialProtection } from '../biometricActions.js'
+import { enableCredentialProtection, unlockCredentialProtection } from '../biometricActions.js'
 import { securityStatus, refreshSecurityStatus, refreshJob } from '../backgroundState.js'
 import { ensureUnlocked } from '../unlockStore.js'
 import { BIOMETRIC_ACTION_HANDLED } from '../../utils/biometricPage.js'
@@ -13,11 +14,17 @@ import Message from '../components/ui/Message.vue'
 import Notification from '../components/ui/Notification.vue'
 import SecurityProtectionForm from '../components/SecurityProtectionForm.vue'
 import CopyAccessApiCode from '../components/CopyAccessApiCode.vue'
+import PanelConnectionInput from '../components/PanelConnectionInput.vue'
+import Tabs from '../components/ui/Tabs.vue'
 import { needsApiAuthorization } from '../../utils/apiAuthorizationState.js'
+import { API_SOURCES } from '../../utils/apiSource.js'
 
 const props = defineProps({ step: { type: String, required: true }, settings: { type: Object, required: true } })
 const emit = defineEmits(['completed'])
 const projectsUrl = ref(props.settings.projectsUrl || ''), accessUrl = ref(props.settings.accessUrl || '')
+const source = ref(props.settings.source || 'google')
+const panelConnection = ref('')
+const panelNeedsUnlock = computed(() => isFirefox && securityStatus.value.enabled && !securityStatus.value.unlocked)
 const busy = ref(false), error = ref(''), apiAuthorizationRequired = ref(false), capabilities = ref(null)
 const pin = ref('')
 const securityTab = ref('biometric')
@@ -25,7 +32,7 @@ const securityTabs = computed(() => capabilities.value?.available ? [['biometric
 watch(securityTabs, tabs => { if (!tabs.some(([value]) => value === securityTab.value)) securityTab.value = tabs[0][0] })
 const stepOrder = ['security', 'projects', 'accesses']
 const stepNumber = computed(() => stepOrder.indexOf(props.step) + 1)
-const stepTitle = computed(() => ({ security: 'Добро пожаловать', projects: 'Подключите API проектов', accesses: 'Личные доступы и сервисы' })[props.step] || 'Настройка')
+const stepTitle = computed(() => ({ security: 'Добро пожаловать', projects: 'Подключите источник данных', accesses: 'Личные доступы и сервисы' })[props.step] || 'Настройка')
 const previousStep = computed(() => stepOrder[Math.max(0, stepOrder.indexOf(props.step) - 1)])
 const close = async () => run(async () => { await advance('done') })
 const run = async action => {
@@ -44,7 +51,7 @@ const connect = scope => run(async () => {
     const field = scope === 'projects' ? 'projectsUrl' : 'accessUrl'
     const value = scope === 'projects' ? projectsUrl.value : accessUrl.value
     if (!value.trim()) throw new Error('Укажите адрес API')
-    await saveApiSettings({ [field]: value, setupStep: props.step })
+    await saveApiSettings({ source: 'google', [field]: value, setupStep: props.step })
     const load = () => refreshAll({ scope })
     const result = scope === 'accesses' ? await ensureUnlocked(load, { refreshAfterUnlock: false, intent: { type: 'refresh', scope, setupStep: 'done' } }) : await load()
     if (result !== BIOMETRIC_ACTION_HANDLED) {
@@ -52,6 +59,22 @@ const connect = scope => run(async () => {
         if (result.refreshErrors?.length) throw new Error(result.refreshErrors.join('\n'))
     }
     await advance(scope === 'projects' ? 'accesses' : 'done')
+})
+const connectPanel = () => run(async () => {
+    const connection = panelConnection.value.trim()
+    await ensureUnlocked(() => saveApiSettings({
+        source: 'panel', ...(connection ? { panelConnection: connection } : {}), setupStep: 'projects'
+    }), { refreshAfterUnlock: false })
+    panelConnection.value = ''
+    const result = await ensureUnlocked(() => refreshAll({ scope: 'all' }), {
+        refreshAfterUnlock: false, intent: { type: 'refresh', scope: 'all', setupStep: 'done' }
+    })
+    if (result !== BIOMETRIC_ACTION_HANDLED && result.refreshErrors.length) throw new Error(result.refreshErrors.join('\n'))
+    await advance('done')
+})
+const unlockPanel = () => run(async () => {
+    await unlockCredentialProtection(securityStatus.value)
+    await refreshSecurityStatus()
 })
 const enable = () => run(async () => {
     await enableCredentialProtection({ advanceSetup: true })
@@ -88,9 +111,15 @@ onMounted(async () => {
                 <Button variant="ghost" :disabled="busy" @click="run(() => advance('projects'))">{{ securityStatus.enabled ? 'Далее' : 'Пропустить' }}</Button>
             </div>
         </Card>
-        <Card v-else-if="step === 'projects'" title="Подключите API проектов">
-            <p class="mb-4 text-xs text-ui-muted">Возьмите адрес API из таблицы «База знаний 5th». Мы проверим подключение и загрузим проекты.</p>
-            <form class="grid gap-3" @submit.prevent="connect('projects')">
+        <Card v-else-if="step === 'projects'" title="Источник данных">
+            <Tabs v-model="source" :items="API_SOURCES" label="Источник данных" wrap :disabled="busy" @update:model-value="apiAuthorizationRequired = false; error = ''" />
+            <form v-if="source === 'panel'" class="mt-3 grid gap-3" @submit.prevent="connectPanel">
+                <PanelConnectionInput v-model="panelConnection" :connected="Boolean(settings.panelTokenSaved)" :disabled="busy || panelNeedsUnlock" />
+                <Button v-if="panelNeedsUnlock" variant="secondary" :disabled="busy" @click="unlockPanel">Разблокировать для настройки</Button>
+                <Button v-else type="submit" :loading="busy" :disabled="refreshJob.running">Подключить и загрузить</Button>
+            </form>
+            <form v-else class="mt-3 grid gap-3" @submit.prevent="connect('projects')">
+                <p class="text-xs text-ui-muted">Возьмите адрес API из таблицы «База знаний 5th».</p>
                 <label for="setup-projects" class="text-xs text-ui-muted">API проектов</label>
                 <Input id="setup-projects" v-model="projectsUrl" type="url" required placeholder="https://script.google.com/macros/s/…/exec" :disabled="busy" />
                 <Button type="submit" :loading="busy" :disabled="refreshJob.running">Подключить проекты</Button>

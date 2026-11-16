@@ -1,4 +1,4 @@
-import { seoImageSource } from '../utils/seoDom.js'
+import { isSeoElementVisible, seoImageSource } from '../utils/seoDom.js'
 
 let headings = [], blinking = null, nextImageId = 0
 let stopWaitingForImage = null
@@ -67,14 +67,7 @@ const highlightImage = (image, reducedMotion) => {
 }
 
 const focusElement = (element, highlight) => {
-    let visible = [...element.getClientRects()].some(rect => rect.width && rect.height)
-    for (let parent = element; parent && visible; parent = parent.parentElement) {
-        const css = getComputedStyle(parent)
-        if (css.display === 'none' || (parent === element && ['hidden', 'collapse'].includes(css.visibility)) || Number(css.opacity) === 0 || css.contentVisibility === 'hidden') visible = false
-        const rect = parent.getBoundingClientRect()
-        if ((css.overflowY === 'hidden' || css.overflowY === 'clip') && rect.height === 0) visible = false
-    }
-    if (!visible) return { hidden: true }
+    if (!isSeoElementVisible(element)) return { hidden: true }
     cancelHighlight()
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
     element.scrollIntoView({ behavior: reducedMotion ? 'instant' : 'smooth', block: 'center', inline: 'nearest' })

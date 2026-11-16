@@ -1,12 +1,12 @@
 import { extensionApi } from '../platform/extensionApi.js'
-import { trustedLocal } from '../platform/trustedStorage.js'
 import { base64ToBytes, bytesToBase64, derivePinKey, importAesKey, openBytes, openJson, randomBytes, sealBytes, sealJson } from '../utils/credentialCrypto.js'
 import { publicAccess, publicService, accessSecret } from './credentialRecords.js'
-import { DATA_KEY, SERVICES_KEY, SECURITY_KEY, VAULT_KEY, UNLOCKED_KEY, AUTH_SESSIONS_KEY, getStoredData, storageGet, storageSetMany, sessionGet, sessionSet, sessionRemove, mutateStorage } from './storageRepository.js'
+import { DATA_KEY, SERVICES_KEY, SETTINGS_KEY, SECURITY_KEY, VAULT_KEY, UNLOCKED_KEY, AUTH_SESSIONS_KEY, getStoredData, storageGet, storageSetMany, sessionGet, sessionSet, sessionRemove, mutateStorage } from './storageRepository.js'
 
 let revision = 0
 export const vaultRevision = () => revision
-export const assertVaultRevision = expected => { if (expected !== revision) throw new Error('Хранилище было заблокировано. Повторите действие.') }
+export const invalidateVaultReads = () => ++revision
+export const assertVaultRevision = expected => { if (expected !== revision) throw new Error('Хранилище изменилось. Повторите действие.') }
 export const getSecurityConfig = () => storageGet(SECURITY_KEY)
 export const getUnlockedKey = async ({ required = true } = {}) => {
     if (!(await getSecurityConfig())?.enabled) return null
@@ -29,10 +29,13 @@ const enableProtection = async ({ key, identity, wrappedKey }) => {
     const vaultKey = await importAesKey(base64ToBytes(key))
     const vault = { accesses: data.lastSuccessfulData.accesses.map(accessSecret), services: services.map(({ id, password }) => ({ id, password })) }
     const config = { enabled: true, ...identity, wrappedKey }
+    const settings = await storageGet(SETTINGS_KEY)
+    const panelToken = settings?.panelToken ? await sealJson(settings.panelToken, vaultKey) : null
     await sessionRemove(AUTH_SESSIONS_KEY)
     await storageSetMany({
         [DATA_KEY]: { ...data, lastSuccessfulData: { ...data.lastSuccessfulData, accesses: data.lastSuccessfulData.accesses.map(publicAccess) } },
-        [SERVICES_KEY]: services.map(publicService), [SECURITY_KEY]: config, [VAULT_KEY]: await sealJson(vault, vaultKey)
+        [SERVICES_KEY]: services.map(publicService), [SECURITY_KEY]: config, [VAULT_KEY]: await sealJson(vault, vaultKey),
+        ...(panelToken ? { [SETTINGS_KEY]: { ...settings, panelToken } } : {})
     })
     await sessionSet(UNLOCKED_KEY, { key })
     return getSecurityStatus()
@@ -85,7 +88,7 @@ export const unlockWithPin = async ({ pin }) => {
     return unlockWithKey(bytesToBase64(rawKey))
 }
 export const lockCredentialVault = async () => {
-    revision++ // Invalidate operations before waiting for the storage queue.
+    invalidateVaultReads() // Invalidate operations before waiting for the storage queue.
     await mutateStorage(async () => {
         const sessions = await sessionGet(AUTH_SESSIONS_KEY, {})
         await sessionRemove([UNLOCKED_KEY, AUTH_SESSIONS_KEY])
@@ -106,9 +109,14 @@ export const disableCredentialProtection = () => mutateStorage(async () => {
     }
     const accesses = data.lastSuccessfulData.accesses.map(record => restore(record, secrets))
     const restoredServices = services.map(record => restore(record, serviceSecrets))
+    const settings = await storageGet(SETTINGS_KEY)
+    const panelToken = settings?.panelToken ? await openJson(settings.panelToken, key) : null
     assertVaultRevision(expected)
-    await storageSetMany({ [DATA_KEY]: { ...data, lastSuccessfulData: { ...data.lastSuccessfulData, accesses } }, [SERVICES_KEY]: restoredServices })
-    await trustedLocal.remove([SECURITY_KEY, VAULT_KEY])
+    await storageSetMany({
+        [DATA_KEY]: { ...data, lastSuccessfulData: { ...data.lastSuccessfulData, accesses } }, [SERVICES_KEY]: restoredServices,
+        [SECURITY_KEY]: null, [VAULT_KEY]: null,
+        ...(panelToken ? { [SETTINGS_KEY]: { ...settings, panelToken } } : {})
+    })
     await sessionRemove([UNLOCKED_KEY, AUTH_SESSIONS_KEY])
     return getSecurityStatus()
 })

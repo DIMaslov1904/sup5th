@@ -1,7 +1,7 @@
 <script setup>
-import { extensionApi } from '../../platform/extensionApi.js'
+import { extensionApi, isFirefox } from '../../platform/extensionApi.js'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { loadApiSettings, loadProjectData, refreshAll, loadErrorLog, clearErrorLog, clearAllData, authorizeProjectsApi, authorizeAccessApi, lockCredentialVault, disableCredentialProtection, enablePinProtection } from '../data/projectData.js'
+import { loadApiSettings, saveApiSettings, loadProjectData, refreshAll, loadErrorLog, clearErrorLog, clearAllData, authorizeProjectsApi, authorizeAccessApi, lockCredentialVault, disableCredentialProtection, enablePinProtection } from '../data/projectData.js'
 import { getBiometricCapabilities } from '../../utils/biometricHello.js'
 import { enableCredentialProtection, unlockCredentialProtection } from '../biometricActions.js'
 import { securityStatus, refreshJob, refreshSecurityStatus } from '../backgroundState.js'
@@ -20,15 +20,22 @@ import SecurityProtectionForm from '../components/SecurityProtectionForm.vue'
 import ToggleSwitch from '../components/ui/ToggleSwitch.vue'
 import { useApiAutosave } from '../useApiAutosave.js'
 import CopyAccessApiCode from '../components/CopyAccessApiCode.vue'
+import PanelConnectionInput from '../components/PanelConnectionInput.vue'
 import ExtensionUpdates from '../components/ExtensionUpdates.vue'
 import { pipelineBadgePreference, setPipelineBadgeEnabled } from '../pipelineBadgeState.js'
 import { projectShortcuts, updateProjectShortcuts } from '../projectShortcutsState.js'
 import { REFRESH_PERIOD } from '../../utils/dataRefreshPolicy.js'
 import { needsApiAuthorization } from '../../utils/apiAuthorizationState.js'
+import { API_SOURCES, apiUrls } from '../../utils/apiSource.js'
 
 const section = defineModel('section', { type: String, required: true })
 const settings = ref({ projectsUrl: '', accessUrl: '' }), data = ref(null), errors = ref([])
-const savedSettings = ref({ projectsUrl: '', accessUrl: '' })
+const savedSettings = ref({ ...settings.value, source: 'google', panelTokenSaved: false })
+const panelConnection = ref('')
+const panelMode = computed(() => savedSettings.value.source === 'panel')
+const urls = computed(() => apiUrls(savedSettings.value))
+const panelEdited = computed(() => Boolean(panelConnection.value.trim()))
+const panelNeedsUnlock = computed(() => isFirefox && securityStatus.value.enabled && !securityStatus.value.unlocked)
 const loaded = ref(false), busy = ref(''), message = ref({ type: 'info', text: '' }), caps = ref({ available: false })
 const pin = ref('')
 const securityTab = ref('biometric')
@@ -40,13 +47,10 @@ const apiSources = [
     ['accesses', 'Личные доступы и сервисы', 'accessUrl', 'accessApiStatus']
 ]
 const snapshot = computed(() => data.value?.lastSuccessfulData)
-const needsAuthorization = type => {
-    const url = savedSettings.value[type === 'projects' ? 'projectsUrl' : 'accessUrl']
-    return Boolean(url) && needsApiAuthorization(data.value, type)
-}
+const needsAuthorization = type => !panelMode.value && Boolean(urls.value[type]) && needsApiAuthorization(data.value, type)
 const date = value => value ? new Date(value).toLocaleString('ru-RU') : 'Ещё не загружены'
 const freshness = type => {
-    const time = snapshot.value?.[`${type}UpdatedAt`], url = savedSettings.value[type === 'projects' ? 'projectsUrl' : 'accessUrl']
+    const time = snapshot.value?.[`${type}UpdatedAt`], url = urls.value[type]
     if (!url) return 'API не подключён'
     if (!time) return 'Ожидается первая загрузка'
     if (snapshot.value[`${type}Url`] !== url) return 'Источник изменён — загрузите данные'
@@ -79,15 +83,39 @@ const run = async (name, action, success = '') => {
     catch (error) { showError(error) }
     finally { if (alive) busy.value = '' }
 }
-const loadData = scope => run('load', async () => {
-    const saved = scope === 'all' ? await autosave.flushAll() : await autosave.flush(scope === 'projects' ? 'projectsUrl' : 'accessUrl')
-    if (!saved) throw new Error('Проверьте адреса API в разделе «Загрузка»')
+const refresh = async scope => {
     const action = () => refreshAll({ scope })
-    const result = scope !== 'projects' && savedSettings.value.accessUrl ? await ensureUnlocked(action, { refreshAfterUnlock: false, intent: { type: 'refresh', scope } }) : await action()
+    const result = panelMode.value || (scope !== 'projects' && urls.value.accesses)
+        ? await ensureUnlocked(action, { refreshAfterUnlock: false, intent: { type: 'refresh', scope } })
+        : await action()
     data.value = result === BIOMETRIC_ACTION_HANDLED ? await loadProjectData() : result
     errors.value = await loadErrorLog()
     if (data.value.refreshErrors.length) throw new Error(data.value.refreshErrors.join('\n'))
+}
+const loadData = scope => run('load', async () => {
+    if (!panelMode.value) {
+        const saved = scope === 'all' ? await autosave.flushAll() : await autosave.flush(scope === 'projects' ? 'projectsUrl' : 'accessUrl')
+        if (!saved) throw new Error('Проверьте адреса API в разделе «Загрузка»')
+    }
+    await refresh(scope)
 }, 'Данные обновлены')
+const selectSource = source => run('source', async () => {
+    if (source === savedSettings.value.source) return
+    await autosave.cancel()
+    savedSettings.value = await saveApiSettings({ source })
+    settings.value = { ...savedSettings.value }
+    panelConnection.value = ''
+})
+const connectPanel = () => run('panel', async () => {
+    const connection = panelConnection.value.trim()
+    if (connection) {
+        savedSettings.value = await ensureUnlocked(() => saveApiSettings({
+            source: 'panel', panelConnection: connection
+        }), { refreshAfterUnlock: false })
+        panelConnection.value = ''
+    }
+    await refresh('all')
+}, 'Панель подключена, данные обновлены')
 const authorize = type => run('authorize', async () => {
     if (!await autosave.flush(type === 'projects' ? 'projectsUrl' : 'accessUrl')) return
     return type === 'projects' ? authorizeProjectsApi() : authorizeAccessApi()
@@ -108,7 +136,7 @@ const disable = () => {
 }
 const reset = () => {
     if (!confirm('Удалить настройки, доступы, кеш иконок и результаты расширения? Текущая загрузка будет отменена.')) return
-    run('reset', async () => { await autosave.cancel(); await clearAllData(); loaded.value = false; await load(); await refreshSecurityStatus() }, 'Данные удалены')
+    run('reset', async () => { await autosave.cancel(); await clearAllData(); panelConnection.value = ''; loaded.value = false; await load(); await refreshSecurityStatus() }, 'Данные удалены')
 }
 </script>
 <template>
@@ -118,19 +146,33 @@ const reset = () => {
         <Preloader v-else-if="!loaded" label="Загрузка настроек…" />
         <template v-else>
             <template v-if="section === 'data'">
+                <Card title="Источник данных">
+                    <Tabs :model-value="savedSettings.source" :items="API_SOURCES" label="Источник данных" wrap :disabled="Boolean(busy)" @update:model-value="selectSource" />
+                    <form v-if="panelMode" class="mt-3 grid gap-3" @submit.prevent="connectPanel">
+                        <PanelConnectionInput v-model="panelConnection" :connected="savedSettings.panelTokenSaved" :disabled="Boolean(busy) || panelNeedsUnlock" />
+                        <Button v-if="panelNeedsUnlock" variant="secondary" class="mt-3" :disabled="Boolean(busy)" @click="unlock">Разблокировать для настройки</Button>
+                        <Button v-else-if="panelEdited || !savedSettings.panelTokenSaved" type="submit" :loading="busy === 'panel'" :disabled="Boolean(busy)">Сохранить и загрузить</Button>
+                    </form>
+                </Card>
                 <Card title="Загрузка данных">
-                    <div class="grid grid-cols-3 gap-2"><Button :disabled="Boolean(busy) || refreshJob.running || (!savedSettings.projectsUrl && !savedSettings.accessUrl)" @click="loadData('all')">Загрузить всё</Button><Button variant="secondary" :disabled="Boolean(busy) || refreshJob.running || !savedSettings.projectsUrl" @click="loadData('projects')">Только проекты</Button><Button variant="secondary" :disabled="Boolean(busy) || refreshJob.running || !savedSettings.accessUrl" @click="loadData('accesses')">Только доступы</Button></div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <Button :disabled="Boolean(busy) || refreshJob.running || (panelMode && panelEdited) || (!urls.projects && !urls.accesses)" @click="loadData('all')">Загрузить всё</Button>
+                        <Button variant="secondary" :disabled="Boolean(busy) || refreshJob.running || (panelMode && panelEdited) || !urls.projects" @click="loadData('projects')">Только проекты</Button>
+                        <Button variant="secondary" :disabled="Boolean(busy) || refreshJob.running || (panelMode && panelEdited) || !urls.accesses" @click="loadData('accesses')">Только доступы</Button>
+                    </div>
                     <p v-if="refreshJob.running" role="status" class="mt-3 flex items-center gap-2 text-xs text-ui-accent"><span class="ui-loading" aria-hidden="true"></span>Загружаем: {{ refreshJob.completed }} / {{ refreshJob.total }}. Можно закрыть popup.</p>
                     <p v-else-if="refreshJob.finishedAt" class="mt-3 text-xs text-ui-muted">Последняя операция: {{ date(refreshJob.finishedAt) }} · {{ refreshJob.state === 'done' ? 'завершена' : refreshJob.state === 'interrupted' ? 'прервана' : 'есть ошибки' }}</p>
                     <Message v-for="text in refreshJob.errors || []" :key="text" type="error" class="mt-2">{{ text }}</Message>
                 </Card>
                 <Card v-for="[type, title, field, status] in apiSources" :key="type" :title="title">
+                    <template v-if="!panelMode">
                     <Input :model-value="settings[field]" :aria-label="`URL API: ${title}`" :aria-invalid="Boolean(autosave.states[field].error)" :aria-describedby="autosave.states[field].status !== 'idle' ? `api-${field}-status` : undefined" placeholder="URL веб-приложения Apps Script" :disabled="Boolean(busy)" @update:model-value="value => autosave.update(field, value)" @blur="autosave.flush(field)" @keydown.enter.prevent="autosave.flush(field)" />
                     <p v-if="autosave.states[field].status !== 'idle'" :id="`api-${field}-status`" role="status" aria-live="polite" class="mt-2 text-xs" :class="autosave.states[field].error ? 'text-ui-danger' : 'text-ui-muted'">{{ autosave.states[field].error || saveLabels[autosave.states[field].status] }}</p>
                     <p v-if="type === 'projects'" class="mt-2 text-xs text-ui-muted">Адрес из таблицы «База знаний 5th».</p>
                     <CopyAccessApiCode v-else class="mt-2" />
                     <Message v-if="data?.[status]" type="warning" class="mt-2">{{ data[status] === 'access_denied' ? 'Доступ к таблице ограничен. Обратитесь к владельцу.' : 'Войдите в Google и подтвердите доступ, затем повторите загрузку.' }}</Message>
                     <Button v-if="needsAuthorization(type)" size="sm" variant="ghost" class="mt-2" :disabled="Boolean(busy)" @click="authorize(type)">Открыть API / авторизацию</Button>
+                    </template>
                     <dl class="mt-3 grid gap-2 border-t border-ui-border pt-3 text-xs">
                         <div class="flex justify-between gap-3"><dt class="text-ui-muted">Записей</dt><dd>{{ snapshot?.[type]?.length || 0 }}</dd></div>
                         <div class="flex justify-between gap-3"><dt class="text-ui-muted">Последняя успешная загрузка</dt><dd>{{ date(snapshot?.[`${type}UpdatedAt`]) }}</dd></div>

@@ -11,6 +11,7 @@ import { registerPopupSession } from './popupSession.js'
 import { storageReady, SCHEMA_VERSION, SERVICES_KEY, ERRORS_KEY, storageGet, storageSet, getStoredData, mutateStorage, invalidateOperations } from './storageRepository.js'
 import { getSecurityStatus, enableHelloProtection, unlockWithHelloKey, enablePinProtection, unlockWithPin, lockCredentialVault, disableCredentialProtection, registerVaultIdleLock } from './credentialVault.js'
 import { readApiSettings, saveApiSettings } from './apiSettings.js'
+import { apiUrls } from '../utils/apiSource.js'
 import { refreshAll, getRefreshJob, saveRefreshJob, cancelRefresh, scheduleRefresh, PROJECTS_ALARM } from './apiRefresh.js'
 import { toPublicData } from './catalogueData.js'
 import { updateActiveTabIcon, updateBadgeForTab } from './actionBadge.js'
@@ -53,9 +54,16 @@ const clearAllData = async () => {
     return { cleared: true }
 }
 const authorize = async type => {
-    const settings = await readApiSettings(), url = settings[type === 'projects' ? 'projectsUrl' : 'accessUrl']
+    const settings = await readApiSettings()
+    if (settings.source === 'panel') throw new Error('Для подключения панели используйте персональный токен')
+    const url = apiUrls(settings)[type]
     if (!url) throw new Error('Сначала сохраните адрес API')
     await extensionApi.tabs.create({ url }); return { opened: true }
+}
+const unlockAndRefresh = unlock => async payload => {
+    const status = await unlock(payload)
+    if (payload.refreshAfterUnlock !== false) loadData({ onlyIfDue: true }).catch(() => { })
+    return status
 }
 const handlers = {
     'pipeline:absence:get': getPipelineAbsence, 'pipeline:absence:set': setPipelineAbsence,
@@ -76,12 +84,8 @@ const handlers = {
     'data:clear': clearAllData, 'auth:start': startAdminAuth, 'auth:context': authContext, 'auth:consume': consumePendingAdminAuth,
     'project:details': getProjectDetails, 'project:accessField': getProjectAccessField, 'project:accessFields': getProjectAccessFields, 'project:copyAccess': copyProjectAccessText,
     'security:status': getSecurityStatus, 'security:enableHello': enableHelloProtection,
-    'security:enablePin': enablePinProtection, 'security:unlockPin': unlockWithPin,
-    'security:unlockHelloKey': async payload => {
-        const status = await unlockWithHelloKey(payload)
-        if (payload.refreshAfterUnlock !== false) loadData({ onlyIfDue: true }).catch(() => { })
-        return status
-    },
+    'security:enablePin': enablePinProtection,
+    'security:unlockPin': unlockAndRefresh(unlockWithPin), 'security:unlockHelloKey': unlockAndRefresh(unlockWithHelloKey),
     'security:lock': lockCredentialVault, 'security:disable': disableCredentialProtection
 }
 Object.assign(handlers, createBiometricPageHandlers({ unlock: handlers['security:unlockHelloKey'], refreshData: loadData }))
@@ -100,8 +104,8 @@ extensionApi.runtime.onMessage.addListener((message, sender, sendResponse) => {
 })
 const startup = () => ready.then(async () => {
     await scheduleRefresh()
-    const settings = await readApiSettings()
-    if (settings.projectsUrl || settings.accessUrl) await loadData({ onlyIfDue: true })
+    const urls = apiUrls(await readApiSettings())
+    if (urls.projects || urls.accesses) await loadData({ onlyIfDue: true })
 }).catch(error => console.error('[background] startup', error))
 extensionApi.runtime.onInstalled.addListener(startup)
 extensionApi.runtime.onStartup.addListener(startup)

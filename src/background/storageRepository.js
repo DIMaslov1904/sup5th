@@ -11,8 +11,9 @@ export const SECURITY_KEY = 'credentialSecurity'
 export const VAULT_KEY = 'credentialVault'
 export const UNLOCKED_KEY = 'unlockedCredentialVaultKey'
 export const AUTH_SESSIONS_KEY = 'pendingAdminAuthSessions'
+export const REFRESH_JOB_KEY = 'dataRefreshJob'
 
-const emptyData = () => ({
+export const emptyData = () => ({
     projectApiStatus: '', accessApiStatus: '', accessAuthRequired: false, refreshErrors: [],
     lastSuccessfulData: { projects: [], accesses: [], projectsUpdatedAt: null, accessesUpdatedAt: null, projectsUrl: '', accessesUrl: '' }
 })
@@ -48,5 +49,5 @@ export const mutateStorage = action => enqueueMutation(() => storageReady.then(a
 export const currentGeneration = () => generation
 export const invalidateOperations = () => ++generation
 export const assertGeneration = expected => {
-    if (expected !== generation) throw new Error('Операция отменена: данные были сброшены')
+    if (expected !== generation) throw new Error('Данные изменились. Повторите действие.')
 }
