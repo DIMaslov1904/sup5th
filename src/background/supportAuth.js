@@ -6,20 +6,26 @@ import { SUPPORT_ORIGIN, SUPPORT_LOGIN_PATH, SUPPORT_EXPIRED_PATH, SUPPORT_INDEX
 import { openTabWithSession } from './tabSession.js'
 
 const SUPPORT_AUTH_KEY = 'pendingSupportAuth'
+const SUPPORT_HOME_URL = `${SUPPORT_ORIGIN}${SUPPORT_INDEX_PATH}?app=ST`
 const AUTH_LIFETIME = 300000
 const manual = message => ({ action: 'manual', message })
 const readSessions = () => sessionEntries(SUPPORT_AUTH_KEY)
 const newSession = targetUrl => ({ targetUrl, attempted: false, restoring: false, expiresAt: Date.now() + AUTH_LIFETIME })
 
-export const openSupportTicket = async ({ number }) => {
-    if (typeof number !== 'string' || !/^[1-9]\d*$/.test(number)) throw new Error('Введите положительный целый номер тикета')
-    const targetUrl = `${SUPPORT_ORIGIN}${SUPPORT_INDEX_PATH}?app=ST#/requests/search/${number}/`
+const openSupportPage = async targetUrl => {
     await openTabWithSession(targetUrl, tabId => mutateStorage(async () => {
         const sessions = await readSessions()
         sessions[tabId] = newSession(targetUrl)
         await sessionSet(SUPPORT_AUTH_KEY, sessions)
     }), forgetSupportAuthTab)
     return { opened: true }
+}
+
+export const openSupportHome = () => openSupportPage(SUPPORT_HOME_URL)
+
+export const openSupportTicket = async ({ number }) => {
+    if (typeof number !== 'string' || !/^[1-9]\d*$/.test(number)) throw new Error('Введите положительный целый номер тикета')
+    return openSupportPage(`${SUPPORT_HOME_URL}#/requests/search/${number}/`)
 }
 
 const supportCredentials = async () => {
@@ -46,12 +52,15 @@ export const supportAuthPage = (payload, sender) => mutateStorage(async () => {
     if (!state) return { action: 'none' }
     if (page.pathname === SUPPORT_EXPIRED_PATH) return { action: 'login', url: SUPPORT_ORIGIN + SUPPORT_LOGIN_PATH }
     if (page.pathname === SUPPORT_INDEX_PATH && !payload.loginFormReady) {
-        if (target === state.targetUrl) {
+        const isHome = state.targetUrl === SUPPORT_HOME_URL
+        if (target === state.targetUrl || (isHome && page.searchParams.get('app') === 'ST')) {
             delete sessions[tabId]
             await sessionSet(SUPPORT_AUTH_KEY, sessions)
             return { action: 'none' }
         }
-        if (state.restoring) return manual('Не удалось открыть тикет. Откройте его повторно из расширения.')
+        if (state.restoring) return manual(isHome
+            ? 'Не удалось открыть Support. Откройте его повторно из расширения.'
+            : 'Не удалось открыть тикет. Откройте его повторно из расширения.')
         state.restoring = true
         await sessionSet(SUPPORT_AUTH_KEY, sessions)
         return { action: 'redirect', url: state.targetUrl }

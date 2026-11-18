@@ -12,6 +12,7 @@ export interface PopupResults {
     'data:settings:set': ApiSettings
     'support:ticket:get': ActiveSupportTicket | null
     'support:ticket:reset': null
+    'support:home:open': { opened: boolean }
     'support:ticket:open': { opened: boolean }
     'seo:fetch': unknown
     'seo:downloadImage': { id: number }

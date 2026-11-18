@@ -18,7 +18,7 @@ import { updateActiveTabIcon, updateBadgeForTab } from './actionBadge.js'
 import { getActiveSupportTicket, observeSupportTicket, resetActiveSupportTicket, registerSupportTicketTracking } from './supportTicketTracking.js'
 import { startAdminAuth, authContext, consumePendingAdminAuth, injectAuthForTab, forgetAuthTab, copyProjectAccessText, getProjectDetails, getProjectAccessField, getProjectAccessFields, getServices, getServiceField } from './projectAccess.js'
 import { updateChecker, registerExtensionUpdates } from './extensionUpdates.js'
-import { openSupportTicket, supportAuthPage, forgetSupportAuthTab } from './supportAuth.js'
+import { openSupportHome, openSupportTicket, supportAuthPage, forgetSupportAuthTab } from './supportAuth.js'
 
 registerPopupSession()
 registerVaultIdleLock()
@@ -71,7 +71,7 @@ const handlers = {
     'updates:status': () => updateChecker.getStatus(), 'updates:check': () => updateChecker.check({ force: true }),
     'support:ticket:get': getActiveSupportTicket, 'support:ticket:reset': resetActiveSupportTicket,
     'support:ticket:observe': observeSupportTicket,
-    'support:ticket:open': openSupportTicket, 'support:auth:page': supportAuthPage,
+    'support:home:open': openSupportHome, 'support:ticket:open': openSupportTicket, 'support:auth:page': supportAuthPage,
     'seo:fetch': fetchSeoResource, 'seo:downloadImage': downloadSeoImage,
     'icons:status': getSiteIconStatus, 'icons:refresh': () => syncCatalogueIcons({ force: true }), 'icons:cancel': cancelSiteIcons,
     'icons:refreshOne': async ({ url }) => refreshSiteIcon(url, await catalogueIconItems()),

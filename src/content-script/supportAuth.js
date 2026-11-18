@@ -21,7 +21,7 @@ const showMessage = message => {
         notice.setAttribute('role', 'status')
         document.body.prepend(notice)
     }
-    notice.textContent = `SUP 5th: ${message} Ссылка на тикет сохраняется на 5 минут для возврата после ручного входа.`
+    notice.textContent = `SUP 5th: ${message} Адрес перехода сохраняется на 5 минут для возврата после ручного входа.`
 }
 
 export const startSupportAuth = () => {

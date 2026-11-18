@@ -6,6 +6,7 @@ import Input from '../components/ui/Input.vue'
 import Message from '../components/ui/Message.vue'
 import { activeSupportTicket } from '../backgroundState.js'
 import { resetActiveSupportTicket } from '../data/projectData.js'
+import { callBackground } from '../../utils/backgroundClient.js'
 import { openTicket, ticketDigits } from '../../utils/ticketNavigation.js'
 
 const input = ref(null)
@@ -34,6 +35,10 @@ const go = async (number, action) => {
         input.value?.$el?.focus()
     }
 }
+
+const openSupport = () => run('support', () => callBackground('support:home:open', {}, {
+    fallbackError: 'Не удалось открыть Support'
+}), 'Не удалось открыть Support')
 
 const reset = async () => {
     if (!await run('reset', resetActiveSupportTicket, 'Не удалось сбросить отсчёт')) return
@@ -70,6 +75,8 @@ const pasteTicket = event => {
                 <Button type="submit" :disabled="Boolean(pending)" :loading="pending === 'search'">Открыть тикет</Button>
             </form>
         </Card>
+        <Button variant="secondary" :disabled="Boolean(pending)" :loading="pending === 'support'"
+            @click="openSupport">Перейти в Support</Button>
         <Message v-if="error" type="error">{{ error.text }}</Message>
         <Message v-else-if="resetDone && !activeSupportTicket" type="success">Отсчёт по тикету сброшен.</Message>
     </section>
