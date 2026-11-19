@@ -9,7 +9,7 @@ const load = () => {
     loading = loadProjectShortcuts().then(value => { if (current === revision) state.value = value }).catch(() => {})
     return loading
 }
-extensionApi.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes[PROJECT_SHORTCUTS_KEY]) load() })
+extensionApi.storage.onChanged.addListener((changes, area) => { if (area === 'local' && (changes[PROJECT_SHORTCUTS_KEY] || changes.projectData)) load() })
 load()
 export const projectShortcuts = readonly(state)
 export const updateProjectShortcuts = async patch => {

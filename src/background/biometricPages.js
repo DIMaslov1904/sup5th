@@ -14,7 +14,7 @@ const validateIntent = intent => {
     if (!intent) return null
     if (intent.type === 'refresh' && ['all', 'projects', 'accesses'].includes(intent.scope) && (!intent.setupStep || intent.setupStep === 'done')) return { type: intent.type, scope: intent.scope, setupStep: intent.setupStep }
     if (intent.type === 'service-copy' && validText(intent.id) && ['login', 'password'].includes(intent.field)) return { type: intent.type, id: intent.id, field: intent.field }
-    if (['auth', 'project-copy'].includes(intent.type) && validText(intent.url) && validText(intent.accessId) && (intent.type === 'auth' || copyFields.includes(intent.field))) return { type: intent.type, url: intent.url, accessId: intent.accessId, field: intent.field }
+    if (['auth', 'project-copy'].includes(intent.type) && validText(intent.projectKey) && validText(intent.accessId) && (intent.type === 'auth' || copyFields.includes(intent.field))) return { type: intent.type, projectKey: intent.projectKey, accessId: intent.accessId, field: intent.field }
     throw new Error('Неизвестное действие после разблокировки')
 }
 

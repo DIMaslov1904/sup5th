@@ -5,7 +5,7 @@ import { normalizeProject, normalizeAccessData } from './catalogueData.js'
 import { getSecurityConfig, getUnlockedKey, readCredentialVault, vaultRevision, assertVaultRevision } from './credentialVault.js'
 import { publicAccess, publicService, accessSecret } from './credentialRecords.js'
 import { openJson, sealJson } from '../utils/credentialCrypto.js'
-import { apiUrls } from '../utils/apiSource.js'
+import { apiUrls, panelRecordId } from '../utils/apiSource.js'
 import { assignLocalIds, accessIdentity, serviceIdentity } from './recordIdentity.js'
 import { apiAuthorizationError, classifyApiAuthorization } from './apiAuthorization.js'
 import { REFRESH_PERIOD } from '../utils/dataRefreshPolicy.js'
@@ -29,7 +29,10 @@ const requestRows = async (url, kind, signal, token) => {
         ...(token ? { cache: 'no-store' } : {}), signal: AbortSignal.any([signal, timer])
     })
     if (token && response.status === 401) throw new Error('Панель отклонила токен. Создайте новую строку подключения в разделе SUP 5th профиля панели.')
-    if (token && response.status === 404) throw new Error('API панели не найден. Проверьте адрес панели.')
+    if (token && response.status === 404) {
+        if (kind === 'внимания') return []
+        throw new Error('API панели не найден. Проверьте адрес панели.')
+    }
     const text = await response.text()
     if (!token) {
         const status = classifyApiAuthorization(response, text)
@@ -47,7 +50,26 @@ const requestRows = async (url, kind, signal, token) => {
     if (!Array.isArray(rows)) throw new Error('Ожидался массив result')
     return rows
 }
-const saveRows = (type, rows, url, generation, securityRevision) => mutateStorage(async () => {
+export const loadPanelAttention = async () => {
+    const generation = currentGeneration(), securityRevision = vaultRevision()
+    const { panelToken, ...settings } = await readStoredApiSettings()
+    const url = apiUrls(settings, Boolean(panelToken)).attention
+    if (!url) return { status: 'ready', rows: [] }
+    const key = typeof panelToken === 'string' ? null : await getUnlockedKey({ required: false })
+    assertGeneration(generation)
+    assertVaultRevision(securityRevision)
+    if (typeof panelToken !== 'string' && !key) return { status: 'locked', rows: [] }
+    const token = key ? await openJson(panelToken, key) : panelToken
+    assertGeneration(generation)
+    assertVaultRevision(securityRevision)
+    const rows = await requestRows(url, 'внимания', new AbortController().signal, token)
+    assertGeneration(generation)
+    assertVaultRevision(securityRevision)
+    return { status: 'ready', rows: rows.filter(row => panelRecordId(row?.project_id)
+        && typeof row.kind === 'string' && typeof row.color === 'string' && typeof row.name === 'string' && typeof row.detail === 'string') }
+}
+
+const saveRows = (type, rows, url, generation, securityRevision, panelBase) => mutateStorage(async () => {
     assertGeneration(generation)
     const data = await getStoredData(), snapshot = data.lastSuccessfulData
     let services = null, encryptedVault = null, values = rows
@@ -68,7 +90,8 @@ const saveRows = (type, rows, url, generation, securityRevision) => mutateStorag
     }
     assertGeneration(generation)
     if (type === 'accesses') assertVaultRevision(securityRevision)
-    const next = { ...data, lastSuccessfulData: { ...snapshot, [type]: values, [`${type}Url`]: url, [`${type}UpdatedAt`]: Date.now() } }
+    const next = { ...data, lastSuccessfulData: { ...snapshot, [type]: values, [`${type}Url`]: url, [`${type}UpdatedAt`]: Date.now(),
+        ...(panelBase ? { [`${type}PanelMetadata`]: true } : {}) } }
     await storageSetMany({ [DATA_KEY]: next, ...(services ? { [SERVICES_KEY]: services } : {}), ...(encryptedVault ? { [VAULT_KEY]: encryptedVault } : {}) })
 })
 export const refreshAll = async ({ scope = 'all', onlyIfDue = false } = {}) => {
@@ -91,7 +114,7 @@ export const refreshAll = async ({ scope = 'all', onlyIfDue = false } = {}) => {
             const url = urls[type]
             if (!url || (scope !== 'all' && scope !== type)) return false
             const snapshot = data.lastSuccessfulData
-            return !onlyIfDue || snapshot[`${type}Url`] !== url || Date.now() - (snapshot[`${type}UpdatedAt`] || 0) >= REFRESH_PERIOD
+            return !onlyIfDue || snapshot[`${type}Url`] !== url || (panel && !snapshot[`${type}PanelMetadata`]) || Date.now() - (snapshot[`${type}UpdatedAt`] || 0) >= REFRESH_PERIOD
         })
         if (!types.length) {
             if (!urls.projects && !urls.accesses) throw new Error(panel
@@ -115,7 +138,9 @@ export const refreshAll = async ({ scope = 'all', onlyIfDue = false } = {}) => {
                 assertGeneration(generation)
                 if (panel) assertVaultRevision(securityRevision)
                 const rows = await requestRows(url, type === 'projects' ? 'проектов' : 'доступов', requestController.signal, token)
-                await saveRows(type, type === 'projects' ? rows.map(normalizeProject) : normalizeAccessData(rows), url, generation, securityRevision)
+                const panelBase = panel ? settings.panelUrl : ''
+                const values = type === 'projects' ? rows.map(item => normalizeProject(item, panelBase)) : normalizeAccessData(rows, panelBase)
+                await saveRows(type, values, url, generation, securityRevision, panelBase)
                 refreshed[type] = true
                 statuses[type] = ''
             } catch (error) {

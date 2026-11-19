@@ -12,7 +12,7 @@ import { storageReady, SCHEMA_VERSION, SERVICES_KEY, ERRORS_KEY, storageGet, sto
 import { getSecurityStatus, enableHelloProtection, unlockWithHelloKey, enablePinProtection, unlockWithPin, lockCredentialVault, disableCredentialProtection, registerVaultIdleLock } from './credentialVault.js'
 import { readApiSettings, saveApiSettings } from './apiSettings.js'
 import { apiUrls } from '../utils/apiSource.js'
-import { refreshAll, getRefreshJob, saveRefreshJob, cancelRefresh, scheduleRefresh, PROJECTS_ALARM } from './apiRefresh.js'
+import { refreshAll, loadPanelAttention, getRefreshJob, saveRefreshJob, cancelRefresh, scheduleRefresh, PROJECTS_ALARM } from './apiRefresh.js'
 import { toPublicData } from './catalogueData.js'
 import { updateActiveTabIcon, updateBadgeForTab } from './actionBadge.js'
 import { getActiveSupportTicket, observeSupportTicket, resetActiveSupportTicket, registerSupportTicketTracking } from './supportTicketTracking.js'
@@ -78,6 +78,7 @@ const handlers = {
     'services:get': getServices, 'services:field': getServiceField,
     'data:settings:get': readApiSettings,
     'data:settings:set': async payload => { const settings = await saveApiSettings(payload); await scheduleRefresh(); return settings },
+    'data:attention:get': loadPanelAttention,
     'data:projects:get': () => getStoredData().then(toPublicData), 'data:all:refresh': loadData, 'data:job:get': getRefreshJob,
     'data:projects:authorize': () => authorize('projects'), 'data:accesses:authorize': () => authorize('accesses'),
     'data:errors:get': () => storageGet(ERRORS_KEY, []), 'data:errors:clear': () => mutateStorage(() => storageSet(ERRORS_KEY, [])),

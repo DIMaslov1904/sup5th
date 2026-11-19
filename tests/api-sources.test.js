@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test, { beforeEach } from 'node:test'
-import { apiUrls, parsePanelConnection } from '../src/utils/apiSource.js'
+import { apiUrls, panelRecordUrl, parsePanelConnection } from '../src/utils/apiSource.js'
 
 const makeStorage = (initial = {}) => ({
     values: { ...initial },
@@ -27,7 +27,10 @@ globalThis.chrome = {
 }
 const { readApiSettings, saveApiSettings } = await import('../src/background/apiSettings.js')
 const { getStoredData, storageReady } = await import('../src/background/storageRepository.js')
-const { getRefreshJob, refreshAll } = await import('../src/background/apiRefresh.js')
+const { getRefreshJob, loadPanelAttention, refreshAll } = await import('../src/background/apiRefresh.js')
+const { toPublicData, indexProjectAccesses } = await import('../src/background/catalogueData.js')
+const { findProjectByKey, projectKey } = await import('../src/utils/projectUtils.js')
+const { changeProjectShortcuts, selectProjectShortcuts } = await import('../src/utils/projectShortcuts.js')
 const { enablePinProtection, lockCredentialVault, unlockWithPin, disableCredentialProtection } = await import('../src/background/credentialVault.js')
 await storageReady
 beforeEach(() => { local.values = initial(); session.values = {} })
@@ -66,7 +69,7 @@ test('keeps the Google connection and uses the configured panel with Bearer auth
     assert.deepEqual(data.refreshErrors, [])
     assert.equal(data.lastSuccessfulData.projects[0].name, project[0])
     assert.equal(local.values.services[0].password, service[3])
-    assert.deepEqual(new Set(requests.slice(1).map(({ url }) => url)), new Set(Object.values(apiUrls(saved))))
+    assert.deepEqual(new Set(requests.slice(1).map(({ url }) => url)), new Set([apiUrls(saved).projects, apiUrls(saved).accesses]))
     for (const { options } of requests.slice(1)) {
         assert.equal(options.headers.Authorization, 'Bearer ' + token)
         assert.equal(options.credentials, 'omit')
@@ -115,4 +118,77 @@ test('uses an existing connection after an upgrade and reports a revoked token w
     assert.match(result.refreshErrors.join(), /Панель отклонила токен/)
     assert.ok(!JSON.stringify(local.values.apiErrorLog).includes(token))
     assert.equal(result.projectApiStatus, '')
+})
+
+test('opens exact Panel records on one hostname and preserves corporate identifiers when fields change', async t => {
+    const base = panelUrl + '/office'
+    await saveApiSettings({ source: 'panel', panelConnection: connection(base) })
+    const rows = [
+        [...project, 7, '/admin/projects/7'],
+        ['Каталог', project[1] + '/catalog', '', '', 'UMI', '', '', 8, '/admin/projects/8']
+    ]
+    const accessRow = ['Каталог', '!' + project[1], 'fixture', 'fixture-password', '', '', '', 8, '/admin/projects/8']
+    const path = '/admin/corporate-accesses/2?tableAction=viewAccess&tableActionRecord=5'
+    const services = [
+        [...service, 5, path],
+        [...service, 6, 'https://elsewhere.example.test/']
+    ]
+    const attention = { project_id: 8, kind: 'Сайт', color: 'danger', name: 'Каталог', detail: 'HTTP 503' }
+    const requests = []
+    t.mock.method(globalThis, 'fetch', async (url, options) => {
+        requests.push({ url, options })
+        if (url.endsWith('/attention')) return Response.json({ result: [attention, { ...attention, project_id: 'invalid' }] })
+        if (url.endsWith('/accesses')) return Response.json({ result: { access: [accessRow], services } })
+        return Response.json({ result: rows })
+    })
+    await refreshAll()
+    const data = await getStoredData()
+    const [main, catalogue] = toPublicData(data).lastSuccessfulData.projects
+    assert.notEqual(projectKey(main), projectKey(catalogue))
+    assert.equal(findProjectByKey([main, catalogue], projectKey(catalogue)).id, '8')
+    assert.equal(findProjectByKey([main, catalogue], main.url), null)
+    const oldShortcuts = { enabled: true, pinned: [catalogue.url] }
+    assert.equal(selectProjectShortcuts([catalogue], oldShortcuts)[0].id, '8')
+    assert.deepEqual(selectProjectShortcuts([main, catalogue], oldShortcuts), [])
+    const shortcuts = changeProjectShortcuts(oldShortcuts, { kind: 'pin', url: projectKey(catalogue), pinned: true }, [main, catalogue])
+    assert.deepEqual(shortcuts.pinned, [projectKey(catalogue)])
+    assert.equal(main.hasAccess, false)
+    assert.equal(catalogue.hasAccess, true)
+    assert.equal(indexProjectAccesses(data.lastSuccessfulData.accesses)(catalogue)[0].login, 'fixture')
+    assert.equal(catalogue.panelUrl, base + '/admin/projects/8')
+    const corpId = local.values.services[0].id
+    assert.notEqual(corpId, local.values.services[1].id)
+    assert.equal(local.values.services[0].panelId, '5')
+    assert.equal(local.values.services[0].panelUrl, base + path)
+    assert.equal(local.values.services[1].panelUrl, '')
+    services[0][0] = 'Новое название'
+    await refreshAll({ scope: 'accesses' })
+    assert.equal(local.values.services[0].id, corpId)
+
+    assert.deepEqual(await loadPanelAttention(), { status: 'ready', rows: [attention] })
+    assert.equal(requests.at(-1).url, base + '/api/v1/sup5th/attention')
+    assert.equal(requests.at(-1).options.headers.Authorization, 'Bearer ' + token)
+    assert.equal(requests.at(-1).options.credentials, 'omit')
+    assert.equal(requests.at(-1).options.redirect, 'error')
+
+    await enablePinProtection({ pin: '135790' })
+    await lockCredentialVault()
+    const count = requests.length
+    assert.deepEqual(await loadPanelAttention(), { status: 'locked', rows: [] })
+    assert.equal(requests.length, count)
+    await unlockWithPin({ pin: '135790' })
+    assert.deepEqual(await loadPanelAttention(), { status: 'ready', rows: [attention] })
+
+    globalThis.fetch.mock.mockImplementation(async () => new Response(null, { status: 404 }))
+    assert.deepEqual(await loadPanelAttention(), { status: 'ready', rows: [] })
+    await saveApiSettings({ source: 'google' })
+    assert.deepEqual(await loadPanelAttention(), { status: 'ready', rows: [] })
+})
+
+test('only resolves record links inside the configured Panel base', () => {
+    const base = 'https://panel.example.test/office'
+    for (const path of ['//other.example.test/', '/\\other.example.test/', 'https://other.example.test/', '../admin', '/../../admin', '/%2e%2e/admin']) {
+        assert.equal(panelRecordUrl(base, path), '', path)
+    }
+    assert.equal(panelRecordUrl(base, '/admin/projects/5'), base + '/admin/projects/5')
 })

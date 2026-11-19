@@ -2,7 +2,7 @@
 import { extensionApi } from '../../platform/extensionApi.js'
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { loadProjectDetails, refreshSiteIcon } from '../data/projectData'
-import { getAdminUrl, getCmsIconPath, getTicketUrl } from '../../utils/projectUtils'
+import { getAdminUrl, getCmsIconPath, getTicketUrl, projectKey } from '../../utils/projectUtils'
 import { siteHref } from '../../utils/siteAddress.js'
 import { displayUrl } from '../../utils/displayUrl.js'
 import { iconOrigin } from '../../icons/iconPolicy.js'
@@ -12,6 +12,7 @@ import { pipelineBadgePreference } from '../pipelineBadgeState.js'
 import ProjectAccessCard from './ProjectAccessCard.vue'
 import FtpAccessCard from './FtpAccessCard.vue'
 import Notification from './ui/Notification.vue'
+import Button from './ui/Button.vue'
 import IconButton from './ui/IconButton.vue'
 import HeartIcon from './ui/HeartIcon.vue'
 import { projectShortcuts, updateProjectShortcuts, recordProjectOpen } from '../projectShortcutsState.js'
@@ -39,14 +40,15 @@ const iconChanged = message => {
     if (message.origin === origin.value && message.succeeded === false) iconError.value = 'Не удалось обновить иконку сайта.'
     if (message.origin === origin.value || message.cancelled || message.cleared) refreshingIcon.value = false
 }
-const pinned = computed(() => projectShortcuts.value.pinned.includes(props.project.url))
+const key = computed(() => projectKey(props.project))
+const pinned = computed(() => projectShortcuts.value.pinned.includes(key.value))
 const togglePin = async () => {
     pinning.value = true
-    try { await updateProjectShortcuts({ kind: 'pin', url: props.project.url, pinned: !pinned.value }) }
+    try { await updateProjectShortcuts({ kind: 'pin', url: key.value, pinned: !pinned.value }) }
     catch (reason) { error.value = reason.message }
     finally { pinning.value = false }
 }
-watch(() => props.project.url, url => { recordProjectOpen(url).catch(reason => { error.value = reason.message }) }, { immediate: true })
+watch(key, key => { recordProjectOpen(key).catch(reason => { error.value = reason.message }) }, { immediate: true })
 const href = siteHref
 const actions = computed(() => [
     { kind: 'admin', label: 'В админку', url: getAdminUrl(props.project) },
@@ -57,14 +59,14 @@ const actions = computed(() => [
 const projectAccesses = computed(() => accesses.value.filter(access => access.hasLogin || access.hasPassword))
 const ftpAccesses = computed(() => accesses.value.filter(access => access.ftpUrl || access.ftpHasLogin || access.ftpHasPassword))
 let revision = 0
-const reload = async (url = props.project.url) => {
+const reload = async () => {
     const current = ++revision
     accesses.value = []; loading.value = true; error.value = ''
-    try { const details = await loadProjectDetails(url); if (current === revision) accesses.value = details.accesses }
+    try { const details = await loadProjectDetails(key.value); if (current === revision) accesses.value = details.accesses }
     catch (reason) { if (current === revision) error.value = reason.message }
     finally { if (current === revision) loading.value = false }
 }
-watch(() => props.project.url, reload, { immediate: true })
+watch(key, reload, { immediate: true })
 const changed = changes => { if (changes.projectData || changes.credentialSecurity || changes.unlockedCredentialVaultKey) reload() }
 onMounted(() => {
     extensionApi.storage.onChanged.addListener(changed)
@@ -106,6 +108,9 @@ onUnmounted(() => {
                 <span>{{ action.label }}</span>
             </a>
         </div>
+        <div v-if="project.panelUrl">
+            <Button :href="project.panelUrl" size="sm" variant="secondary">Открыть в панели ↗</Button>
+        </div>
         <p v-if="loading && project.hasAccess" class="text-xs text-ui-muted">Загрузка доступов…</p>
         <section v-if="projectAccesses.length" class="grid gap-2">
             <h2 class="text-[13px] font-semibold">Доступы</h2>
@@ -113,7 +118,7 @@ onUnmounted(() => {
         </section>
         <section v-if="ftpAccesses.length" class="grid gap-2">
             <h2 class="text-[13px] font-semibold">FTP доступы</h2>
-            <FtpAccessCard v-for="access in ftpAccesses" :key="access.id" :access="access" :project-url="project.url" />
+            <FtpAccessCard v-for="access in ftpAccesses" :key="access.id" :access="access" :project-key="key" />
         </section>
         <Notification v-if="error" :text="error" />
         <Notification v-if="iconError" :text="iconError" />

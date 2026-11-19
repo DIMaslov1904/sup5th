@@ -6,15 +6,15 @@ import { getSshCommand } from '../../utils/ssh.js'
 import { useCardAction } from '../useCardAction.js'
 import CredentialCard from './CredentialCard.vue'
 
-const props = defineProps({ access: Object, projectUrl: String })
+const props = defineProps({ access: Object, projectKey: String })
 const card = ref(null)
 const { busy, message, error, run } = useCardAction(card)
 const copy = field => run(async () => {
     await copyUnlockedText(async () => {
-        if (field !== 'ssh') return getProjectAccessField(props.projectUrl, props.access.id, field)
-        const { ftpUrl: host, ftpLogin: login } = await getProjectAccessFields(props.projectUrl, props.access.id, ['ftpUrl', 'ftpLogin'])
+        if (field !== 'ssh') return getProjectAccessField(props.projectKey, props.access.id, field)
+        const { ftpUrl: host, ftpLogin: login } = await getProjectAccessFields(props.projectKey, props.access.id, ['ftpUrl', 'ftpLogin'])
         return getSshCommand(login, host)
-    }, { intent: { type: 'project-copy', url: props.projectUrl, accessId: props.access.id, field } })
+    }, { intent: { type: 'project-copy', projectKey: props.projectKey, accessId: props.access.id, field } })
 }, `${{ ftpUrl: 'Host', ftpLogin: 'Логин', ftpPassword: 'Пароль', ssh: 'SSH-команда' }[field]} скопирован${field === 'ssh' ? 'а' : ''}`)
 </script>
 <template>

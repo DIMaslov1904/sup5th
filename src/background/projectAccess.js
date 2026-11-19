@@ -3,28 +3,33 @@ import { injectExtensionScript } from '../platform/scriptInjection.js'
 import authScript from '../content-script/index.js?script&iife'
 import { AUTH_SESSIONS_KEY, SERVICES_KEY, getStoredData, storageGet, sessionGet, sessionSet, sessionEntries, mutateStorage, currentGeneration, assertGeneration } from './storageRepository.js'
 import { getSecurityConfig, getUnlockedKey, readCredentialVault, vaultRevision, assertVaultRevision } from './credentialVault.js'
-import { findAccessesByUrl, getAdminUrl } from '../utils/projectUtils.js'
+import { findProjectByKey, getAdminUrl } from '../utils/projectUtils.js'
+import { catalogueProjects, indexProjectAccesses } from './catalogueData.js'
 import { hasOrigin } from '../utils/hostPermissions.js'
 import { publicAccess, publicService } from './credentialRecords.js'
 import { openTabWithSession } from './tabSession.js'
 
-const getProjectAccessRecords = async (data, url, required = true) => {
-    const records = findAccessesByUrl(data.lastSuccessfulData.accesses, url)
+const getProjectAccessRecords = async (data, project, required = true) => {
+    if (!project) return []
+    const records = indexProjectAccesses(data.lastSuccessfulData.accesses)(project)
     const key = await getUnlockedKey({ required })
     if (!key) return records
     const secrets = new Map((await readCredentialVault(key)).accesses.map(record => [record.id, record]))
     return records.map(record => ({ ...record, ...secrets.get(record.id) }))
 }
-const selectedAccess = async ({ url, accessId }) => {
+const selectedAccess = async ({ projectKey, url, accessId }) => {
     if (typeof accessId !== 'string' || !accessId) throw new Error('Доступ изменился. Откройте карточку заново.')
-    const data = await getStoredData(), records = await getProjectAccessRecords(data, url)
+    const data = await getStoredData()
+    const project = findProjectByKey(catalogueProjects(data.lastSuccessfulData), projectKey || url)
+    const records = await getProjectAccessRecords(data, project)
     const access = records.find(record => record.id === accessId)
     if (!access) throw new Error('Доступ удалён или изменился. Обновите карточку проекта.')
-    return { data, access }
+    return { project, access }
 }
-export const getProjectDetails = async ({ url }) => {
+export const getProjectDetails = async ({ projectKey }) => {
     const expected = vaultRevision(), data = await getStoredData()
-    const records = await getProjectAccessRecords(data, url, false)
+    const project = findProjectByKey(catalogueProjects(data.lastSuccessfulData), projectKey)
+    const records = await getProjectAccessRecords(data, project, false)
     assertVaultRevision(expected)
     return { accesses: records.map(publicAccess) }
 }
@@ -33,8 +38,8 @@ const accessFieldValue = (access, field) => field.startsWith('ftp')
     ? access.ftp?.[{ ftpUrl: 'url', ftpLogin: 'login', ftpPassword: 'password' }[field]]
     : access[field]
 // One vault read decrypts every requested field of the same access.
-export const getProjectAccessFields = async ({ url, accessId, fields }) => {
-    const expected = vaultRevision(), { access } = await selectedAccess({ url, accessId })
+export const getProjectAccessFields = async ({ projectKey, accessId, fields }) => {
+    const expected = vaultRevision(), { access } = await selectedAccess({ projectKey, accessId })
     if (!Array.isArray(fields) || !fields.length || fields.some(field => !accessFields.includes(field))) throw new Error('Неизвестное поле доступа')
     const values = Object.fromEntries(fields.map(field => [field, accessFieldValue(access, field)]))
     assertVaultRevision(expected)
@@ -43,8 +48,7 @@ export const getProjectAccessFields = async ({ url, accessId, fields }) => {
 }
 export const getProjectAccessField = async payload => (await getProjectAccessFields({ ...payload, fields: [payload.field] }))[payload.field]
 export const copyProjectAccessText = async payload => {
-    const expected = vaultRevision(), { data, access } = await selectedAccess(payload)
-    const project = data.lastSuccessfulData.projects.find(record => record.url === payload.url)
+    const expected = vaultRevision(), { project, access } = await selectedAccess(payload)
     if (!project || !access.login || !access.password) throw new Error('Логин или пароль отсутствует')
     assertVaultRevision(expected)
     return `Доступ: ${getAdminUrl(project) || project.siteUrl}\nЛогин: ${access.login}\nПароль: ${access.password}`
@@ -67,8 +71,7 @@ export const getServiceFields = async ({ id, fields }) => {
 }
 export const getServiceField = async ({ id, field }) => (await getServiceFields({ id, fields: [field] }))[field]
 export const startAdminAuth = async payload => {
-    const generation = currentGeneration(), expected = vaultRevision(), { data, access } = await selectedAccess(payload)
-    const project = data.lastSuccessfulData.projects.find(record => record.url === payload.url)
+    const generation = currentGeneration(), expected = vaultRevision(), { project, access } = await selectedAccess(payload)
     if (!project || !access.login || !access.password) throw new Error('Проект или доступ не найден')
     const adminUrl = getAdminUrl(project)
     if (!adminUrl) throw new Error('Адрес админки не указан')
@@ -78,7 +81,7 @@ export const startAdminAuth = async payload => {
         assertGeneration(generation); assertVaultRevision(expected)
         const sessions = await sessionEntries(AUTH_SESSIONS_KEY)
         // Keep references only. Password is read when a matching form is ready.
-        sessions[tabId] = { url: payload.url, accessId: access.id, cms: project.cms, targetOrigin: parsed.origin,
+        sessions[tabId] = { projectKey: payload.projectKey, accessId: access.id, cms: project.cms, targetOrigin: parsed.origin,
             targetPath: parsed.pathname.replace(/[^/]*$/, '') || '/', createdAt: Date.now(), expiresAt: Date.now() + 300000 }
         await sessionSet(AUTH_SESSIONS_KEY, sessions)
     }))

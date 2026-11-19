@@ -1,4 +1,5 @@
 import switcher from './switcher.js'
+import { projectKey } from './projectUtils.js'
 import { displayUrl } from './displayUrl.js'
 import { typoDistance } from './typoDistance.js'
 
@@ -51,7 +52,7 @@ const fuzzyDistance = (variant, candidates) => {
 export const createCatalogueSearch = (services, projects) => {
     const entries = [
         ...services.map(item => ({ ...item, kind: 'service', key: `service:${item.id}` })),
-        ...projects.map(item => ({ ...item, kind: 'project', key: `project:${item.url}` }))
+        ...projects.map(item => ({ ...item, kind: 'project', key: `project:${projectKey(item)}` }))
     ].map(prepareEntry)
 
     return query => {

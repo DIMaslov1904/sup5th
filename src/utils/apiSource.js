@@ -28,9 +28,17 @@ export const parsePanelConnection = value => {
     return { panelUrl: normalizePanelUrl(connection.url), panelToken: connection.token }
 }
 
+export const panelRecordId = id => Number.isSafeInteger(id) && id > 0 ? String(id) : ''
+
+export const panelRecordUrl = (base, path) => {
+    if (!base || typeof path !== 'string' || !/^\/(?![\/\\])/.test(path)) return ''
+    const root = URL.parse(base + '/'), url = root && URL.parse('./' + path.slice(1), root)
+    return url?.origin === root?.origin && url?.pathname.startsWith(root.pathname) ? url.href : ''
+}
+
 export const apiUrls = (settings, panelTokenSaved = settings.panelTokenSaved) => {
     if (settings.source !== 'panel') return { projects: settings.projectsUrl, accesses: settings.accessUrl }
     if (!settings.panelUrl || !panelTokenSaved) return { projects: '', accesses: '' }
     const base = settings.panelUrl + '/api/v1/sup5th'
-    return { projects: base + '/projects', accesses: base + '/accesses' }
+    return { projects: base + '/projects', accesses: base + '/accesses', attention: base + '/attention' }
 }

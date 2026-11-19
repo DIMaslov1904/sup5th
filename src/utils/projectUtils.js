@@ -1,4 +1,4 @@
-import { siteHref, parseSiteAddress, createAccessIndex } from './siteAddress.js'
+import { siteHref, parseSiteAddress } from './siteAddress.js'
 const CMS_PATHS = { UMI: 'admin/content/sitetree/', EzPro: 'ezpro/', Bitrix: 'bitrix/admin/#authorize', ABO: 'login.php', MODX: 'manager/', AdminLTE: 'admin/', Joomla: 'administrator/' }
 const CMS_ICONS = ['abo', 'adminlte', 'bitrix', 'cms', 'ezpro', 'joomla', 'modx', 'tilda', 'umi', 'wordpress', 'drupal', 'opencart']
 export const findProjectByUrl = (projects, value) => {
@@ -14,7 +14,14 @@ export const findProjectByUrl = (projects, value) => {
     }
     return match
 }
-export const findAccessesByUrl = (accesses, url) => createAccessIndex(accesses || [])(url)
+export const projectKey = project => project.id ? `panel:${project.panelBase}:${project.id}` : project.url
+
+export const findProjectByKey = (projects, key) => {
+    const exact = projects.find(project => projectKey(project) === key)
+    if (exact) return exact
+    const legacy = projects.filter(project => project.url === key)
+    return legacy.length === 1 ? legacy[0] : null
+}
 export const CREATE_TICKET_PARAM = 'sup5th-create-ticket'
 export const getTicketUrl = project => project?.ticketKey ? `https://support.5th.ru/published/personal.php?key=${encodeURIComponent(project.ticketKey)}&t=requests&${CREATE_TICKET_PARAM}=1` : ''
 export const getAdminUrl = project => {

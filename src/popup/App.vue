@@ -27,7 +27,7 @@ let tabRevision = 0
 
 const view = ref('site')
 const stateReady = ref(false)
-const selectedProjectUrl = ref('')
+const selectedProjectKey = ref('')
 const selectedServiceId = ref('')
 const search = ref('')
 const settingsSection = ref('maintenance')
@@ -36,11 +36,17 @@ let heartbeat
 let disconnectState
 
 const openCatalogue = () => {
-  selectedProjectUrl.value = ''
+  selectedProjectKey.value = ''
   selectedServiceId.value = ''
   view.value = 'projects'
 }
-watch(search, openCatalogue)
+watch(search, openCatalogue, { flush: 'sync' })
+const openProject = key => {
+  search.value = ''
+  selectedServiceId.value = ''
+  selectedProjectKey.value = key
+  view.value = 'projects'
+}
 
 const openProtection = () => {
   settingsSection.value = 'security'
@@ -53,11 +59,11 @@ const openSetup = () => applySetupStep('security')
 
 const saveUiState = () => {
   if (!stateReady.value || !statePort) return
-  statePort.postMessage({ type: 'state', state: { view: view.value, projectUrl: selectedProjectUrl.value, serviceId: selectedServiceId.value, seoTabId: seoTab.value?.id, seoUrl: seoTab.value?.url } })
+  statePort.postMessage({ type: 'state', state: { view: view.value, projectKey: selectedProjectKey.value, serviceId: selectedServiceId.value, seoTabId: seoTab.value?.id, seoUrl: seoTab.value?.url } })
 }
 
 watch(view, (value) => {
-  if (value !== 'projects') { selectedProjectUrl.value = ''; selectedServiceId.value = '' }
+  if (value !== 'projects') { selectedProjectKey.value = ''; selectedServiceId.value = '' }
   const revision = ++tabRevision
   seoTabReady.value = false
   seoTab.value = null
@@ -67,7 +73,7 @@ watch(view, (value) => {
     seoTabReady.value = true
   }).catch(() => { if (revision === tabRevision) seoTabReady.value = true })
 }, { flush: 'sync' })
-watch([view, selectedProjectUrl, selectedServiceId, seoTab], saveUiState, { flush: 'sync' })
+watch([view, selectedProjectKey, selectedServiceId, seoTab], saveUiState, { flush: 'sync' })
 
 onMounted(() => {
   disconnectState = connectBackgroundState()
@@ -81,7 +87,7 @@ onMounted(() => {
       if (tab?.id !== message.state.seoTabId || tab?.url !== message.state.seoUrl) restoredView = 'site'
     }
     view.value = restoredView
-    selectedProjectUrl.value = message.state.projectUrl
+    selectedProjectKey.value = message.state.projectKey
     selectedServiceId.value = message.state.serviceId || ''
     stateReady.value = true
     saveUiState()
@@ -110,9 +116,9 @@ onUnmounted(() => {
   <Welcome v-else-if="setupReady && setupStep !== 'done'" :step="setupStep" :settings="setupSettings" @completed="openCatalogue" />
   <Layout v-else-if="stateReady && setupReady" v-model="view" v-model:search="search" @search="openCatalogue" @open-protection="openProtection">
     <Transition name="ui-view" mode="out-in"><div :key="view" class="flex flex-[1_0_auto] flex-col">
-    <Site v-if="view === 'site'" />
+    <Site v-if="view === 'site'" @open-project="openProject" />
     <section v-if="view === 'seo'" class="flex flex-1 flex-col px-3"><SeoPanel v-if="seoTabReady" :tab="seoTab" :session="seoSession" /></section>
-    <Projects v-if="view === 'projects'" v-model:search="search" v-model:selected-project-url="selectedProjectUrl" v-model:selected-service-id="selectedServiceId" />
+    <Projects v-if="view === 'projects'" v-model:search="search" v-model:selected-project-key="selectedProjectKey" v-model:selected-service-id="selectedServiceId" />
     <Settings v-if="view === 'settings'" v-model:section="settingsSection" />
     <Tools v-if="view === 'tools'" />
     <Tickets v-if="view === 'tickets'" />

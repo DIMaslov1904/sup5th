@@ -16,6 +16,7 @@ export interface PopupResults {
     'support:ticket:open': { opened: boolean }
     'seo:fetch': unknown
     'seo:downloadImage': { id: number }
+    'data:attention:get': { status: 'ready' | 'locked'; rows: { project_id: number; kind: string; color: string; name: string; detail: string }[] }
     'data:projects:get': unknown
     'data:projects:authorize': { opened: boolean }
     'data:accesses:authorize': { opened: boolean }

@@ -5,6 +5,7 @@ import { getServiceField, loadServices, loadProjectData, loadApiSettings } from 
 import { copyUnlockedText } from '../unlockStore'
 import { createCatalogueSearch } from '../../utils/catalogue.js'
 import { displayUrl } from '../../utils/displayUrl.js'
+import { findProjectByKey, projectKey } from '../../utils/projectUtils.js'
 import { siteHref } from '../../utils/siteAddress.js'
 import { refreshJob } from '../backgroundState.js'
 import { apiUrls } from '../../utils/apiSource.js'
@@ -21,20 +22,20 @@ const projects = ref([]), services = ref([]), copying = ref(''), loaded = ref(fa
 let alive = true, revision = 0
 const downloaded = ref(false), loadError = ref('')
 const search = defineModel('search', { type: String, default: '' })
-const selectedProjectUrl = defineModel('selectedProjectUrl', { type: String, default: '' })
+const selectedProjectKey = defineModel('selectedProjectKey', { type: String, default: '' })
 const selectedServiceId = defineModel('selectedServiceId', { type: String, default: '' })
 const selectedService = computed(() => services.value.find(item => item.id === selectedServiceId.value) || null)
 const serviceHasLogin = computed(() => Boolean(selectedService.value?.hasLogin || selectedService.value?.login))
 const serviceHasPassword = computed(() => Boolean(selectedService.value?.hasPassword || selectedService.value?.password))
-const selectedProject = computed(() => projects.value.find(item => item.url === selectedProjectUrl.value) || null)
+const selectedProject = computed(() => findProjectByKey(projects.value, selectedProjectKey.value))
 const selectedItem = computed(() => selectedService.value || selectedProject.value)
 const catalogueSearch = computed(() => createCatalogueSearch(services.value, projects.value))
 const filteredProjects = computed(() => catalogueSearch.value(search.value))
 const linkHref = siteHref
-const back = () => { selectedProjectUrl.value = ''; selectedServiceId.value = '' }
+const back = () => { selectedProjectKey.value = ''; selectedServiceId.value = '' }
 const openItem = item => {
-    if (item.kind === 'service') { selectedProjectUrl.value = ''; selectedServiceId.value = item.id }
-    else { selectedServiceId.value = ''; selectedProjectUrl.value = item.url }
+    if (item.kind === 'service') { selectedProjectKey.value = ''; selectedServiceId.value = item.id }
+    else { selectedServiceId.value = ''; selectedProjectKey.value = projectKey(item) }
 }
 const copyService = async field => {
     copying.value = field
@@ -56,7 +57,7 @@ const load = async () => {
         services.value = savedServices
         projects.value = data.lastSuccessfulData.projects
         if (!savedServices.some(item => item.id === selectedServiceId.value)) selectedServiceId.value = ''
-        if (!projects.value.some(item => item.url === selectedProjectUrl.value)) selectedProjectUrl.value = ''
+        selectedProjectKey.value = selectedProject.value ? projectKey(selectedProject.value) : ''
     } catch (reason) { if (alive) loadError.value = reason.message }
     finally { if (alive) loaded.value = true }
 }
@@ -66,7 +67,7 @@ onUnmounted(() => { alive = false; revision++; extensionApi.storage.onChanged.re
 </script>
 <template>
     <section class="min-w-0 w-full px-4 text-ui-text">
-        <ProjectShortcutStrip v-if="loaded && !selectedItem" :projects="projects" @select="url => { selectedServiceId = ''; selectedProjectUrl = url }" />
+        <ProjectShortcutStrip v-if="loaded && !selectedItem" :projects="projects" @select="key => { selectedServiceId = ''; selectedProjectKey = key }" />
         <Preloader v-if="!loaded || (refreshJob.running && !projects.length && !services.length)" label="Загрузка каталога…" />
         <Message v-else-if="loadError" type="error">{{ loadError }}</Message>
         <EmptyState v-else-if="!connected && !projects.length && !services.length" title="Данные ещё не подключены" description="Выберите и подключите источник в настройках загрузки." />
@@ -100,6 +101,9 @@ onUnmounted(() => { alive = false; revision++; extensionApi.storage.onChanged.re
                 <h1 :title="selectedService.name" class="ui-title min-w-0 line-clamp-2 wrap-anywhere">{{ selectedService.name }}</h1>
             </div>
             <a :href="linkHref(selectedService.url)" :title="displayUrl(selectedService.url)" target="_blank" rel="noreferrer" class="min-w-0 truncate text-[13px] text-ui-accent">{{ displayUrl(selectedService.url) }} ↗</a>
+            <div v-if="selectedService.panelUrl">
+                <Button :href="selectedService.panelUrl" size="sm" variant="secondary">Открыть в панели ↗</Button>
+            </div>
             <article v-if="serviceHasLogin || serviceHasPassword" class="grid gap-3 ui-panel">
                 <h2 class="text-[13px] font-semibold">Доступ</h2>
                 <p v-if="serviceHasLogin" class="break-all text-xs text-ui-muted">Логин: {{ selectedService.login || 'Доступен после первой разблокировки' }}</p>
@@ -109,7 +113,7 @@ onUnmounted(() => { alive = false; revision++; extensionApi.storage.onChanged.re
                 </div>
             </article>
         </div>
-        <ProjectDetails v-else-if="selectedProject" :key="selectedProject.url" :project="selectedProject">
+        <ProjectDetails v-else-if="selectedProject" :key="projectKey(selectedProject)" :project="selectedProject">
             <template #leading><Button variant="ghost" size="sm" aria-label="Назад к списку" title="Назад к списку" @click="back">←</Button></template>
         </ProjectDetails>
     </section>

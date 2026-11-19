@@ -18,6 +18,8 @@ export const resetActiveSupportTicket = () => callBackground('support:ticket:res
 export const saveApiSettings = (patch) =>
     callBackground('data:settings:set', patch)
 
+export const loadPanelAttention = () => callBackground('data:attention:get')
+
 export const loadProjectData = () => callBackground('data:projects:get')
 
 export const authorizeAccessApi = () => callBackground('data:accesses:authorize')
@@ -37,29 +39,29 @@ export const refreshSiteIcons = () => callBackground('icons:refresh')
 export const refreshSiteIcon = url => callBackground('icons:refreshOne', { url })
 export const cancelSiteIcons = () => callBackground('icons:cancel')
 
-/** @param {string} url @param {string} accessId */
-export const startAdminAuth = (url, accessId) => callBackground('auth:start', { url, accessId })
+/** @param {string} projectKey @param {string} accessId */
+export const startAdminAuth = (projectKey, accessId) => callBackground('auth:start', { projectKey, accessId })
 
 export const loadServices = () => callBackground('services:get')
 
 /** @param {string} id @param {import('../../types/extension.js').ServiceField} field */
 export const getServiceField = (id, field) => callBackground('services:field', { id, field })
 
-/** @param {string} url @param {string} accessId */
-export const getProjectAccessText = (url, accessId) =>
-    callBackground('project:copyAccess', { url, accessId })
+/** @param {string} projectKey @param {string} accessId */
+export const getProjectAccessText = (projectKey, accessId) =>
+    callBackground('project:copyAccess', { projectKey, accessId })
 
-/** @param {string} url */
-export const loadProjectDetails = (url) =>
-    callBackground('project:details', { url })
+/** @param {string} projectKey */
+export const loadProjectDetails = projectKey =>
+    callBackground('project:details', { projectKey })
 
-/** @param {string} url @param {string} accessId @param {import('../../types/extension.js').AccessField} field */
-export const getProjectAccessField = (url, accessId, field) =>
-    callBackground('project:accessField', { url, accessId, field })
+/** @param {string} projectKey @param {string} accessId @param {import('../../types/extension.js').AccessField} field */
+export const getProjectAccessField = (projectKey, accessId, field) =>
+    callBackground('project:accessField', { projectKey, accessId, field })
 
-/** @param {string} url @param {string} accessId @param {import('../../types/extension.js').AccessField[]} fields */
-export const getProjectAccessFields = (url, accessId, fields) =>
-    callBackground('project:accessFields', { url, accessId, fields })
+/** @param {string} projectKey @param {string} accessId @param {import('../../types/extension.js').AccessField[]} fields */
+export const getProjectAccessFields = (projectKey, accessId, fields) =>
+    callBackground('project:accessFields', { projectKey, accessId, fields })
 
 export const getCredentialSecurityStatus = () => callBackground('security:status')
 
